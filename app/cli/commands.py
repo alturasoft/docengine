@@ -290,6 +290,7 @@ def version(ctx: click.Context) -> None:
     """Show DocEngine and Docling version information."""
     settings: AppSettings = ctx.obj["settings"]
     try:
+        import docling  # noqa: PLC0415
         docling_ver = getattr(docling, "__version__", "unknown")
     except Exception:
         docling_ver = "unknown"
