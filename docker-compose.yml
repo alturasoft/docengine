@@ -13,6 +13,10 @@ services:
       - ./outputs:/app/outputs
       # Read-only samples for testing
       - ./samples:/app/samples:ro
+      # Insurance company extraction skills & rules
+      - ./skills:/app/skills:ro
+      # Agent rules and guidelines
+      - ./.agents:/app/.agents:ro
       # Optional: pre-downloaded Docling model artifacts
       # - ./docling_models:/app/docling_models:ro
     environment:

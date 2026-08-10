@@ -16,8 +16,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# --- Copy application code ---
+# --- Copy application code and extraction skills ---
 COPY app/ ./app/
+COPY skills/ ./skills/
+COPY .agents/ ./.agents/
 COPY main.py .
 
 # --- Create output and sample directories ---
