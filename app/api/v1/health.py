@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 try:
     import psutil
@@ -121,3 +121,23 @@ def get_metrics() -> MetricsResponse:
         avg_extraction_time_seconds=round(avg_time, 3),
         memory_usage_mb=round(mem_mb, 1),
     )
+
+
+@router.get(
+    "/logs",
+    summary="Get process logs",
+    description="Returns recent server log entries from in-memory circular buffer.",
+)
+def get_logs(
+    lines: int = Query(default=200, ge=1, le=1000, description="Number of log lines to retrieve"),
+    level: str | None = Query(default=None, description="Optional level filter (INFO, WARNING, ERROR)"),
+) -> dict:
+    """Return recent log entries from the server process."""
+    from app.infrastructure.logging.logger import get_recent_logs  # noqa: PLC0415
+
+    logs = get_recent_logs(limit=lines, level=level)
+    return {
+        "count": len(logs),
+        "logs": logs,
+    }
+

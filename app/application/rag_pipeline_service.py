@@ -75,35 +75,36 @@ class RagPipelineService:
             company_sigla=company_sigla,
         )
 
-        # 1. Idempotency Check
-        existing_policy_id = self._repo.policy_exists_by_hash(file_hash)
-        if existing_policy_id:
-            logger.info(
-                "Policy already processed (hash exists in policies). Skipping execution.",
-                file_name=file_name,
-                file_hash=file_hash,
-                policy_id=existing_policy_id,
-            )
-            job_id = self._repo.create_job(file_name)
-            self._repo.update_job(
-                job_id=job_id,
-                status="SKIPPED",
-                policy_id=existing_policy_id,
-            )
-            return RagProcessingReport(
-                policy_id=existing_policy_id,
-                file_name=file_name,
-                file_hash=file_hash,
-                company_sigla=company_sigla,
-                skipped_duplicate=True,
-                job_id=job_id,
-                processing_time_seconds=time.perf_counter() - start_time,
-            )
-
-        # Create processing job record
-        job_id = self._repo.create_job(file_name)
-
+        job_id = None
         try:
+            # 1. Idempotency Check
+            existing_policy_id = self._repo.policy_exists_by_hash(file_hash)
+            if existing_policy_id:
+                logger.info(
+                    "Policy already processed (hash exists in policies). Skipping execution.",
+                    file_name=file_name,
+                    file_hash=file_hash,
+                    policy_id=existing_policy_id,
+                )
+                job_id = self._repo.create_job(file_name)
+                self._repo.update_job(
+                    job_id=job_id,
+                    status="SKIPPED",
+                    policy_id=existing_policy_id,
+                )
+                return RagProcessingReport(
+                    policy_id=existing_policy_id,
+                    file_name=file_name,
+                    file_hash=file_hash,
+                    company_sigla=company_sigla,
+                    skipped_duplicate=True,
+                    job_id=job_id,
+                    processing_time_seconds=time.perf_counter() - start_time,
+                )
+
+            # Create processing job record
+            job_id = self._repo.create_job(file_name)
+
             # 2. Local Chunking
             chunks = self._chunker.chunk_markdown(
                 markdown=result.markdown,
@@ -165,11 +166,15 @@ class RagPipelineService:
                 file_name=file_name,
                 error=str(e),
             )
-            self._repo.update_job(
-                job_id=job_id,
-                status="FAILED",
-                error_message=str(e),
-            )
+            if job_id:
+                try:
+                    self._repo.update_job(
+                        job_id=job_id,
+                        status="FAILED",
+                        error_message=str(e),
+                    )
+                except Exception:
+                    pass
             return RagProcessingReport(
                 policy_id=None,
                 file_name=file_name,
@@ -179,3 +184,4 @@ class RagPipelineService:
                 processing_time_seconds=time.perf_counter() - start_time,
                 errors=[str(e)],
             )
+

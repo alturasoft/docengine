@@ -43,6 +43,16 @@ class MetadataSchema(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class RagReportSchema(BaseModel):
+    """Report of RAG pipeline persistence into PostgreSQL."""
+
+    policy_id: str | None = None
+    job_id: str | None = None
+    skipped_duplicate: bool = False
+    chunks_created: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
 class ExtractionResultSchema(BaseModel):
     """API response for a single document extraction."""
 
@@ -55,9 +65,11 @@ class ExtractionResultSchema(BaseModel):
     output_paths: dict[str, str] = Field(
         description="Map of format name to file path on server"
     )
+    rag_report: RagReportSchema | None = Field(default=None, description="Resultado de persistencia RAG en PostgreSQL")
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
 
 
 class BatchExtractionResultSchema(BaseModel):

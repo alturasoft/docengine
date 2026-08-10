@@ -49,7 +49,9 @@ def configure_logging(
                 pass
 
     # --- Handlers ---
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    _ring_buffer_handler = RingBufferHandler()
+    _ring_buffer_handler.setFormatter(logging.Formatter("%(message)s"))
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout), _ring_buffer_handler]
     if log_file:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
 
@@ -76,7 +78,7 @@ def configure_logging(
     if format_ == "json":
         renderer: Processor = structlog.processors.JSONRenderer()
     else:
-        renderer = structlog.dev.ConsoleRenderer(colors=True)
+        renderer = structlog.dev.ConsoleRenderer(colors=False)
 
     structlog.configure(
         processors=shared_processors + [renderer],
@@ -87,6 +89,42 @@ def configure_logging(
     )
 
     _logging_configured = True
+
+
+from collections import deque
+
+_LOG_BUFFER: deque[str] = deque(maxlen=1000)
+
+
+class RingBufferHandler(logging.Handler):
+    """Custom logging handler to store formatted log records in a circular buffer."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            _LOG_BUFFER.append(msg)
+        except Exception:
+            self.handleError(record)
+
+
+def get_recent_logs(limit: int = 200, level: str | None = None) -> list[str]:
+    """Retrieve recent log lines from the in-memory circular buffer.
+
+    Args:
+        limit: Maximum number of log lines to return.
+        level: Optional log level filter ('INFO', 'WARNING', 'ERROR').
+
+    Returns:
+        List of formatted log string entries.
+    """
+    logs = list(_LOG_BUFFER)
+    if level:
+        level_upper = level.upper()
+        logs = [
+            l for l in logs
+            if level_upper in l.upper() or f"[{level_upper}]" in l.upper()
+        ]
+    return logs[-limit:]
 
 
 def get_logger(name: str) -> structlog.BoundLogger:
@@ -130,3 +168,4 @@ def add_memory_info(
     except Exception:
         pass
     return event_dict
+

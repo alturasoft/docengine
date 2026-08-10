@@ -15,13 +15,14 @@ from fastapi.responses import JSONResponse, Response
 
 from app.config.settings import get_settings
 
-from app.api.dependencies import ExtractionServiceDep
+from app.api.dependencies import ExtractionServiceDep, RagPipelineServiceDep
 from app.api.v1.health import record_extraction
 from app.api.v1.schemas import (
     BatchExtractionResultSchema,
     ExtractionResultSchema,
     FolderExtractionRequest,
     MetadataSchema,
+    RagReportSchema,
     UrlExtractionRequest,
 )
 from app.domain.models.document import ExtractionResult
@@ -49,6 +50,7 @@ _MAX_FILENAME_LEN = 255
 async def extract_file(
     file: UploadFile,
     extraction_service: ExtractionServiceDep,
+    rag_service: RagPipelineServiceDep = None,
     company_sigla: str | None = Form(default=None, description="Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"),
 ) -> ExtractionResultSchema:
     """Extract content from an uploaded PDF file.
@@ -56,6 +58,7 @@ async def extract_file(
     Args:
         file: Uploaded PDF file via multipart/form-data.
         extraction_service: Injected ExtractionService.
+        rag_service: Injected RagPipelineService (optional).
         company_sigla: Optional 3-letter company code.
 
     Returns:
@@ -86,7 +89,9 @@ async def extract_file(
 
         result = extraction_service.extract_document(request)
         _record_and_log(result)
-        return _to_schema(result)
+
+        rag_report_schema = _process_rag_safe(rag_service, result)
+        return _to_schema(result, rag_report=rag_report_schema)
 
     except Exception as exc:
         logger.error("File extraction endpoint error", error=str(exc))
@@ -113,12 +118,14 @@ async def extract_file(
 def extract_url(
     body: UrlExtractionRequest,
     extraction_service: ExtractionServiceDep,
+    rag_service: RagPipelineServiceDep = None,
 ) -> ExtractionResultSchema:
     """Extract content from a PDF available at a URL.
 
     Args:
         body: Request body containing the URL and optional company_sigla.
         extraction_service: Injected ExtractionService.
+        rag_service: Injected RagPipelineService (optional).
 
     Returns:
         ExtractionResultSchema with Markdown preview and metadata.
@@ -131,7 +138,8 @@ def extract_url(
         sigla_clean = body.company_sigla.strip().upper() if body.company_sigla else None
         result = extraction_service.extract_from_url(body.url, company_sigla=sigla_clean)
         _record_and_log(result)
-        return _to_schema(result)
+        rag_report_schema = _process_rag_safe(rag_service, result)
+        return _to_schema(result, rag_report=rag_report_schema)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -157,12 +165,14 @@ def extract_url(
 def extract_folder(
     body: FolderExtractionRequest,
     extraction_service: ExtractionServiceDep,
+    rag_service: RagPipelineServiceDep = None,
 ) -> BatchExtractionResultSchema:
     """Extract all PDFs in a server-side directory.
 
     Args:
         body: Request body with folder_path and optional company_sigla.
         extraction_service: Injected ExtractionService.
+        rag_service: Injected RagPipelineService (optional).
 
     Returns:
         BatchExtractionResultSchema with results for each PDF.
@@ -182,11 +192,17 @@ def extract_folder(
         sigla_clean = body.company_sigla.strip().upper() if body.company_sigla else None
         results = extraction_service.extract_folder(folder, company_sigla=sigla_clean)
         successful = sum(1 for r in results if r.is_successful)
+
+        schema_results = []
+        for r in results:
+            rag_report_schema = _process_rag_safe(rag_service, r)
+            schema_results.append(_to_schema(r, rag_report=rag_report_schema))
+
         return BatchExtractionResultSchema(
             total_documents=len(results),
             successful=successful,
             failed=len(results) - successful,
-            results=[_to_schema(r) for r in results],
+            results=schema_results,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -198,6 +214,7 @@ def extract_folder(
             folder=body.folder_path,
             error=str(exc),
         )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Batch extraction failed: {exc}",
@@ -301,11 +318,35 @@ def _validate_upload(file: UploadFile) -> None:
         )
 
 
-def _to_schema(result: ExtractionResult) -> ExtractionResultSchema:
+def _process_rag_safe(rag_service: Any, result: ExtractionResult) -> RagReportSchema | None:
+    """Helper to safely execute RAG pipeline without failing primary extraction."""
+    if not rag_service or not result.is_successful:
+        return None
+    try:
+        report = rag_service.process_extraction_result(result)
+        if report:
+            return RagReportSchema(
+                policy_id=report.policy_id,
+                job_id=report.job_id,
+                skipped_duplicate=report.skipped_duplicate,
+                chunks_created=report.chunks_created,
+                errors=report.errors,
+            )
+    except Exception as exc:
+        logger.error("RAG pipeline execution error", error=str(exc))
+        return RagReportSchema(errors=[str(exc)])
+    return None
+
+
+def _to_schema(
+    result: ExtractionResult,
+    rag_report: RagReportSchema | None = None,
+) -> ExtractionResultSchema:
     """Convert domain ExtractionResult to API schema.
 
     Args:
         result: Domain extraction result.
+        rag_report: Optional RAG persistence report.
 
     Returns:
         API schema suitable for JSON serialization.
@@ -331,10 +372,13 @@ def _to_schema(result: ExtractionResult) -> ExtractionResultSchema:
             errors=meta.errors,
             warnings=meta.warnings,
             extracted_at=meta.extracted_at,
+            company_sigla=meta.company_sigla,
         ),
         output_paths={k: str(v) for k, v in result.output_paths.items()},
+        rag_report=rag_report,
         created_at=result.created_at,
     )
+
 
 
 def _record_and_log(result: ExtractionResult) -> None:

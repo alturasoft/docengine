@@ -7,7 +7,7 @@ initialised once at startup via lifespan and stored in app.state.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
@@ -45,3 +45,12 @@ def get_extraction_service(request: Request) -> ExtractionService:
 
 
 ExtractionServiceDep = Annotated[ExtractionService, Depends(get_extraction_service)]
+
+
+def get_rag_pipeline_service(request: Request):
+    """FastAPI dependency: return RagPipelineService from app state."""
+    return getattr(request.app.state, "rag_service", None)
+
+
+RagPipelineServiceDep = Annotated[Any, Depends(get_rag_pipeline_service)]
+

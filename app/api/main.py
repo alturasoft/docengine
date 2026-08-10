@@ -87,6 +87,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.extraction_service = _build_extraction_service(settings)
     logger.info("Docling models loaded. Service ready.")
 
+    # Build RAG Pipeline Service
+    try:
+        from app.cli.rag_factory import create_rag_pipeline_service  # noqa: PLC0415
+        app.state.rag_service = create_rag_pipeline_service()
+        logger.info("RAG Pipeline Service initialized and ready.")
+    except Exception as exc:
+        logger.error("Could not initialize RAG Pipeline Service", error=str(exc))
+        app.state.rag_service = None
+
     yield  # Application is running
 
     logger.info("DocEngine shutting down gracefully.")
