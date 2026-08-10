@@ -102,9 +102,21 @@ class ExtractionService:
 
         # 2. Post-process Markdown (only if extraction succeeded)
         if result.is_successful and result.markdown:
+            company_skill = getattr(request, "_company_skill", None)
+            if company_skill is None:
+                company_sigla = getattr(request, "_company_sigla", None)
+                from app.application.company_skill_loader import (  # noqa: PLC0415
+                    load_company_skill_merged,
+                    load_general_skill,
+                )
+                if company_sigla:
+                    company_skill = load_company_skill_merged(company_sigla)
+                else:
+                    company_skill = load_general_skill()
+
             post_result = self._markdown_service.post_process(
                 result.markdown,
-                company_skill=getattr(request, "_company_skill", None),
+                company_skill=company_skill,
             )
             result.markdown = post_result.markdown
 

@@ -177,12 +177,18 @@ def extract(
                 source=source_path,
                 output_formats=[output_format],
             )
-            # Attach company info when processing a single file
-            if company_sigla:
-                request._company_sigla = company_sigla  # type: ignore[attr-defined]
-                from app.application.company_skill_loader import load_company_skill_merged  # noqa: PLC0415
-                skill = load_company_skill_merged(company_sigla)
-                request._company_skill = skill  # type: ignore[attr-defined]
+            # Auto-detect or attach company info / general skill when processing a single file
+            effective_sigla = company_sigla or detect_company_from_path(source_path)
+            from app.application.company_skill_loader import (  # noqa: PLC0415
+                load_company_skill_merged,
+                load_general_skill,
+            )
+            if effective_sigla:
+                request._company_sigla = effective_sigla  # type: ignore[attr-defined]
+                skill = load_company_skill_merged(effective_sigla)
+            else:
+                skill = load_general_skill()
+            request._company_skill = skill  # type: ignore[attr-defined]
             result = service.extract_document(request)
             _print_result(result)
 
