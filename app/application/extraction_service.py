@@ -102,9 +102,12 @@ class ExtractionService:
 
         # 2. Post-process Markdown (only if extraction succeeded)
         if result.is_successful and result.markdown:
+            company_sigla = request.company_sigla or getattr(request, "_company_sigla", None)
+            if company_sigla and not result.metadata.company_sigla:
+                result.metadata.company_sigla = company_sigla
+
             company_skill = getattr(request, "_company_skill", None)
             if company_skill is None:
-                company_sigla = getattr(request, "_company_sigla", None)
                 from app.application.company_skill_loader import (  # noqa: PLC0415
                     load_company_skill_merged,
                     load_general_skill,
@@ -221,13 +224,16 @@ class ExtractionService:
         batch_request = BatchExtractionRequest(requests=requests)
         return self._extract_batch(batch_request)
 
-    def extract_from_url(self, url: str) -> ExtractionResult:
+    def extract_from_url(
+        self, url: str, company_sigla: str | None = None
+    ) -> ExtractionResult:
         """Extract content from a PDF available at a URL.
 
         Downloads the PDF and processes it through the standard pipeline.
 
         Args:
             url: URL pointing to a PDF document.
+            company_sigla: Optional explicit 3-letter company code.
 
         Returns:
             ExtractionResult for the downloaded document.
@@ -242,6 +248,7 @@ class ExtractionService:
             source=url,
             output_formats=["all"],
             request_id=str(uuid.uuid4()),
+            company_sigla=company_sigla,
         )
         return self.extract_document(request)
 

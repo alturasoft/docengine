@@ -10,9 +10,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import router as v1_router
 from app.application.extraction_service import ExtractionService
@@ -126,6 +129,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     # Register routers
     app.include_router(v1_router, prefix="/api/v1")
+
+    # Mount Web UI if available
+    webui_dir = (Path(__file__).resolve().parents[2] / "webui").resolve()
+    if webui_dir.exists():
+        app.mount("/ui", StaticFiles(directory=webui_dir, html=True), name="ui")
+
+        @app.get("/", include_in_schema=False)
+        async def root_to_ui() -> FileResponse:
+            return FileResponse(webui_dir / "index.html")
 
     # Global exception handler
     @app.exception_handler(Exception)

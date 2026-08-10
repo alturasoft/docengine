@@ -35,6 +35,7 @@ class MetadataSchema(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     extracted_at: datetime
+    company_sigla: str | None = Field(default=None, description="Sigla de la empresa aseguradora")
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,9 @@ class UrlExtractionRequest(BaseModel):
         default=["all"],
         description="Output formats: md, json, all",
     )
+    company_sigla: str | None = Field(
+        default=None, description="Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"
+    )
 
 
 class FolderExtractionRequest(BaseModel):
@@ -88,6 +92,9 @@ class FolderExtractionRequest(BaseModel):
 
     folder_path: str = Field(description="Server-side folder path containing PDFs")
     output_formats: list[str] = Field(default=["all"])
+    company_sigla: str | None = Field(
+        default=None, description="Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"
+    )
 
 
 # ---------------------------------------------------------------------------

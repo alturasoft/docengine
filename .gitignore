@@ -61,3 +61,6 @@ Thumbs.db
 # --- Docling model cache (can be large) ---
 # Uncomment if you want to ignore downloaded models:
 # docling_models/
+
+# --- Keys ---
+llavepc*

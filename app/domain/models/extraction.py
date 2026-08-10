@@ -59,6 +59,7 @@ class ExtractionRequest:
     )
     config_override: dict | None = None
     request_id: str | None = None
+    company_sigla: str | None = None
 
     @property
     def is_url(self) -> bool:

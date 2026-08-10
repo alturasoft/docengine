@@ -186,15 +186,15 @@ def test_client(app_settings: AppSettings) -> TestClient:
     mock_service.extract_from_url.return_value = mock_result
     mock_service.extract_folder.return_value = [mock_result]
 
-    # Build a minimal test app that skips the expensive lifespan (no Docling load)
     @asynccontextmanager
     async def test_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.extraction_service = mock_service
         yield
 
-    test_app = FastAPI(lifespan=test_lifespan)
-    test_app.state.settings = app_settings
-    test_app.include_router(v1_router, prefix="/api/v1")
+    from app.api.main import create_app  # noqa: PLC0415
+
+    test_app = create_app(settings=app_settings)
+    test_app.router.lifespan_context = test_lifespan
 
     with TestClient(test_app, raise_server_exceptions=True) as client:
         yield client

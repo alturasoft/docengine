@@ -111,3 +111,58 @@ class TestExtractionEndpoints:
             "extracted_at"
         }
         assert meta_fields.issubset(data["metadata"].keys())
+
+    def test_get_markdown_not_found(self, test_client: TestClient) -> None:
+        """GET /extract/{doc_id}/markdown for unknown doc returns 404."""
+        response = test_client.get("/api/v1/extract/unknown_doc_id_999/markdown")
+        assert response.status_code == 404
+
+    def test_get_markdown_with_file(self, test_client: TestClient, tmp_path: Path) -> None:
+        """GET /extract/{doc_id}/markdown with existing md file returns 200."""
+        # Create a mock output folder in outputs
+        out_dir = Path("outputs") / "test_doc_folder"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        md_file = out_dir / "test_doc.md"
+        md_file.write_text("# Test Policy Document\n\nContent", encoding="utf-8")
+
+        try:
+            response = test_client.get("/api/v1/extract/test_doc_folder/markdown")
+            assert response.status_code == 200
+            assert "# Test Policy Document" in response.text
+            assert "text/markdown" in response.headers["content-type"]
+        finally:
+            if md_file.exists():
+                md_file.unlink()
+            if out_dir.exists():
+                out_dir.rmdir()
+
+    def test_web_ui_route(self, test_client: TestClient) -> None:
+        """GET / and GET /ui should return HTML web interface."""
+        res_root = test_client.get("/")
+        assert res_root.status_code == 200
+        assert "DocEngine" in res_root.text
+
+        res_ui = test_client.get("/ui/")
+        assert res_ui.status_code == 200
+        assert "DocEngine" in res_ui.text
+
+    def test_extract_pdf_with_company_sigla(self, test_client: TestClient) -> None:
+        """POST /extract with company_sigla form field must return 200."""
+        fake_pdf = b"%PDF-1.4 test with company"
+        response = test_client.post(
+            "/api/v1/extract",
+            data={"company_sigla": "CRI"},
+            files={"file": ("poliza_cri.pdf", io.BytesIO(fake_pdf), "application/pdf")},
+        )
+        assert response.status_code == 200
+
+    def test_get_companies_registry(self, test_client: TestClient) -> None:
+        """GET /companies must return dictionary of company siglas."""
+        response = test_client.get("/api/v1/companies")
+        assert response.status_code == 200
+        data = response.json()
+        assert "CRI" in data
+        assert "LBC" in data
+        assert "ALI" in data
+
+
