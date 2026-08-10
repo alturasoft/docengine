@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "integration: marks tests that require external resources (Docling models, sample PDFs)",
+    "slow: marks tests that are slow to run",
+]
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "-v",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 70
+
+[tool.pyright]
+include = ["app", "tests"]
+pythonVersion = "3.12"
+reportMissingImports = false
+reportMissingModuleSource = false
