@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY app/ ./app/
 COPY skills/ ./skills/
 COPY .agents/ ./.agents/
+COPY webui/ ./webui/
 COPY main.py .
 
 # --- Create output and sample directories ---
