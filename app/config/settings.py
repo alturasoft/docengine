@@ -83,6 +83,48 @@ class ExtractionConfig(BaseSettings):
         description="Detect and split Markdown tables incorrectly merged by TableFormer",
     )
 
+    # --- Auto-OCR Detection (Phase 2 activation) ---
+    # These fields control the dynamic PDF type detection introduced in Phase 2.
+    # All default to safe values: detection enabled, 50% threshold, 15 chars/page.
+    auto_detect_pdf_type: bool = Field(
+        default=True,
+        description=(
+            "Automatically detect if a PDF is scanned or digital before extraction. "
+            "When True and a scanned/hybrid PDF is detected, Docling OCR is enabled "
+            "dynamically regardless of the do_ocr setting."
+        ),
+    )
+    scanned_page_ratio_threshold: float = Field(
+        default=0.5,
+        description=(
+            "Minimum ratio of scanned pages (0.0–1.0) required to classify a PDF as "
+            "SCANNED (and trigger force_full_page_ocr). Values below the threshold but "
+            "above 0 produce a HYBRID classification (OCR without force_full_page_ocr)."
+        ),
+        ge=0.0,
+        le=1.0,
+    )
+    min_chars_per_page: int = Field(
+        default=15,
+        description=(
+            "Minimum character count on a sampled page to classify it as having "
+            "embedded text (not scanned). Pages with fewer characters than this value "
+            "are treated as scanned image pages."
+        ),
+        ge=1,
+        le=500,
+    )
+    max_sample_pages: int = Field(
+        default=10,
+        description=(
+            "Maximum number of pages to inspect during PDF type auto-detection. "
+            "For documents larger than this, a proportional sample from the beginning, "
+            "middle, and end of the document is used."
+        ),
+        ge=3,
+        le=50,
+    )
+
 
 class PipelineConfig(BaseSettings):
     """Controls Docling pipeline behaviour and model loading.

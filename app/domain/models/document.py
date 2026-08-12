@@ -61,6 +61,13 @@ class DocumentMetadata:
     # Optional: company sigla (e.g. "CRI") for outputs organized by insurer
     company_sigla: str | None = None
 
+    # --- PDF type detection (Phase 2: auto-OCR) ---
+    # Populated by DoclingAdapter when auto_detect_pdf_type is enabled.
+    # None when detection was not performed (e.g. URL sources, Phase 1 config).
+    pdf_type: str | None = None                   # "digital" | "scanned" | "hybrid" | "unknown"
+    scanned_page_ratio: float | None = None       # e.g. 0.85 for 85% scanned pages
+    pdf_detection_time_seconds: float | None = None  # Time spent on pre-classification
+
     def to_dict(self) -> dict:
         """Serialize metadata to a JSON-compatible dictionary.
 
@@ -85,6 +92,10 @@ class DocumentMetadata:
             "warnings": self.warnings,
             "extracted_at": self.extracted_at.isoformat(),
             "company_sigla": self.company_sigla,
+            # PDF type detection fields (None when not applicable)
+            "pdf_type": self.pdf_type,
+            "scanned_page_ratio": self.scanned_page_ratio,
+            "pdf_detection_time_seconds": self.pdf_detection_time_seconds,
         }
 
 

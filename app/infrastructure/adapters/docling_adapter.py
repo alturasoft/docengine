@@ -139,6 +139,12 @@ class DoclingAdapter(IDocumentExtractor):
     def extract(self, request: ExtractionRequest) -> ExtractionResult:
         """Extract content from a single document.
 
+        For local file sources, auto-detects whether the PDF is scanned or
+        digital (if ``config.extraction.auto_detect_pdf_type`` is True) and
+        configures Docling OCR accordingly before starting conversion.
+
+        URL sources skip pre-classification and use the configured do_ocr value.
+
         Args:
             request: Extraction request with source path/URL and options.
 
@@ -151,8 +157,22 @@ class DoclingAdapter(IDocumentExtractor):
         logger.info("Starting extraction", document_id=doc_id, source=source)
         start_time = time.perf_counter()
 
+        # --- Dynamic OCR detection (Phase 2) ---
+        # Classify the PDF type BEFORE calling Docling so we can configure
+        # do_ocr correctly from the start. Uses the default converter (no OCR)
+        # for digital PDFs to preserve startup efficiency.
+        pdf_type_result = self._detect_pdf_type(source)
+        if pdf_type_result.is_scanned:
+            converter = self._build_converter_with_ocr(
+                force_full_page=pdf_type_result.force_full_page_ocr
+            )
+            ocr_was_used = True
+        else:
+            converter = self._converter  # Reuse the pre-built no-OCR converter
+            ocr_was_used = self._config.extraction.do_ocr
+
         try:
-            conv_result = self._converter.convert(source, raises_on_error=False)
+            conv_result = converter.convert(source, raises_on_error=False)
             elapsed = time.perf_counter() - start_time
 
             return self._build_extraction_result(
@@ -160,6 +180,8 @@ class DoclingAdapter(IDocumentExtractor):
                 request=request,
                 document_id=doc_id,
                 elapsed=elapsed,
+                ocr_used=ocr_was_used,
+                pdf_type_result=pdf_type_result,
             )
 
         except Exception as exc:
@@ -351,12 +373,128 @@ class DoclingAdapter(IDocumentExtractor):
             }
         )
 
+    def _detect_pdf_type(
+        self, source: str
+    ) -> "PdfTypeResult":  # noqa: F821 — resolved at runtime
+        """Detect whether the PDF is digital, scanned, or hybrid.
+
+        Returns UNKNOWN immediately (safe fallback) when:
+        - auto_detect_pdf_type is disabled in config.
+        - Source is a URL.
+        - pypdfium2 is not available or raises.
+
+        Args:
+            source: Source path or URL string.
+
+        Returns:
+            PdfTypeResult with classification details.
+        """
+        from app.infrastructure.adapters.pdf_type_detector import (  # noqa: PLC0415
+            PdfClassification,
+            PdfTypeDetector,
+            PdfTypeResult,
+        )
+
+        if not self._config.extraction.auto_detect_pdf_type:
+            logger.debug("PDF type auto-detection disabled by config")
+            return PdfTypeResult(classification=PdfClassification.UNKNOWN)
+
+        detector = PdfTypeDetector(
+            min_chars_per_page=self._config.extraction.min_chars_per_page,
+            scanned_ratio_threshold=self._config.extraction.scanned_page_ratio_threshold,
+            max_sample_pages=self._config.extraction.max_sample_pages,
+        )
+        return detector.classify(source)
+
+    def _build_converter_with_ocr(
+        self, force_full_page: bool = False
+    ) -> DocumentConverter:
+        """Build a NEW DocumentConverter with OCR enabled (EasyOCR, es+en).
+
+        Called only when PDF type detection determines the document is scanned
+        or hybrid. A fresh converter is built per-call because OCR pipelines
+        load additional models that we do not want pre-loaded for digital PDFs.
+
+        Note: This method deliberately mirrors _build_converter() structure
+        so both remain independently maintainable. No shared mutable state.
+
+        Args:
+            force_full_page: If True, EasyOCR processes the entire page image.
+                Set for SCANNED documents. For HYBRID documents, leave False
+                so Docling applies OCR only where no text layer is present.
+
+        Returns:
+            New DocumentConverter with OCR enabled.
+        """
+        from docling.datamodel.pipeline_options import EasyOcrOptions  # noqa: PLC0415
+
+        cfg = self._config
+        ext_cfg = cfg.extraction
+
+        pipeline_options = PdfPipelineOptions()
+
+        # --- OCR: enabled dynamically ---
+        pipeline_options.do_ocr = True
+        pipeline_options.ocr_options = EasyOcrOptions(
+            force_full_page_ocr=force_full_page,
+            lang=["es", "en"],  # Spanish + English for Bolivian insurance documents
+        )
+
+        # --- Table Structure (same as default converter) ---
+        pipeline_options.do_table_structure = ext_cfg.do_table_structure
+        pipeline_options.table_structure_options = TableStructureOptions(
+            do_cell_matching=ext_cfg.do_cell_matching,
+            mode=(
+                TableFormerMode.ACCURATE
+                if ext_cfg.table_mode == "ACCURATE"
+                else TableFormerMode.FAST
+            ),
+        )
+
+        # --- Layout and image scale (same as default converter) ---
+        pipeline_options.images_scale = cfg.pipeline.images_scale
+        pipeline_options.generate_picture_images = ext_cfg.generate_picture_images
+
+        # --- Artifacts path (air-gapped environments) ---
+        if cfg.pipeline.artifacts_path is not None:
+            pipeline_options.artifacts_path = str(cfg.pipeline.artifacts_path)
+
+        # --- PDF Backend (same selection logic as _build_converter) ---
+        backend = cfg.pipeline.pdf_backend
+        if backend == "docling_parse":
+            from docling.backend.docling_parse_backend import (  # noqa: PLC0415
+                DoclingParseDocumentBackend,
+            )
+            backend_cls = DoclingParseDocumentBackend
+        else:
+            from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend  # noqa: PLC0415
+            backend_cls = PyPdfiumDocumentBackend
+
+        logger.info(
+            "Building OCR-enabled DocumentConverter",
+            force_full_page_ocr=force_full_page,
+            ocr_engine="EasyOCR",
+            languages=["es", "en"],
+            backend=backend,
+        )
+
+        return DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=pipeline_options,
+                    backend=backend_cls,
+                )
+            }
+        )
+
     def _build_extraction_result(
         self,
         conv_result: ConversionResult,
         request: ExtractionRequest,
         document_id: str,
         elapsed: float,
+        ocr_used: bool | None = None,
+        pdf_type_result: "PdfTypeResult | None" = None,  # noqa: F821
     ) -> ExtractionResult:
         """Translate a Docling ConversionResult into an ExtractionResult.
 
@@ -365,6 +503,10 @@ class DoclingAdapter(IDocumentExtractor):
             request: The original extraction request.
             document_id: Unique ID for this extraction.
             elapsed: Wall-clock seconds elapsed.
+            ocr_used: Whether OCR was actually used. If None, falls back to
+                config value (preserves backward-compatibility).
+            pdf_type_result: Result of PDF type pre-classification, or None
+                when detection was skipped (e.g. batch mode, URL).
 
         Returns:
             Populated ExtractionResult domain object.
@@ -467,6 +609,9 @@ class DoclingAdapter(IDocumentExtractor):
         # Docling version
         docling_ver = _get_docling_version()
 
+        # Resolve actual OCR usage: prefer explicit argument, fall back to config
+        actual_ocr_used = ocr_used if ocr_used is not None else self._config.extraction.do_ocr
+
         metadata = DocumentMetadata(
             filename=source_path.name,
             source_path=source_path,
@@ -478,10 +623,14 @@ class DoclingAdapter(IDocumentExtractor):
             figures_detected=figures_count,
             headers_removed=0,  # Updated by MarkdownService after post-processing
             footers_removed=0,  # Updated by MarkdownService after post-processing
-            ocr_used=self._config.extraction.do_ocr,
+            ocr_used=actual_ocr_used,
             has_multi_column=False,  # Docling detects layout; updated post-analysis
             markdown_size_bytes=len(markdown_text.encode("utf-8")),
             errors=errors,
+            # PDF type detection fields (None when detection was skipped)
+            pdf_type=pdf_type_result.classification.value if pdf_type_result else None,
+            scanned_page_ratio=pdf_type_result.scanned_ratio if pdf_type_result else None,
+            pdf_detection_time_seconds=pdf_type_result.detection_time_seconds if pdf_type_result else None,
         )
 
         logger.info(

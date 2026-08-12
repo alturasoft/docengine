@@ -36,6 +36,19 @@ class MetadataSchema(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     extracted_at: datetime
     company_sigla: str | None = Field(default=None, description="Sigla de la empresa aseguradora")
+    # PDF type detection fields (Phase 2: auto-OCR)
+    pdf_type: str | None = Field(
+        default=None,
+        description="Tipo de PDF detectado: 'digital' | 'scanned' | 'hybrid' | 'unknown'",
+    )
+    scanned_page_ratio: float | None = Field(
+        default=None,
+        description="Fracción de páginas escaneadas detectadas (0.0–1.0)",
+    )
+    pdf_detection_time_seconds: float | None = Field(
+        default=None,
+        description="Tiempo empleado en la clasificación previa del PDF (segundos)",
+    )
 
 
 # ---------------------------------------------------------------------------
