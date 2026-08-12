@@ -105,7 +105,7 @@ class ExtractionConfig(BaseSettings):
         le=1.0,
     )
     min_chars_per_page: int = Field(
-        default=15,
+        default=50,
         description=(
             "Minimum character count on a sampled page to classify it as having "
             "embedded text (not scanned). Pages with fewer characters than this value "
@@ -232,7 +232,7 @@ class LoggingConfig(BaseSettings):
     def normalize_level(cls, v: Any) -> Any:
         """Ensure log level string is uppercase."""
         if isinstance(v, str):
-            return v.upper()
+            return v.upper()  # type: ignore[return-value]
         return v
 
 

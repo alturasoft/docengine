@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse, Response
@@ -88,6 +89,8 @@ async def extract_file(
         )
 
         result = extraction_service.extract_document(request)
+        if file.filename:
+            result.metadata.filename = file.filename
         _record_and_log(result)
 
         rag_report_schema = _process_rag_safe(rag_service, result)

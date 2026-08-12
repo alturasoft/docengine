@@ -7,6 +7,10 @@ import time
 
 from fastapi import APIRouter, Query
 
+import json
+from pathlib import Path
+from fastapi import APIRouter, Query, Request
+
 try:
     import psutil
     _PSUTIL_AVAILABLE = True
@@ -15,8 +19,8 @@ except ImportError:
 
 try:
     import docling
-    _DOCLING_VERSION = docling.__version__
-except AttributeError:
+    _DOCLING_VERSION = getattr(docling, "__version__", "unknown")
+except (ImportError, AttributeError):
     _DOCLING_VERSION = "unknown"
 
 from app.api.v1.schemas import HealthResponse, MetricsResponse, VersionResponse
@@ -24,15 +28,37 @@ from app.config.settings import AppSettings, get_settings
 
 router = APIRouter(tags=["System"])
 
-# Simple in-memory counters (for production use a proper metrics backend)
-_METRICS: dict = {
-    "total_extractions": 0,
-    "successful_extractions": 0,
-    "failed_extractions": 0,
-    "total_pages_processed": 0,
-    "total_tables_detected": 0,
-    "extraction_times": [],
-}
+_METRICS_FILE = Path("outputs") / "metrics.json"
+
+def _load_metrics() -> dict:
+    """Load persistent metrics from disk if available."""
+    default_metrics = {
+        "total_extractions": 0,
+        "successful_extractions": 0,
+        "failed_extractions": 0,
+        "total_pages_processed": 0,
+        "total_tables_detected": 0,
+        "extraction_times": [],
+    }
+    if _METRICS_FILE.exists():
+        try:
+            data = json.loads(_METRICS_FILE.read_text(encoding="utf-8"))
+            for key in default_metrics:
+                if key in data:
+                    default_metrics[key] = data[key]
+        except Exception:
+            pass
+    return default_metrics
+
+def _save_metrics() -> None:
+    """Save persistent metrics to disk."""
+    try:
+        _METRICS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _METRICS_FILE.write_text(json.dumps(_METRICS), encoding="utf-8")
+    except Exception:
+        pass
+
+_METRICS: dict = _load_metrics()
 _START_TIME = time.time()
 
 
@@ -61,6 +87,7 @@ def record_extraction(
     # Keep only last 1000 measurements to avoid memory growth
     if len(_METRICS["extraction_times"]) > 1000:
         _METRICS["extraction_times"] = _METRICS["extraction_times"][-1000:]
+    _save_metrics()
 
 
 @router.get(
@@ -101,8 +128,35 @@ def get_version() -> VersionResponse:
     summary="Service metrics",
     description="Returns aggregate extraction statistics.",
 )
-def get_metrics() -> MetricsResponse:
-    """Return aggregate extraction metrics."""
+def get_metrics(request: Request) -> MetricsResponse:
+    """Return aggregate extraction metrics, querying PostgreSQL if available."""
+    total_ext = _METRICS["total_extractions"]
+    succ_ext = _METRICS["successful_extractions"]
+    fail_ext = _METRICS["failed_extractions"]
+    tables_det = _METRICS["total_tables_detected"]
+
+    # If PostgreSQL repository is accessible via RAG service, sync metrics with DB tables
+    if request and hasattr(request.app.state, "rag_service") and request.app.state.rag_service:
+        try:
+            repo = request.app.state.rag_service._repo
+            with repo._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM processing_jobs;")
+                    db_jobs_total = cur.fetchone()[0] or 0
+                    cur.execute("SELECT COUNT(*) FROM processing_jobs WHERE status IN ('COMPLETED', 'SKIPPED');")
+                    db_jobs_succ = cur.fetchone()[0] or 0
+                    cur.execute("SELECT COUNT(*) FROM processing_jobs WHERE status = 'FAILED';")
+                    db_jobs_fail = cur.fetchone()[0] or 0
+                    cur.execute("SELECT COUNT(*) FROM policies;")
+                    db_policies = cur.fetchone()[0] or 0
+
+                    if db_jobs_total > 0 or db_policies > 0:
+                        total_ext = max(db_jobs_total, db_policies, total_ext)
+                        succ_ext = max(db_jobs_succ, db_policies, succ_ext)
+                        fail_ext = db_jobs_fail
+        except Exception:
+            pass
+
     times = _METRICS["extraction_times"]
     avg_time = sum(times) / len(times) if times else 0.0
     mem_mb = 0.0
@@ -113,11 +167,11 @@ def get_metrics() -> MetricsResponse:
             pass
 
     return MetricsResponse(
-        total_extractions=_METRICS["total_extractions"],
-        successful_extractions=_METRICS["successful_extractions"],
-        failed_extractions=_METRICS["failed_extractions"],
+        total_extractions=total_ext,
+        successful_extractions=succ_ext,
+        failed_extractions=fail_ext,
         total_pages_processed=_METRICS["total_pages_processed"],
-        total_tables_detected=_METRICS["total_tables_detected"],
+        total_tables_detected=tables_det,
         avg_extraction_time_seconds=round(avg_time, 3),
         memory_usage_mb=round(mem_mb, 1),
     )
@@ -140,4 +194,18 @@ def get_logs(
         "count": len(logs),
         "logs": logs,
     }
+
+
+@router.post(
+    "/logs/clear",
+    summary="Clear process logs",
+    description="Clears all recent server log entries from in-memory circular buffer.",
+)
+def clear_logs() -> dict:
+    """Clear server log buffer."""
+    from app.infrastructure.logging.logger import clear_log_buffer  # noqa: PLC0415
+
+    clear_log_buffer()
+    return {"status": "ok", "message": "Log buffer cleared"}
+
 

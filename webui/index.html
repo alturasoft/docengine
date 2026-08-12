@@ -1068,6 +1068,7 @@
           <input type="checkbox" id="chkAutoRefreshLogs" checked onchange="toggleAutoRefreshLogs()"> Auto-refresco
         </label>
         <button class="btn-secondary" onclick="fetchServerLogs()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
+        <button class="btn-secondary" onclick="clearServerLogBuffer()"><i class="fa-solid fa-trash-can"></i> Limpiar</button>
         <button class="btn-secondary" onclick="copyServerLogs()"><i class="fa-solid fa-copy"></i> Copiar</button>
       </div>
       <pre id="logConsoleContainer" class="log-console"></pre>
@@ -1132,11 +1133,8 @@
       checkHealth();
       fetchMetrics();
 
-      // Refresh status every 15s
-      healthInterval = setInterval(() => {
-        checkHealth();
-        fetchMetrics();
-      }, 15000);
+      // Refresh server health status every 15s (metrics are persistent and updated on process execution)
+      healthInterval = setInterval(checkHealth, 15000);
     });
 
     function getApiUrl() {
@@ -1169,24 +1167,39 @@
     }
 
     async function fetchMetrics() {
+      // Load cached values first to prevent initial 0 flickering
+      const cached = localStorage.getItem('docengine_cached_metrics');
+      if (cached && !window._metricsLoadedOnce) {
+        try {
+          updateMetricsUI(JSON.parse(cached));
+        } catch(e) {}
+      }
+
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/metrics`);
         if (res.ok) {
           const m = await res.json();
-          document.getElementById('mTotal').innerText = m.total_extractions;
-          
-          const rate = m.total_extractions > 0 
-            ? Math.round((m.successful_extractions / m.total_extractions) * 100) 
-            : 100;
-          document.getElementById('mSuccessRate').innerText = `${rate}%`;
-          
-          document.getElementById('mTables').innerText = m.total_tables_detected;
-          document.getElementById('mAvgTime').innerText = `${m.avg_extraction_time_seconds.toFixed(1)}s`;
-          document.getElementById('mMemory').innerText = `${m.memory_usage_mb.toFixed(0)} MB`;
+          updateMetricsUI(m);
+          localStorage.setItem('docengine_cached_metrics', JSON.stringify(m));
+          window._metricsLoadedOnce = true;
         }
       } catch (e) {
         // Silent fail for metrics
       }
+    }
+
+    function updateMetricsUI(m) {
+      if (!m) return;
+      document.getElementById('mTotal').innerText = m.total_extractions || 0;
+      
+      const rate = (m.total_extractions && m.total_extractions > 0) 
+        ? Math.round((m.successful_extractions / m.total_extractions) * 100) 
+        : 100;
+      document.getElementById('mSuccessRate').innerText = `${rate}%`;
+      
+      document.getElementById('mTables').innerText = m.total_tables_detected || 0;
+      document.getElementById('mAvgTime').innerText = `${(m.avg_extraction_time_seconds || 0).toFixed(1)}s`;
+      document.getElementById('mMemory').innerText = `${(m.memory_usage_mb || 0).toFixed(0)} MB`;
     }
 
     // Tab Switching
@@ -1293,6 +1306,8 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
+      await clearServerLogBuffer();
+
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('company_sigla', sigla);
@@ -1331,6 +1346,8 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
+      await clearServerLogBuffer();
+
       showLoader(`Descargando y extrayendo desde URL con Skill [${sigla}]...`);
 
       try {
@@ -1365,6 +1382,8 @@
 
       const sigla = getSelectedCompany();
       if (!sigla) return;
+
+      await clearServerLogBuffer();
 
       showLoader(`Procesando carpeta "${folderPath}" en lote con Skill [${sigla}]...`);
 
@@ -1518,9 +1537,40 @@
       }
     }
 
+    function copyToClipboard(text) {
+      if (!text) return Promise.reject('No content to copy');
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      } else {
+        return new Promise((resolve, reject) => {
+          try {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) resolve();
+            else reject('execCommand copy failed');
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    }
+
     function copyMarkdown() {
-      if (!currentResult || !currentResult.full_markdown) return;
-      navigator.clipboard.writeText(currentResult.full_markdown).then(() => {
+      if (!currentResult) return;
+      const content = currentResult.full_markdown || currentResult.markdown_preview || '';
+      if (!content) {
+        alert('No hay contenido Markdown para copiar.');
+        return;
+      }
+      copyToClipboard(content).then(() => {
         alert('¡Markdown copiado al portapapeles!');
       }).catch(err => {
         alert('Error al copiar: ' + err);
@@ -1529,8 +1579,13 @@
 
     function downloadMarkdownFile() {
       if (!currentResult) return;
-      const mdContent = currentResult.full_markdown || currentResult.markdown_preview;
-      const filename = (currentResult.metadata?.filename || 'documento').replace(/\.pdf$/i, '') + '.md';
+      const mdContent = currentResult.full_markdown || currentResult.markdown_preview || '';
+      let rawFilename = currentResult.metadata?.filename || (selectedFile ? selectedFile.name : 'documento');
+
+      // Strip UUID prefix if present
+      rawFilename = rawFilename.replace(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_/i, '');
+      const nameStem = rawFilename.replace(/\.pdf$/i, '');
+      const filename = `${nameStem}.md`;
 
       const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -1580,6 +1635,16 @@
         clearInterval(logInterval);
         logInterval = null;
       }
+    }
+
+    async function clearServerLogBuffer() {
+      logBuffer = [];
+      try {
+        await fetch(`${getApiUrl()}/api/v1/logs/clear`, { method: 'POST' });
+      } catch (e) {
+        console.warn('Could not clear server log buffer:', e);
+      }
+      renderLogs();
     }
 
     async function fetchServerLogs() {
@@ -1637,8 +1702,14 @@
 
     function copyServerLogs() {
       const text = logBuffer.join('\n');
-      navigator.clipboard.writeText(text).then(() => {
+      if (!text) {
+        alert('No hay logs para copiar.');
+        return;
+      }
+      copyToClipboard(text).then(() => {
         alert('¡Logs copiados al portapapeles!');
+      }).catch(err => {
+        alert('Error al copiar logs: ' + err);
       });
     }
 

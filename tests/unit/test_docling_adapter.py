@@ -114,3 +114,30 @@ class TestDoclingAdapterExtractFailure:
         assert result.metadata.sha256 != ""
         assert len(result.metadata.sha256) == 64
 
+
+class TestOcrAdapterFactory:
+    """Tests for get_ocr_adapter factory helper."""
+
+    def test_get_ocr_adapter_returns_adapter(self, app_settings: AppSettings) -> None:
+        """get_ocr_adapter returns an IOcrEngine implementation."""
+        from app.infrastructure.adapters.ocr_adapter import (
+            NullOcrAdapter,
+            get_ocr_adapter,
+        )
+
+        adapter = get_ocr_adapter(app_settings)
+        assert adapter is not None
+        assert hasattr(adapter, "get_ocr_options")
+        assert hasattr(adapter, "engine_name")
+
+    def test_get_ocr_adapter_fallback_on_invalid_engine(
+        self, app_settings: AppSettings
+    ) -> None:
+        """Unknown engine type falls back gracefully."""
+        from app.infrastructure.adapters.ocr_adapter import get_ocr_adapter
+
+        app_settings.ocr.engine = "nonexistent_engine"  # type: ignore[assignment]
+        adapter = get_ocr_adapter(app_settings)
+        assert adapter is not None
+
+

@@ -127,6 +127,12 @@ def get_recent_logs(limit: int = 200, level: str | None = None) -> list[str]:
     return logs[-limit:]
 
 
+def clear_log_buffer() -> None:
+    """Clear all stored log lines in the in-memory circular buffer."""
+    _LOG_BUFFER.clear()
+
+
+
 def get_logger(name: str) -> structlog.BoundLogger:
     """Return a named structlog logger.
 

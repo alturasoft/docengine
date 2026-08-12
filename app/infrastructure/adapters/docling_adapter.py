@@ -42,7 +42,7 @@ from app.domain.models.extraction import ExtractionRequest, ExtractionStatus
 from app.infrastructure.logging.logger import get_logger
 
 if TYPE_CHECKING:
-    pass
+    from app.infrastructure.adapters.pdf_type_detector import PdfTypeResult
 
 logger = get_logger(__name__)
 
@@ -409,7 +409,7 @@ class DoclingAdapter(IDocumentExtractor):
     def _build_converter_with_ocr(
         self, force_full_page: bool = False
     ) -> DocumentConverter:
-        """Build a NEW DocumentConverter with OCR enabled (EasyOCR, es+en).
+        """Build a NEW DocumentConverter with OCR enabled using configured engine.
 
         Called only when PDF type detection determines the document is scanned
         or hybrid. A fresh converter is built per-call because OCR pipelines
@@ -419,26 +419,26 @@ class DoclingAdapter(IDocumentExtractor):
         so both remain independently maintainable. No shared mutable state.
 
         Args:
-            force_full_page: If True, EasyOCR processes the entire page image.
+            force_full_page: If True, OCR engine processes the entire page image.
                 Set for SCANNED documents. For HYBRID documents, leave False
                 so Docling applies OCR only where no text layer is present.
 
         Returns:
             New DocumentConverter with OCR enabled.
         """
-        from docling.datamodel.pipeline_options import EasyOcrOptions  # noqa: PLC0415
+        from app.infrastructure.adapters.ocr_adapter import (  # noqa: PLC0415
+            get_ocr_adapter,
+        )
 
         cfg = self._config
         ext_cfg = cfg.extraction
 
         pipeline_options = PdfPipelineOptions()
 
-        # --- OCR: enabled dynamically ---
+        # --- OCR: enabled dynamically using configured engine ---
         pipeline_options.do_ocr = True
-        pipeline_options.ocr_options = EasyOcrOptions(
-            force_full_page_ocr=force_full_page,
-            lang=["es", "en"],  # Spanish + English for Bolivian insurance documents
-        )
+        ocr_engine_adapter = get_ocr_adapter(cfg, force_full_page_ocr=force_full_page)
+        pipeline_options.ocr_options = ocr_engine_adapter.get_ocr_options()
 
         # --- Table Structure (same as default converter) ---
         pipeline_options.do_table_structure = ext_cfg.do_table_structure
@@ -473,8 +473,7 @@ class DoclingAdapter(IDocumentExtractor):
         logger.info(
             "Building OCR-enabled DocumentConverter",
             force_full_page_ocr=force_full_page,
-            ocr_engine="EasyOCR",
-            languages=["es", "en"],
+            ocr_engine=ocr_engine_adapter.engine_name,
             backend=backend,
         )
 
