@@ -4,6 +4,7 @@ Orchestrates the RAG processing pipeline:
 1. Idempotency verification via SHA-256 hash
 2. Local Markdown chunking (ChunkingService)
 3. Local vector embedding generation (EmbeddingService with BAAI/bge-m3)
+   └─ Steps 3 & 4 run in parallel via ThreadPoolExecutor (independent tasks)
 4. Structured JSON extraction (OpenAIStructuredExtractor)
 5. Transactional PostgreSQL + pgvector persistence
 6. Async job tracking in processing_jobs table
@@ -12,6 +13,7 @@ Orchestrates the RAG processing pipeline:
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from app.application.chunking_service import ChunkingService
@@ -105,19 +107,44 @@ class RagPipelineService:
             # Create processing job record
             job_id = self._repo.create_job(file_name)
 
-            # 2. Local Chunking
+            # 2. Local Chunking (must run first — embeddings depend on chunks)
             chunks = self._chunker.chunk_markdown(
                 markdown=result.markdown,
                 file_name=file_name,
             )
 
-            # 3. Local Embeddings Generation (bge-m3, 1024d)
-            chunks_with_embeddings = self._embedder.generate_embeddings_for_chunks(chunks)
+            # 3 & 4. Parallel execution: Embeddings + OpenAI (fully independent)
+            # Both operations work on distinct inputs — no shared state.
+            t_parallel_start = time.perf_counter()
+            chunks_with_embeddings: list
+            structured_json: dict
 
-            # 4. Structured JSON Extraction (gpt-4o)
-            structured_json = self._extractor.extract_structured_json(
-                markdown=result.markdown,
-                company_sigla=company_sigla,
+            def _run_embeddings() -> list:
+                return self._embedder.generate_embeddings_for_chunks(chunks)
+
+            def _run_openai() -> dict:
+                return self._extractor.extract_structured_json(
+                    markdown=result.markdown,
+                    company_sigla=company_sigla,
+                )
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                future_emb = executor.submit(_run_embeddings)
+                future_oai = executor.submit(_run_openai)
+
+                # Collect results — re-raise any exception to trigger rollback
+                for future in as_completed([future_emb, future_oai]):
+                    exc = future.exception()
+                    if exc is not None:
+                        raise exc
+
+                chunks_with_embeddings = future_emb.result()
+                structured_json = future_oai.result()
+
+            logger.info(
+                "Parallel steps (Embeddings + OpenAI) completed",
+                duration_seconds=round(time.perf_counter() - t_parallel_start, 3),
+                chunks_count=len(chunks_with_embeddings),
             )
 
             # 5. Transactional PostgreSQL Persistence

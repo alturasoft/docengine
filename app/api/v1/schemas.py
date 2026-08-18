@@ -153,3 +153,72 @@ class MetricsResponse(BaseModel):
     total_tables_detected: int
     avg_extraction_time_seconds: float
     memory_usage_mb: float
+
+
+# ---------------------------------------------------------------------------
+# RAG Query Schemas
+# ---------------------------------------------------------------------------
+
+
+class QueryRequest(BaseModel):
+    """Request body for POST /api/v1/query."""
+
+    question: str = Field(
+        description="Natural language question to answer from document context.",
+        min_length=3,
+        max_length=2000,
+    )
+    top_k: int = Field(
+        default=5,
+        description="Maximum number of document chunks to retrieve (1–20).",
+        ge=1,
+        le=20,
+    )
+    similarity_threshold: float = Field(
+        default=0.3,
+        description="Minimum cosine similarity score for a chunk to be included (0.0–1.0).",
+        ge=0.0,
+        le=1.0,
+    )
+    filters: dict | None = Field(
+        default=None,
+        description=(
+            "Optional pre-filter parameters. Supported keys: "
+            "'policy_id' (str UUID), 'company_sigla' (str, e.g. 'CRI')."
+        ),
+    )
+
+
+class SourceChunkSchema(BaseModel):
+    """Serialized representation of a retrieved chunk used as answer source."""
+
+    chunk_id: str | None = Field(default=None, description="Primary key UUID in policy_chunks table.")
+    policy_id: str = Field(description="UUID of the parent policy document.")
+    chunk_index: int = Field(description="Position of the chunk within the document.")
+    similarity_score: float = Field(description="Cosine similarity score (0.0–1.0).")
+    document_label: str = Field(description="Human-readable citation label for the chunk.")
+    chunk_content: str = Field(description="Raw text content of the chunk.")
+    metadata_json: dict = Field(default_factory=dict, description="Chunk metadata (section, page, etc.).")
+
+
+class QueryResponseSchema(BaseModel):
+    """Response body for POST /api/v1/query."""
+
+    answer: str = Field(
+        description=(
+            "LLM-generated answer based exclusively on retrieved document context. "
+            "Returns the contingency phrase if no relevant context was found."
+        )
+    )
+    query: str = Field(description="The original user question (verbatim).")
+    chunks_used: int = Field(description="Number of document chunks included in the prompt context.")
+    model_used: str = Field(description="OpenAI model identifier used for the completion.")
+    no_context_found: bool = Field(
+        default=False,
+        description="True when no chunks passed the similarity threshold.",
+    )
+    sources: list[SourceChunkSchema] = Field(
+        default_factory=list,
+        description="Ordered list of source chunks (most relevant first).",
+    )
+    created_at: datetime = Field(description="UTC timestamp of the response.")

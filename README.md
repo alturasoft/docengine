@@ -267,23 +267,41 @@ curl http://localhost:8000/api/v1/metrics
 
 ---
 
-## Despliegue con Docker
+## Despliegue y Pruebas con Docker
+
+DocEngine está configurado para desarrollo y pruebas integradas utilizando **Docker y Docker Compose** (incluye API REST y servicio PostgreSQL con `pgvector`).
+
+### 1. Construcción e Inicio de Servicios
 
 ```bash
-# Construir imagen
-docker build -t docengine:1.0 .
+# Iniciar todos los servicios (API + PostgreSQL con pgvector) en segundo plano
+docker compose up -d --build
 
-# Ejecutar con Docker Compose
-docker compose up -d
-
-# Ver logs
+# Ver logs en tiempo real
 docker compose logs -f docengine
 
-# Parar
-docker compose down
+# Verificar estado de los contenedores
+docker compose ps
 ```
 
-La API estará disponible en `http://localhost:8000`.
+La API REST estará disponible en `http://localhost:8000`.
+
+### 2. Ejecución de la Suite de Pruebas (Tests en Docker)
+
+```bash
+# Ejecutar los tests dentro del contenedor docengine
+docker compose exec docengine pytest tests/ -v
+```
+
+### 3. Detener Entorno
+
+```bash
+# Detener contenedores
+docker compose down
+
+# Detener y eliminar volúmenes de datos de prueba
+docker compose down -v
+```
 
 ---
 

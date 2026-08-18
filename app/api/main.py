@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.extraction_service = _build_extraction_service(settings)
     logger.info("Docling models loaded. Service ready.")
 
-    # Build RAG Pipeline Service
+    # Build RAG Pipeline Service (ingestion path — existing, do not modify)
     try:
         from app.cli.rag_factory import create_rag_pipeline_service  # noqa: PLC0415
         app.state.rag_service = create_rag_pipeline_service()
@@ -95,6 +95,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.error("Could not initialize RAG Pipeline Service", error=str(exc))
         app.state.rag_service = None
+
+    # Build RAG Query Service (read/query path — new, independent service)
+    # Reuse the EmbeddingService from rag_service._embedder to share the
+    # already-loaded bge-m3 model in memory (avoids a second ~1GB model load).
+    try:
+        from app.cli.rag_query_factory import create_rag_query_service  # noqa: PLC0415
+        shared_embedder = getattr(app.state.rag_service, "_embedder", None)
+        app.state.rag_query_service = create_rag_query_service(
+            embedding_service=shared_embedder,
+        )
+        reuse_note = "shared" if shared_embedder is not None else "new instance"
+        logger.info(
+            "RAG Query Service initialized and ready.",
+            embedding_service=reuse_note,
+        )
+    except Exception as exc:
+        logger.error("Could not initialize RAG Query Service", error=str(exc))
+        app.state.rag_query_service = None
 
     yield  # Application is running
 
@@ -145,8 +163,14 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         app.mount("/ui", StaticFiles(directory=webui_dir, html=True), name="ui")
 
         @app.get("/", include_in_schema=False)
+        @app.get("/index.html", include_in_schema=False)
         async def root_to_ui() -> FileResponse:
             return FileResponse(webui_dir / "index.html")
+
+        @app.get("/chat", include_in_schema=False)
+        @app.get("/chat.html", include_in_schema=False)
+        async def root_to_chat() -> FileResponse:
+            return FileResponse(webui_dir / "chat.html")
 
     # Global exception handler
     @app.exception_handler(Exception)

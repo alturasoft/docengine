@@ -54,3 +54,21 @@ def get_rag_pipeline_service(request: Request):
 
 RagPipelineServiceDep = Annotated[Any, Depends(get_rag_pipeline_service)]
 
+
+def get_rag_query_service(request: Request):
+    """FastAPI dependency: return RAGQueryService from app state.
+
+    The service is initialized once in the lifespan context manager.
+    Returns None if the service failed to initialize (degraded mode).
+
+    Args:
+        request: The FastAPI Request object (provides access to app.state).
+
+    Returns:
+        The RAGQueryService singleton, or None if unavailable.
+    """
+    return getattr(request.app.state, "rag_query_service", None)
+
+
+RagQueryServiceDep = Annotated[Any, Depends(get_rag_query_service)]
+

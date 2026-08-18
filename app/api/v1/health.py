@@ -133,6 +133,7 @@ def get_metrics(request: Request) -> MetricsResponse:
     total_ext = _METRICS["total_extractions"]
     succ_ext = _METRICS["successful_extractions"]
     fail_ext = _METRICS["failed_extractions"]
+    pages_proc = _METRICS["total_pages_processed"]
     tables_det = _METRICS["total_tables_detected"]
 
     # If PostgreSQL repository is accessible via RAG service, sync metrics with DB tables
@@ -150,10 +151,22 @@ def get_metrics(request: Request) -> MetricsResponse:
                     cur.execute("SELECT COUNT(*) FROM policies;")
                     db_policies = cur.fetchone()[0] or 0
 
-                    if db_jobs_total > 0 or db_policies > 0:
-                        total_ext = max(db_jobs_total, db_policies, total_ext)
-                        succ_ext = max(db_jobs_succ, db_policies, succ_ext)
-                        fail_ext = db_jobs_fail
+                    # Sync metrics with DB counts when PostgreSQL is connected
+                    total_ext = max(db_jobs_total, db_policies)
+                    succ_ext = max(db_jobs_succ, db_policies)
+                    fail_ext = db_jobs_fail
+
+                    # If database is completely empty, reset in-memory and disk metrics as well
+                    if db_jobs_total == 0 and db_policies == 0:
+                        pages_proc = 0
+                        tables_det = 0
+                        _METRICS["total_extractions"] = 0
+                        _METRICS["successful_extractions"] = 0
+                        _METRICS["failed_extractions"] = 0
+                        _METRICS["total_pages_processed"] = 0
+                        _METRICS["total_tables_detected"] = 0
+                        _METRICS["extraction_times"] = []
+                        _save_metrics()
         except Exception:
             pass
 
@@ -170,11 +183,12 @@ def get_metrics(request: Request) -> MetricsResponse:
         total_extractions=total_ext,
         successful_extractions=succ_ext,
         failed_extractions=fail_ext,
-        total_pages_processed=_METRICS["total_pages_processed"],
+        total_pages_processed=pages_proc,
         total_tables_detected=tables_det,
         avg_extraction_time_seconds=round(avg_time, 3),
         memory_usage_mb=round(mem_mb, 1),
     )
+
 
 
 @router.get(
@@ -207,5 +221,26 @@ def clear_logs() -> dict:
 
     clear_log_buffer()
     return {"status": "ok", "message": "Log buffer cleared"}
+
+
+@router.post(
+    "/metrics/reset",
+    summary="Reset service metrics",
+    description="Resets aggregate extraction statistics in memory and on disk.",
+)
+def reset_metrics() -> dict:
+    """Reset aggregate extraction metrics in memory and on disk."""
+    global _METRICS
+    _METRICS = {
+        "total_extractions": 0,
+        "successful_extractions": 0,
+        "failed_extractions": 0,
+        "total_pages_processed": 0,
+        "total_tables_detected": 0,
+        "extraction_times": [],
+    }
+    _save_metrics()
+    return {"status": "ok", "message": "Metrics reset successfully"}
+
 
 

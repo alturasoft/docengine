@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -22,6 +22,22 @@ import sys
 # Load .env file into environment variables if present (except during pytest execution)
 if "pytest" not in sys.modules and os.getenv("PYTEST_CURRENT_TEST") is None:
     load_dotenv()
+
+# Guarantee a valid, writable cache directory for HuggingFace / Docling / PyTorch
+# when running under system users with HOME=/nonexistent (e.g. Docker containers)
+try:
+    _home_path = Path.home()
+    if str(_home_path) == "/nonexistent" or not _home_path.exists():
+        import tempfile
+
+        _hf_fallback = Path(tempfile.gettempdir()) / "huggingface"
+        _hf_fallback.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("HF_HOME", str(_hf_fallback))
+        os.environ.setdefault("TRANSFORMERS_CACHE", str(_hf_fallback))
+        os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(_hf_fallback))
+        os.environ.setdefault("TORCH_HOME", str(_hf_fallback))
+except Exception:
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +234,7 @@ class LoggingConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DOCENGINE_LOG_", extra="ignore")
 
     level: LogLevel = Field(
-        default="INFO", description="Log level"
+        default=cast(LogLevel, "INFO"), description="Log level"
     )
     format: Literal["json", "console"] = Field(
         default="console", description="Log output format"
@@ -232,7 +248,7 @@ class LoggingConfig(BaseSettings):
     def normalize_level(cls, v: Any) -> Any:
         """Ensure log level string is uppercase."""
         if isinstance(v, str):
-            return v.upper()  # type: ignore[return-value]
+            return cast(LogLevel, v.upper())
         return v
 
 
@@ -374,6 +390,42 @@ class EmbeddingConfig(BaseSettings):
     device: str = Field(default="cpu", description="Hardware device for embeddings")
     chunk_size_chars: int = Field(default=1800, description="Target chunk size in characters", ge=200, le=10000)
     chunk_overlap_chars: int = Field(default=200, description="Chunk overlap in characters", ge=0, le=1000)
+    cache_folder: Path | None = Field(
+        default=None,
+        description="Optional custom directory path for storing/loading embedding models",
+    )
+
+
+class RAGQueryConfig(BaseSettings):
+    """Controls the RAG Query & Retrieval service (read path).
+
+    This configuration is used exclusively by RAGQueryService and
+    PgVectorSearchRepository. It has no effect on the ingestion pipeline.
+
+    Attributes:
+        top_k: Default number of chunks to retrieve per query (1–20).
+        similarity_threshold: Minimum cosine similarity for a chunk to be
+            included in the context (0.0–1.0). Lower values increase recall
+            at the cost of noise; higher values increase precision.
+        llm_model: OpenAI chat completion model to use for answer generation.
+            'gpt-4o-mini' (fast, cost-effective) or 'gpt-4o' (higher quality).
+        max_tokens: Maximum tokens in the LLM completion response.
+        temperature: Sampling temperature. Fixed at 0.0 for maximum factual
+            fidelity — do NOT change unless explicitly required.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DOCENGINE_RAG_", extra="ignore")
+
+    top_k: int = Field(default=5, description="Default top-K chunks per query", ge=1, le=20)
+    similarity_threshold: float = Field(
+        default=0.3,
+        description="Minimum cosine similarity threshold (0.0–1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    llm_model: str = Field(default="gpt-4o-mini", description="OpenAI chat completion model")
+    max_tokens: int = Field(default=2048, description="Max tokens for LLM response", ge=128, le=8192)
+    temperature: float = Field(default=0.0, description="Sampling temperature (0.0 = deterministic)", ge=0.0, le=2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +483,7 @@ class AppSettings(BaseSettings):
     markdown: MarkdownConfig = Field(default_factory=lambda: MarkdownConfig())
     database: DatabaseConfig = Field(default_factory=lambda: DatabaseConfig())
     embedding: EmbeddingConfig = Field(default_factory=lambda: EmbeddingConfig())
+    rag_query: RAGQueryConfig = Field(default_factory=lambda: RAGQueryConfig())
 
 
     @field_validator("environment", mode="before")

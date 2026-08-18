@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocEngine — Chat RAG de Consultas</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Marked Library for rendering Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --bg-card-border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #6366f1;
+      --accent-primary-hover: #4f46e5;
+      --accent-success: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    body.light-theme {
+      --bg-dark: #f8fafc;
+      --bg-card: rgba(255, 255, 255, 0.88);
+      --bg-card-border: rgba(0, 0, 0, 0.1);
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
+    }
+
+    body.light-theme header {
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom-color: rgba(0, 0, 0, 0.08);
+    }
+
+    body.light-theme .logo-text h1 {
+      background: linear-gradient(to right, #0f172a, #334155);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    body.light-theme .server-config {
+      background: rgba(241, 245, 249, 0.9);
+      border-color: rgba(0, 0, 0, 0.08);
+    }
+
+    body.light-theme .server-input-group input {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .form-control {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .chat-bubble-assistant {
+      background: rgba(255, 255, 255, 0.9);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: #0f172a;
+    }
+
+    body.light-theme .chat-input-wrapper {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .chat-input-wrapper textarea {
+      color: #0f172a;
+    }
+
+    body.light-theme .source-card {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* Header */
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--bg-card-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+    }
+
+    .header-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #10b981, #6366f1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      color: white;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .logo-text h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo-text span {
+      font-size: 0.75rem;
+      color: var(--accent-success);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Server Config Area */
+    .server-config {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 0.4rem 0.6rem 0.4rem 0.8rem;
+      border-radius: 30px;
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .server-config label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .server-input-group {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .server-input-group input {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      width: 210px;
+    }
+
+    .server-input-group input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .btn-chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-muted);
+      padding: 0.3rem 0.6rem;
+      border-radius: 15px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .btn-chip:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--accent-primary);
+      color: white;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--accent-success);
+    }
+
+    .status-badge.offline {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+      color: var(--accent-danger);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* Main Grid Layout */
+    main {
+      max-width: 1400px;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+      flex: 1;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 1.5rem;
+      align-items: stretch;
+      height: calc(100vh - 120px);
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--bg-card-border);
+    }
+
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-main);
+    }
+
+    /* Form controls */
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+    }
+
+    .form-control {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.6rem 0.8rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .range-slider {
+      width: 100%;
+      accent-color: var(--accent-primary);
+      cursor: pointer;
+    }
+
+    /* Suggested Prompts List */
+    .prompt-suggestions {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .prompt-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--bg-card-border);
+      padding: 0.6rem 0.8rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .prompt-chip:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: var(--text-main);
+      transform: translateX(3px);
+    }
+
+    /* Chat Stream & Bubbles */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .chat-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .chat-message {
+      display: flex;
+      gap: 0.8rem;
+      max-width: 88%;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .chat-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    .chat-message.user .chat-avatar {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+    }
+
+    .chat-message.assistant .chat-avatar {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+    }
+
+    .chat-bubble {
+      padding: 0.9rem 1.15rem;
+      border-radius: var(--radius-md);
+      font-size: 0.88rem;
+      line-height: 1.6;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .chat-message.user .chat-bubble {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+      border-bottom-right-radius: 2px;
+    }
+
+    .chat-message.assistant .chat-bubble {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      border-bottom-left-radius: 2px;
+      width: 100%;
+    }
+
+    .chat-timestamp {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+      display: block;
+      text-align: right;
+    }
+
+    /* Markdown inside assistant bubbles */
+    .chat-bubble p { margin-bottom: 0.6rem; }
+    .chat-bubble p:last-child { margin-bottom: 0; }
+    .chat-bubble ul, .chat-bubble ol { margin: 0.5rem 0 0.5rem 1.2rem; }
+    .chat-bubble code {
+      font-family: var(--font-mono);
+      background: rgba(99, 102, 241, 0.18);
+      color: #a5b4fc;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    .chat-bubble pre {
+      background: rgba(15, 23, 42, 0.8);
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 0.6rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+    }
+
+    /* Source Citations Section */
+    .sources-accordion {
+      margin-top: 0.85rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed var(--bg-card-border);
+    }
+
+    .sources-header {
+      font-size: 0.76rem;
+      color: var(--accent-primary);
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      user-select: none;
+    }
+
+    .sources-list {
+      margin-top: 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .source-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--bg-card-border);
+      padding: 0.6rem 0.75rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.76rem;
+    }
+
+    .source-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.3rem;
+    }
+
+    .source-label {
+      font-weight: 600;
+      color: #a5b4fc;
+    }
+
+    .source-score {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 10px;
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-success);
+    }
+
+    .source-text {
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+      max-height: 80px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    /* Typing Indicator */
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.6rem 0.9rem;
+    }
+
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-primary);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1.0); }
+    }
+
+    /* Chat Input Form */
+    .chat-input-area {
+      padding: 1rem 0 0 0;
+      border-top: 1px solid var(--bg-card-border);
+    }
+
+    .chat-input-wrapper {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      padding: 0.6rem 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input-wrapper:focus-within {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    .chat-input-wrapper textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 0.88rem;
+      resize: none;
+      max-height: 120px;
+      outline: none;
+      height: 24px;
+    }
+
+    .btn-send {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-primary), #4f46e5);
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .btn-send:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-send:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <a href="index.html" class="logo-area">
+        <div class="logo-icon"><i class="fa-solid fa-comments"></i></div>
+        <div class="logo-text">
+          <h1>DocEngine Chat RAG</h1>
+          <span>Consultas Inteligentes sobre Pólizas</span>
+        </div>
+      </a>
+
+      <!-- Server Selector -->
+      <div class="server-config">
+        <label><i class="fa-solid fa-server"></i> API Target:</label>
+        <div class="server-input-group">
+          <input type="text" id="apiBaseUrl" value="http://localhost:8000">
+          <button class="btn-chip" onclick="setApiUrl('http://localhost:8000')">Local</button>
+          <button class="btn-chip" onclick="setApiUrl('http://172.24.25.30:8000')">Server Linux</button>
+        </div>
+      </div>
+
+      <!-- Navigation & Actions -->
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <button class="btn-chip" id="themeToggleBtn" style="padding: 0.4rem 0.65rem;" onclick="toggleTheme()" title="Cambiar Tema (Oscuro / Claro)">
+          <i class="fa-solid fa-sun" id="themeIcon" style="color: #f59e0b; font-size: 0.95rem;"></i>
+        </button>
+
+        <a href="index.html" class="btn-chip" style="background: rgba(99, 102, 241, 0.25); border-color: var(--accent-primary); color: white; font-weight: 600; padding: 0.4rem 0.85rem;" title="Volver al Estudio de Extracción">
+          <i class="fa-solid fa-file-contract" style="color: #a5b4fc;"></i> Studio Extracción
+        </a>
+
+        <div id="healthBadge" class="status-badge">
+          <div class="status-dot"></div>
+          <span id="healthText">Conectando...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <main>
+    <!-- Left Sidebar: Filters & Settings -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><i class="fa-solid fa-sliders"></i> Ajustes de Consulta</div>
+        <button class="btn-chip" onclick="clearChatHistory()" title="Reiniciar Conversación">
+          <i class="fa-solid fa-rotate-left"></i> Limpiar
+        </button>
+      </div>
+
+      <!-- Company Filter -->
+      <div class="form-group">
+        <label for="companySelect">
+          <span><i class="fa-solid fa-building" style="color: var(--accent-primary);"></i> Empresa Aseguradora</span>
+        </label>
+        <select id="companySelect" class="form-control">
+          <option value="">-- Todas las Empresas --</option>
+          <option value="ALI">ALI — ALIANZA CIA DE SEGUROS</option>
+          <option value="ALV">ALV — ALIANZA VIDA SEGUROS</option>
+          <option value="BIS">BIS — BISA SEGUROS Y REASEGUROS</option>
+          <option value="FOV">FOV — COMPAÑIA DE SEGUROS FORTALEZA VIDA</option>
+          <option value="CRI">CRI — CREDINFORM INTERNATIONAL</option>
+          <option value="CRG">CRG — CREDISEGURO GENERALES</option>
+          <option value="CRP">CRP — CREDISEGURO PERSONALES</option>
+          <option value="FOR">FOR — FORTALEZA SEGUROS GENERALES</option>
+          <option value="LBC">LBC — LA BOLIVIANA CIACRUZ GENERALES</option>
+          <option value="LBP">LBP — LA BOLIVIANA CIACRUZ PERSONALES</option>
+          <option value="VIT">VIT — LA VITALICIA DE SEGUROS</option>
+          <option value="MSC">MSC — MERCANTIL SANTA CRUZ SEGUROS</option>
+          <option value="NPF">NPF — NACIONAL SEGUROS PATRIMONIALES</option>
+          <option value="NVS">NVS — NACIONAL SEGUROS VIDA Y SALUD</option>
+          <option value="UNI">UNI — UNIVIDA S.A.</option>
+          <option value="UBI">UBI — UNIBIENES SEGUROS</option>
+        </select>
+      </div>
+
+      <!-- Top K Slider -->
+      <div class="form-group">
+        <label for="topKInput">
+          <span><i class="fa-solid fa-layer-group" style="color: #38bdf8;"></i> Top K Chunks</span>
+          <span id="topKVal" style="font-family: var(--font-mono); color: var(--accent-primary); font-weight: 700;">5</span>
+        </label>
+        <input type="range" id="topKInput" class="range-slider" min="1" max="20" value="5" oninput="document.getElementById('topKVal').innerText = this.value">
+      </div>
+
+      <!-- Similarity Threshold Slider -->
+      <div class="form-group">
+        <label for="similarityThresholdInput">
+          <span><i class="fa-solid fa-bullseye" style="color: var(--accent-success);"></i> Umbral Similitud</span>
+          <span id="threshVal" style="font-family: var(--font-mono); color: var(--accent-success); font-weight: 700;">0.30</span>
+        </label>
+        <input type="range" id="similarityThresholdInput" class="range-slider" min="0.0" max="0.9" step="0.05" value="0.30" oninput="document.getElementById('threshVal').innerText = parseFloat(this.value).toFixed(2)">
+      </div>
+
+      <!-- Suggested Prompts -->
+      <div style="margin-top: 1rem; flex: 1; overflow-y: auto;">
+        <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
+          <i class="fa-solid fa-lightbulb" style="color: var(--accent-warning);"></i> Preguntas Frecuentes
+        </label>
+        <div class="prompt-suggestions">
+          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Qué coberturas principales ofrece la póliza de Alianza?')">
+            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
+            <span>¿Qué coberturas ofrece Alianza?</span>
+          </button>
+          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Cuáles son las exclusiones generales en seguros de accidentes?')">
+            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
+            <span>Exclusiones en accidentes personales</span>
+          </button>
+          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Cuál es el deducible estipulado para daños materiales en BISA?')">
+            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
+            <span>Deducibles por daños materiales</span>
+          </button>
+          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Qué requisitos exige Credinform para la presentación de siniestros?')">
+            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
+            <span>Requisitos para reclamo de siniestros</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Interactive Chat Stream -->
+    <div class="panel">
+      <div class="chat-container">
+        <!-- Message Stream Container -->
+        <div class="chat-stream" id="chatStream">
+          <!-- Initial Welcome Message -->
+          <div class="chat-message assistant">
+            <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+            <div class="chat-bubble">
+              <p><strong>¡Hola! Soy DocEngine Assistant.</strong></p>
+              <p>Puedo responder tus preguntas sobre las pólizas de seguros bolivianas procesadas por el motor. Mis respuestas provienen exclusivamente de los documentos indexados en nuestra base vectorial RAG.</p>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">
+                <i class="fa-solid fa-circle-info"></i> Puedes filtrar por empresa asegurable o ajustar los parámetros de recuperación en el panel izquierdo.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <div class="chat-input-area">
+          <div class="chat-input-wrapper">
+            <textarea id="questionInput" placeholder="Escribe tu consulta sobre las pólizas aquí... (Enter para enviar)" rows="1" onkeydown="handleKeyDown(event)"></textarea>
+            <button class="btn-send" id="btnSend" onclick="submitQuestion()" title="Enviar Pregunta">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Config Server Base URL
+    function getApiUrl() {
+      return localStorage.getItem('docengine_api_url') || 'http://localhost:8000';
+    }
+
+    function setApiUrl(url) {
+      document.getElementById('apiBaseUrl').value = url;
+      localStorage.setItem('docengine_api_url', url);
+      checkHealth();
+    }
+
+    // Load saved settings
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedUrl = localStorage.getItem('docengine_api_url');
+      if (savedUrl) {
+        document.getElementById('apiBaseUrl').value = savedUrl;
+      }
+      document.getElementById('apiBaseUrl').addEventListener('change', (e) => {
+        localStorage.setItem('docengine_api_url', e.target.value);
+        checkHealth();
+      });
+
+      // Init Theme
+      initTheme();
+
+      // Check RAG Health
+      checkHealth();
+      setInterval(checkHealth, 15000);
+    });
+
+    // Theme Management
+    function initTheme() {
+      const savedTheme = localStorage.getItem('docengine_theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        document.getElementById('themeIcon').className = 'fa-solid fa-moon';
+        document.getElementById('themeIcon').style.color = '#6366f1';
+      } else {
+        document.body.classList.remove('light-theme');
+        document.getElementById('themeIcon').className = 'fa-solid fa-sun';
+        document.getElementById('themeIcon').style.color = '#f59e0b';
+      }
+    }
+
+    function toggleTheme() {
+      const isLight = document.body.classList.toggle('light-theme');
+      const icon = document.getElementById('themeIcon');
+      if (isLight) {
+        icon.className = 'fa-solid fa-moon';
+        icon.style.color = '#6366f1';
+        localStorage.setItem('docengine_theme', 'light');
+      } else {
+        icon.className = 'fa-solid fa-sun';
+        icon.style.color = '#f59e0b';
+        localStorage.setItem('docengine_theme', 'dark');
+      }
+    }
+
+    // Health Check
+    async function checkHealth() {
+      const badge = document.getElementById('healthBadge');
+      const text = document.getElementById('healthText');
+      try {
+        const response = await fetch(`${getApiUrl()}/api/v1/query/health`, { method: 'GET' });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'ok') {
+            badge.className = 'status-badge';
+            text.innerText = 'RAG Online';
+            return;
+          }
+        }
+        // Fallback to basic health
+        const resHealth = await fetch(`${getApiUrl()}/health`);
+        if (resHealth.ok) {
+          badge.className = 'status-badge';
+          text.innerText = 'Server OK';
+        } else {
+          badge.className = 'status-badge offline';
+          text.innerText = 'API Offline';
+        }
+      } catch (err) {
+        badge.className = 'status-badge offline';
+        text.innerText = 'Desconectado';
+      }
+    }
+
+    // Auto-resize textarea
+    const textarea = document.getElementById('questionInput');
+    textarea.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
+    });
+
+    function handleKeyDown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        submitQuestion();
+      }
+    }
+
+    function useSuggestedPrompt(text) {
+      document.getElementById('questionInput').value = text;
+      submitQuestion();
+    }
+
+    function clearChatHistory() {
+      const stream = document.getElementById('chatStream');
+      stream.innerHTML = `
+        <div class="chat-message assistant">
+          <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="chat-bubble">
+            <p><strong>Conversación reiniciada.</strong></p>
+            <p>Puedes hacerme cualquier pregunta sobre las pólizas indexadas.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    // Submit Question to RAG API
+    async function submitQuestion() {
+      const inputEl = document.getElementById('questionInput');
+      const question = inputEl.value.trim();
+      if (!question) return;
+
+      const btnSend = document.getElementById('btnSend');
+      const chatStream = document.getElementById('chatStream');
+
+      // 1. Add User Message
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const userMsgHtml = `
+        <div class="chat-message user">
+          <div class="chat-avatar"><i class="fa-solid fa-user"></i></div>
+          <div class="chat-bubble">
+            ${escapeHtml(question)}
+            <span class="chat-timestamp">${timeStr}</span>
+          </div>
+        </div>
+      `;
+      chatStream.insertAdjacentHTML('beforeend', userMsgHtml);
+
+      // Clear input
+      inputEl.value = '';
+      inputEl.style.height = '24px';
+      btnSend.disabled = true;
+
+      // 2. Add Thinking Indicator
+      const loadingId = 'loading-' + Date.now();
+      const loadingHtml = `
+        <div class="chat-message assistant" id="${loadingId}">
+          <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="chat-bubble">
+            <div class="typing-indicator">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 0.5rem;">Buscando fragmentos y generando respuesta...</span>
+            </div>
+          </div>
+        </div>
+      `;
+      chatStream.insertAdjacentHTML('beforeend', loadingHtml);
+      scrollToBottom();
+
+      // Gather Payload Params
+      const companySigla = document.getElementById('companySelect').value;
+      const topK = parseInt(document.getElementById('topKInput').value, 10) || 5;
+      const similarityThreshold = parseFloat(document.getElementById('similarityThresholdInput').value) || 0.3;
+
+      const payload = {
+        question: question,
+        top_k: topK,
+        similarity_threshold: similarityThreshold,
+        filters: companySigla ? { company_sigla: companySigla } : null
+      };
+
+      try {
+        const response = await fetch(`${getApiUrl()}/api/v1/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        // Remove loading
+        const loaderElem = document.getElementById(loadingId);
+        if (loaderElem) loaderElem.remove();
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Error de servidor' }));
+          renderAssistantError(errorData.detail || 'No se pudo obtener la respuesta.');
+          return;
+        }
+
+        const data = await response.json();
+        renderAssistantResponse(data);
+
+      } catch (err) {
+        const loaderElem = document.getElementById(loadingId);
+        if (loaderElem) loaderElem.remove();
+        renderAssistantError(`Error de conexión con el servidor RAG (${err.message})`);
+      } finally {
+        btnSend.disabled = false;
+        scrollToBottom();
+      }
+    }
+
+    function renderAssistantResponse(data) {
+      const chatStream = document.getElementById('chatStream');
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // Render answer using marked
+      let parsedAnswer = marked.parse(data.answer || '');
+
+      // Build Sources HTML
+      let sourcesHtml = '';
+      if (data.sources && data.sources.length > 0) {
+        const sourcesList = data.sources.map((s, idx) => {
+          const pct = Math.round(s.similarity_score * 100);
+          return `
+            <div class="source-card">
+              <div class="source-card-header">
+                <span class="source-label"><i class="fa-solid fa-file-lines"></i> ${escapeHtml(s.document_label || 'Póliza')} (Paso #${s.chunk_index})</span>
+                <span class="source-score">Similitud: ${pct}%</span>
+              </div>
+              <div class="source-text">${escapeHtml(s.chunk_content)}</div>
+            </div>
+          `;
+        }).join('');
+
+        const accordionId = 'acc-' + Date.now();
+        sourcesHtml = `
+          <div class="sources-accordion">
+            <div class="sources-header" onclick="toggleAccordion('${accordionId}')">
+              <i class="fa-solid fa-link"></i> Fuentes consultadas (${data.sources.length} fragmentos)
+              <i class="fa-solid fa-chevron-down" id="icon-${accordionId}" style="margin-left: auto;"></i>
+            </div>
+            <div class="sources-list" id="${accordionId}" style="display: none;">
+              ${sourcesList}
+            </div>
+          </div>
+        `;
+      } else if (data.no_context_found) {
+        sourcesHtml = `
+          <div class="sources-accordion" style="border-top-color: rgba(245, 158, 11, 0.3);">
+            <span style="font-size: 0.76rem; color: var(--accent-warning);">
+              <i class="fa-solid fa-triangle-exclamation"></i> No se encontraron fragmentos que superen el umbral de similitud (${data.similarity_threshold || 0.3}).
+            </span>
+          </div>
+        `;
+      }
+
+      const messageHtml = `
+        <div class="chat-message assistant">
+          <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="chat-bubble">
+            <div class="answer-text">${parsedAnswer}</div>
+            ${sourcesHtml}
+            <span class="chat-timestamp">${timeStr} • Modelo: ${escapeHtml(data.model_used || 'OpenAI')}</span>
+          </div>
+        </div>
+      `;
+
+      chatStream.insertAdjacentHTML('beforeend', messageHtml);
+    }
+
+    function renderAssistantError(errorMsg) {
+      const chatStream = document.getElementById('chatStream');
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const html = `
+        <div class="chat-message assistant">
+          <div class="chat-avatar" style="background: var(--accent-danger);"><i class="fa-solid fa-circle-exclamation"></i></div>
+          <div class="chat-bubble" style="border-color: rgba(239, 68, 68, 0.4);">
+            <p style="color: #f87171; font-weight: 600;"><i class="fa-solid fa-triangle-exclamation"></i> Ocurrió un inconveniente:</p>
+            <p style="font-size: 0.85rem; margin-top: 0.3rem;">${escapeHtml(errorMsg)}</p>
+            <span class="chat-timestamp">${timeStr}</span>
+          </div>
+        </div>
+      `;
+      chatStream.insertAdjacentHTML('beforeend', html);
+    }
+
+    function toggleAccordion(id) {
+      const el = document.getElementById(id);
+      const icon = document.getElementById('icon-' + id);
+      if (el.style.display === 'none') {
+        el.style.display = 'flex';
+        icon.className = 'fa-solid fa-chevron-up';
+      } else {
+        el.style.display = 'none';
+        icon.className = 'fa-solid fa-chevron-down';
+      }
+    }
+
+    function scrollToBottom() {
+      const stream = document.getElementById('chatStream');
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>

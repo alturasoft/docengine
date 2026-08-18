@@ -575,11 +575,65 @@
       border-top-color: var(--accent-primary);
       border-radius: 50%;
       animation: spin 1s linear infinite;
-      margin: 0 auto 1rem;
+      margin: 0 auto 1.25rem;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+
+    .progress-bar-wrapper {
+      width: 100%;
+      max-width: 440px;
+      margin: 0.75rem auto 0.5rem;
+      background: rgba(15, 23, 42, 0.4);
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6366f1, #818cf8, #10b981);
+      border-radius: 999px;
+      transition: width 0.35s ease-out;
+      box-shadow: 0 0 14px rgba(99, 102, 241, 0.5);
+    }
+
+    .progress-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      font-family: var(--font-mono);
+    }
+
+    .progress-stage-text {
+      font-size: 0.84rem;
+      color: #a5b4fc;
+      font-weight: 500;
+      margin-top: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.4rem 0.8rem;
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(99, 102, 241, 0.2);
     }
 
     /* Results Area */
@@ -828,6 +882,9 @@
         <button class="btn-chip" id="themeToggleBtn" style="padding: 0.4rem 0.65rem;" onclick="toggleTheme()" title="Cambiar Tema (Oscuro / Claro)">
           <i class="fa-solid fa-sun" id="themeIcon" style="color: #f59e0b; font-size: 0.95rem;"></i>
         </button>
+        <a href="chat.html" class="btn-chip" style="background: rgba(16, 185, 129, 0.25); border-color: var(--accent-success); color: white; font-weight: 600; padding: 0.4rem 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.45rem;" title="Ir al Chat RAG de Consultas">
+          <i class="fa-solid fa-comments" style="color: #34d399;"></i> Chat RAG
+        </a>
         <button class="btn-chip" style="background: rgba(99, 102, 241, 0.25); border-color: var(--accent-primary); color: white; font-weight: 600; padding: 0.4rem 0.8rem;" onclick="openLogModal()">
           <i class="fa-solid fa-terminal" style="color: #a5b4fc;"></i> Logs del Servidor
         </button>
@@ -976,8 +1033,28 @@
         <!-- Loader -->
         <div id="loader" class="loader-container">
           <div class="spinner"></div>
-          <h4 style="font-size: 0.95rem; font-weight: 600;" id="loaderTitle">Procesando documento...</h4>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Docling está analizando maquetación, tablas y estructura RAG.</p>
+          
+          <!-- Línea 1: Mensaje de archivo / acción actual -->
+          <h4 style="font-size: 0.98rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.75rem;" id="loaderTitle">Procesando documento...</h4>
+          
+          <!-- Línea 2: Barra de progreso con porcentaje -->
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar-container">
+              <div id="loaderProgressBar" class="progress-bar-fill"></div>
+            </div>
+            <div class="progress-bar-header">
+              <span id="loaderStageStep" style="color: var(--accent-primary); font-weight: 600;">Paso 1 de 4</span>
+              <span id="loaderPercentText" style="color: var(--text-main); font-weight: 600;">0%</span>
+            </div>
+          </div>
+
+          <!-- Línea 3: Mensaje detallado del estado/fase actual del proceso -->
+          <div id="loaderStageMessage" class="progress-stage-text">
+            <i class="fa-solid fa-gear fa-spin" style="font-size: 0.85rem; color: var(--accent-primary);"></i>
+            <span id="loaderStageDetail">Inicializando motor de extracción...</span>
+          </div>
+
+          <p style="font-size: 0.76rem; color: var(--text-dim); margin-top: 0.75rem;" id="loaderSubtext">Docling está analizando maquetación, tablas y estructura RAG.</p>
         </div>
 
       </div>
@@ -1274,13 +1351,72 @@
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Process Operations
+    // Process Operations & Progress Management
+    let progressTimer = null;
+    let currentProgressPercent = 0;
+
+    const EXTRACTION_STAGES = [
+      { pct: 15, step: "Paso 1 de 4", text: "Inicializando motor y preparando documento PDF..." },
+      { pct: 45, step: "Paso 2 de 4", text: "Análisis de maquetación, lectura OCR y detección de tablas (Docling)..." },
+      { pct: 75, step: "Paso 3 de 4", text: "Aplicando Skill y reglas de extracción para la empresa..." },
+      { pct: 92, step: "Paso 4 de 4", text: "Generando contenido Markdown/JSON y guardando en BD (RAG)..." }
+    ];
+
+    function setLoaderProgress(percent, stepText, detailText) {
+      currentProgressPercent = Math.min(100, Math.max(0, percent));
+      const fillEl = document.getElementById('loaderProgressBar');
+      const percentEl = document.getElementById('loaderPercentText');
+      const stepEl = document.getElementById('loaderStageStep');
+      const detailEl = document.getElementById('loaderStageDetail');
+
+      if (fillEl) fillEl.style.width = `${currentProgressPercent}%`;
+      if (percentEl) percentEl.innerText = `${Math.round(currentProgressPercent)}%`;
+      if (stepEl && stepText) stepEl.innerText = stepText;
+      if (detailEl && detailText) detailEl.innerText = detailText;
+    }
+
+    function startProgressSimulation() {
+      stopProgressSimulation();
+      setLoaderProgress(5, "Paso 1 de 4", EXTRACTION_STAGES[0].text);
+      
+      let stageIndex = 0;
+
+      progressTimer = setInterval(() => {
+        if (currentProgressPercent < 92) {
+          let nextVal = currentProgressPercent + (Math.random() * 2.2 + 0.6);
+          if (nextVal > 92) nextVal = 92;
+
+          if (stageIndex < EXTRACTION_STAGES.length - 1 && nextVal >= EXTRACTION_STAGES[stageIndex + 1].pct) {
+            stageIndex++;
+          }
+          
+          const stage = EXTRACTION_STAGES[stageIndex];
+          setLoaderProgress(nextVal, stage.step, stage.text);
+        }
+      }, 450);
+    }
+
+    async function completeProgressSimulation() {
+      stopProgressSimulation();
+      setLoaderProgress(100, "Completado", "¡Extracción finalizada exitosamente!");
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    function stopProgressSimulation() {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+    }
+
     function showLoader(title = 'Procesando documento...') {
       document.getElementById('loaderTitle').innerText = title;
+      setLoaderProgress(0, "Paso 1 de 4", "Inicializando motor de extracción...");
       loader.style.display = 'block';
     }
 
     function hideLoader() {
+      stopProgressSimulation();
       loader.style.display = 'none';
     }
 
@@ -1313,6 +1449,7 @@
       formData.append('company_sigla', sigla);
 
       showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]...`);
+      startProgressSimulation();
 
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/extract`, {
@@ -1326,6 +1463,7 @@
         }
 
         const data = await res.json();
+        await completeProgressSimulation();
         await displaySingleResult(data);
         fetchMetrics();
       } catch (err) {
@@ -1349,6 +1487,7 @@
       await clearServerLogBuffer();
 
       showLoader(`Descargando y extrayendo desde URL con Skill [${sigla}]...`);
+      startProgressSimulation();
 
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/extract/url`, {
@@ -1363,6 +1502,7 @@
         }
 
         const data = await res.json();
+        await completeProgressSimulation();
         await displaySingleResult(data);
         fetchMetrics();
       } catch (err) {
@@ -1386,6 +1526,7 @@
       await clearServerLogBuffer();
 
       showLoader(`Procesando carpeta "${folderPath}" en lote con Skill [${sigla}]...`);
+      startProgressSimulation();
 
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/extract/folder`, {
@@ -1400,6 +1541,7 @@
         }
 
         const data = await res.json();
+        await completeProgressSimulation();
         displayBatchResult(data);
         fetchMetrics();
       } catch (err) {
