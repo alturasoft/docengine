@@ -284,6 +284,9 @@ class ChunkingService:
             logger.warning("Empty markdown provided for chunking", file_name=file_name)
             return []
 
+        # Normalise line endings across OS platforms (CRLF -> LF) for deterministic chunking
+        markdown = markdown.replace("\r\n", "\n").replace("\r", "\n")
+
         # Detect primary policy number from markdown content
         detected_policy_num = self._detect_policy_number(markdown)
 

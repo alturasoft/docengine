@@ -46,6 +46,13 @@ class TestPostProcess:
         result = service.post_process(md)
         assert result.markdown.endswith("\n")
 
+    def test_normalises_crlf_line_endings(self, service: MarkdownService) -> None:
+        """CRLF line endings should be normalised to LF."""
+        md = "# Título\r\n\r\nContenido en Windows.\r\n"
+        result = service.post_process(md)
+        assert "\r" not in result.markdown
+        assert "# Título\n\nContenido en Windows.\n" in result.markdown
+
 
 class TestDetectRepeatedElements:
     """Tests for MarkdownService._detect_repeated_elements()."""

@@ -117,6 +117,9 @@ class MarkdownService:
                 repeated_elements=[],
             )
 
+        # Normalise line endings across OS platforms (CRLF -> LF)
+        raw_markdown = raw_markdown.replace("\r\n", "\n").replace("\r", "\n")
+
         context = PostProcessingContext(page_texts=page_texts or [])
 
         # Build effective pipeline: generic + optional company rules
