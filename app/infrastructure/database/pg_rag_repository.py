@@ -183,17 +183,20 @@ class PgRagRepository:
                                     chunk.chunk_content,
                                     Json(chunk.metadata_json),
                                     vector_str,
+                                    chunk.chunk_id,
+                                    chunk.parent_id,
+                                    chunk.chunk_type or "parent",
                                 )
                             )
 
                         execute_values(
                             cur,
                             """
-                            INSERT INTO policy_chunks (policy_id, chunk_index, chunk_content, metadata_json, embedding)
+                            INSERT INTO policy_chunks (policy_id, chunk_index, chunk_content, metadata_json, embedding, chunk_id, parent_id, chunk_type)
                             VALUES %s;
                             """,
                             chunk_tuples,
-                            template="(%s, %s, %s, %s, %s::vector)",
+                            template="(%s, %s, %s, %s, %s::vector, %s::uuid, %s::uuid, %s)",
                         )
 
                 # Commit transaction

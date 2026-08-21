@@ -26,6 +26,8 @@ from app.infrastructure.logging.logger import get_logger
 
 if TYPE_CHECKING:
     from app.application.embedding_service import EmbeddingService
+    from app.application.reranker_service import RerankerService
+    from app.infrastructure.database.pg_hybrid_search import PgHybridSearchRepository
     from app.infrastructure.database.pg_vector_search import PgVectorSearchRepository
 
 logger = get_logger(__name__)
@@ -74,10 +76,15 @@ class RAGQueryService:
         embedding_service: EmbeddingService,
         vector_search: PgVectorSearchRepository,
         config: RAGQueryConfig,
+        # --- Parent-Child Retrieval dependencies (optional, backward-compatible) ---
+        hybrid_search: PgHybridSearchRepository | None = None,
+        reranker: RerankerService | None = None,
     ) -> None:
         self._embedder = embedding_service
         self._vector_search = vector_search
         self._config = config
+        self._hybrid_search = hybrid_search
+        self._reranker = reranker
         self._openai_client: openai.OpenAI | None = None
 
     # ------------------------------------------------------------------
@@ -131,13 +138,21 @@ class RAGQueryService:
         # Step 1: Embed the query using the shared bge-m3 model
         query_vector = self._embed_query(question)
 
-        # Step 2: Retrieve top-K similar chunks
-        retrieved_chunks = self._retrieve_chunks(
-            query_vector=query_vector,
-            top_k=resolved_top_k,
-            threshold=resolved_threshold,
-            filters=filters,
-        )
+        # Step 2: Retrieve relevant chunks
+        # Use hybrid search + reranking when available, fall back to vector-only
+        if self._hybrid_search is not None:
+            retrieved_chunks = self._retrieve_and_rerank(
+                query_vector=query_vector,
+                query_text=question,
+                filters=filters,
+            )
+        else:
+            retrieved_chunks = self._retrieve_chunks(
+                query_vector=query_vector,
+                top_k=resolved_top_k,
+                threshold=resolved_threshold,
+                filters=filters,
+            )
 
         # Step 3: Contingency path — no relevant chunks found
         if not retrieved_chunks:
@@ -238,6 +253,61 @@ class RAGQueryService:
         except Exception as exc:
             logger.error("Vector search failed", error=str(exc))
             raise RuntimeError(f"Vector database query failed: {exc}") from exc
+
+    def _retrieve_and_rerank(
+        self,
+        query_vector: list[float],
+        query_text: str,
+        filters: dict[str, Any] | None,
+    ) -> list[RetrievedChunk]:
+        """Retrieve via hybrid search, resolve parents, and rerank.
+
+        This is the Parent-Child Retrieval path:
+        1. Hybrid RRF search over Child Chunks (vector + FTS).
+        2. Resolve and deduplicate Parent Chunks.
+        3. Cross-encoder reranking to select the top-N most relevant Parents.
+
+        Falls back to returning the hybrid results without reranking if
+        no RerankerService was injected.
+
+        Args:
+            query_vector: 1024-dim query embedding.
+            query_text: Original user question for FTS and reranking.
+            filters: Optional pre-filter parameters.
+
+        Returns:
+            List of top-N RetrievedChunk instances (Parent Chunks).
+        """
+        try:
+            parent_chunks = self._hybrid_search.search_and_resolve(
+                query_vector=query_vector,
+                query_text=query_text,
+                top_k_children=20,
+                rrf_pool=60,
+                filters=filters,
+            )
+        except Exception as exc:
+            logger.error("Hybrid search failed", error=str(exc))
+            raise RuntimeError(f"Hybrid search query failed: {exc}") from exc
+
+        if not parent_chunks:
+            return []
+
+        # Apply cross-encoder reranking if available
+        if self._reranker is not None:
+            try:
+                parent_chunks = self._reranker.rerank(
+                    query=query_text,
+                    parent_chunks=parent_chunks,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Reranker failed — returning hybrid results without reranking",
+                    error=str(exc),
+                )
+                # Graceful degradation: use hybrid results as-is
+
+        return parent_chunks
 
     def _build_context(self, chunks: list[RetrievedChunk]) -> str:
         """Assemble the context string injected into the prompt.

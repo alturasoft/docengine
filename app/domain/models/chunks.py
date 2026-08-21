@@ -24,3 +24,6 @@ class PolicyChunk:
     chunk_content: str
     metadata_json: dict = field(default_factory=dict)
     embedding: list[float] | None = None
+    chunk_id: str | None = None
+    parent_id: str | None = None
+    chunk_type: str = "parent"  # "parent" | "child"

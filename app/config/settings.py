@@ -390,6 +390,8 @@ class EmbeddingConfig(BaseSettings):
     device: str = Field(default="cpu", description="Hardware device for embeddings")
     chunk_size_chars: int = Field(default=1800, description="Target chunk size in characters", ge=200, le=10000)
     chunk_overlap_chars: int = Field(default=200, description="Chunk overlap in characters", ge=0, le=1000)
+    child_chunk_size_chars: int = Field(default=800, description="Child chunk size for Parent-Child retrieval", ge=100, le=2000)
+    child_chunk_overlap_chars: int = Field(default=100, description="Child chunk overlap for Parent-Child retrieval", ge=0, le=500)
     cache_folder: Path | None = Field(
         default=None,
         description="Optional custom directory path for storing/loading embedding models",
@@ -426,6 +428,38 @@ class RAGQueryConfig(BaseSettings):
     llm_model: str = Field(default="gpt-4o-mini", description="OpenAI chat completion model")
     max_tokens: int = Field(default=2048, description="Max tokens for LLM response", ge=128, le=8192)
     temperature: float = Field(default=0.0, description="Sampling temperature (0.0 = deterministic)", ge=0.0, le=2.0)
+
+
+class RerankerConfig(BaseSettings):
+    """Controls the cross-encoder reranking step in the RAG query path.
+
+    When enabled, retrieved Parent Chunks are re-scored against the user query
+    using a cross-encoder model (BAAI/bge-reranker-v2-m3) for higher-quality
+    ranking before LLM context injection.
+
+    Set DOCENGINE_RERANKER_ENABLED=False in .env for lightweight development
+    environments (e.g., Windows with limited RAM). The mock fallback returns
+    the first top_n chunks with synthetic scores, preserving data structure
+    compatibility for the rest of the pipeline.
+
+    Attributes:
+        enabled: Toggle cross-encoder reranking on/off. Default True (production).
+        model_name: HuggingFace cross-encoder model identifier.
+        top_n: Number of parent chunks to return after reranking.
+        device: Computation device ('cpu', 'cuda', 'directml').
+        cache_folder: Optional custom model cache directory.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DOCENGINE_RERANKER_", extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable cross-encoder reranking (False for dev mock)")
+    model_name: str = Field(default="BAAI/bge-reranker-v2-m3", description="Cross-encoder model")
+    top_n: int = Field(default=3, description="Number of parent chunks after reranking", ge=1, le=10)
+    device: str = Field(default="cpu", description="Hardware device for reranker")
+    cache_folder: Path | None = Field(
+        default=None,
+        description="Optional custom directory path for storing/loading reranker models",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +518,7 @@ class AppSettings(BaseSettings):
     database: DatabaseConfig = Field(default_factory=lambda: DatabaseConfig())
     embedding: EmbeddingConfig = Field(default_factory=lambda: EmbeddingConfig())
     rag_query: RAGQueryConfig = Field(default_factory=lambda: RAGQueryConfig())
+    reranker: RerankerConfig = Field(default_factory=lambda: RerankerConfig())
 
 
     @field_validator("environment", mode="before")

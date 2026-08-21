@@ -17,6 +17,11 @@ services:
       - ./.agents:/app/.agents:ro
       # Web UI static files
       - ./webui:/app/webui:ro
+      # Application code
+      - ./app:/app/app:ro
+      - ./main.py:/app/main.py:ro
+      # HuggingFace cache named volume
+      - hf_cache:/tmp/huggingface
       # Scripts
       - ./scripts:/app/scripts:ro
       # Optional: pre-downloaded Docling model artifacts
@@ -76,6 +81,7 @@ services:
 
 volumes:
   postgres_data:
+  hf_cache:
 
 networks:
   docengine_net:

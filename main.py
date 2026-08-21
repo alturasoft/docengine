@@ -58,7 +58,7 @@ if __name__ == "__main__":
     #   python main.py extract document.pdf
     #   python main.py process-rag document.pdf
     #   python main.py skill analyze CRI
-    if len(sys.argv) > 1 and sys.argv[1] in ("extract", "process-rag", "version"):
+    if len(sys.argv) > 1 and sys.argv[1] in ("extract", "process-rag", "query", "version"):
         cli(standalone_mode=True)
     elif len(sys.argv) > 1 and sys.argv[1] == "skill":
         skill(standalone_mode=True)

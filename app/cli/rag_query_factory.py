@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from app.application.embedding_service import EmbeddingService
 from app.application.rag_query_service import RAGQueryService
+from app.application.reranker_service import RerankerService
 from app.config.settings import get_settings
 from app.infrastructure.database.db_connection import DatabaseManager
+from app.infrastructure.database.pg_hybrid_search import PgHybridSearchRepository
 from app.infrastructure.database.pg_vector_search import PgVectorSearchRepository
 
 
@@ -28,6 +30,11 @@ def create_rag_query_service(
     application settings. This fallback ensures the factory is self-contained
     and usable in isolation (e.g., CLI scripts, tests).
 
+    Hybrid search and reranker are always wired in. The reranker respects
+    the DOCENGINE_RERANKER_ENABLED flag — when False, it operates in mock
+    mode returning the first top_n chunks without loading the cross-encoder
+    model (safe for Windows dev environments with limited RAM).
+
     Args:
         embedding_service: Optional pre-initialized EmbeddingService (bge-m3).
             Pass app.state.rag_service._embedder from the lifespan context
@@ -38,9 +45,13 @@ def create_rag_query_service(
     """
     settings = get_settings()
 
-    # Database setup — read-only repository, separate connection scope
+    # Database setup — read-only repositories, separate connection scope
     db_manager = DatabaseManager(settings.database)
     vector_search = PgVectorSearchRepository(db_manager)
+    hybrid_search = PgHybridSearchRepository(db_manager)
+
+    # Reranker — lazy model loading; mock mode when enabled=False
+    reranker = RerankerService(settings.reranker)
 
     # Reuse the provided embedding_service, or create a new one as fallback
     if embedding_service is None:
@@ -50,4 +61,7 @@ def create_rag_query_service(
         embedding_service=embedding_service,
         vector_search=vector_search,
         config=settings.rag_query,
+        hybrid_search=hybrid_search,
+        reranker=reranker,
     )
+

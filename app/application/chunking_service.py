@@ -8,6 +8,7 @@ Table-Aware Contextual Chunking strategy for Markdown tables and sections.
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -72,6 +73,13 @@ class ChunkingService:
         self._text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self._config.chunk_size_chars,
             chunk_overlap=self._config.chunk_overlap_chars,
+            separators=["\n\n", "\n", " ", ""],
+        )
+        # Child splitter for Parent-Child Retrieval: smaller fragments for
+        # precise vector matching. Parents are returned to the LLM intact.
+        self._child_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self._config.child_chunk_size_chars,
+            chunk_overlap=self._config.child_chunk_overlap_chars,
             separators=["\n\n", "\n", " ", ""],
         )
 
@@ -293,7 +301,8 @@ class ChunkingService:
         # 1. First pass: Split by Markdown headers
         header_splits = self._header_splitter.split_text(markdown)
 
-        final_chunks: list[PolicyChunk] = []
+        parent_chunks: list[PolicyChunk] = []
+        child_chunks: list[PolicyChunk] = []
         chunk_idx = 0
 
         for doc in header_splits:
@@ -312,6 +321,9 @@ class ChunkingService:
 
             for block in blocks:
                 if block.block_type == "table":
+                    # --- TABLE BLOCKS: Parent-only (no children) ---
+                    # Tables are already optimized by _split_table with header
+                    # repetition. Each table sub-chunk becomes a standalone Parent.
                     table_title = self._extract_table_title(block.lines[0]) if block.lines else None
                     context_prefix = self._build_context_prefix(
                         metadata=metadata,
@@ -322,36 +334,77 @@ class ChunkingService:
                     table_chunks = self._split_table(block.lines, context_prefix=context_prefix)
                     for tbl_chunk in table_chunks:
                         if tbl_chunk.strip():
-                            final_chunks.append(
+                            parent_chunks.append(
                                 PolicyChunk(
                                     chunk_index=chunk_idx,
                                     chunk_content=tbl_chunk.strip(),
                                     metadata_json=dict(metadata),
+                                    chunk_id=str(uuid.uuid4()),
+                                    parent_id=None,
+                                    chunk_type="parent",
                                 )
                             )
                             chunk_idx += 1
                 else:
+                    # --- TEXT BLOCKS: Parent + Child Chunks ---
                     context_prefix = self._build_context_prefix(
                         metadata=metadata,
                         file_name=file_name,
                         detected_policy_num=detected_policy_num,
                     )
-                    text_chunks = self._split_text_block(block.content, context_prefix=context_prefix)
-                    for txt_chunk in text_chunks:
-                        if txt_chunk.strip():
-                            final_chunks.append(
-                                PolicyChunk(
-                                    chunk_index=chunk_idx,
-                                    chunk_content=txt_chunk.strip(),
-                                    metadata_json=dict(metadata),
+
+                    # Create the Parent Chunk with full text content
+                    parent_id = str(uuid.uuid4())
+                    full_text = f"{context_prefix}{block.content.strip()}" if context_prefix else block.content.strip()
+                    parent_chunks.append(
+                        PolicyChunk(
+                            chunk_index=chunk_idx,
+                            chunk_content=full_text,
+                            metadata_json=dict(metadata),
+                            chunk_id=parent_id,
+                            parent_id=None,
+                            chunk_type="parent",
+                        )
+                    )
+                    chunk_idx += 1
+
+                    # Generate Child Chunks only if the raw narrative text
+                    # (without context prefix) is long enough to benefit from
+                    # finer-grained vector matching.
+                    raw_narrative = block.content.strip()
+                    if len(raw_narrative) > self._config.child_chunk_size_chars:
+                        child_texts = self._child_splitter.split_text(raw_narrative)
+                        for child_text in child_texts:
+                            if child_text.strip():
+                                child_content = (
+                                    f"{context_prefix}{child_text.strip()}"
+                                    if context_prefix
+                                    else child_text.strip()
                                 )
-                            )
-                            chunk_idx += 1
+                                child_chunks.append(
+                                    PolicyChunk(
+                                        chunk_index=chunk_idx,
+                                        chunk_content=child_content,
+                                        metadata_json=dict(metadata),
+                                        chunk_id=str(uuid.uuid4()),
+                                        parent_id=parent_id,
+                                        chunk_type="child",
+                                    )
+                                )
+                                chunk_idx += 1
+
+        # Combine: Parents first (for storage order), then Children
+        final_chunks = parent_chunks + child_chunks
+
+        parent_count = len(parent_chunks)
+        child_count = len(child_chunks)
 
         logger.info(
-            "Local Markdown chunking complete",
+            "Local Markdown chunking complete (Parent-Child)",
             file_name=file_name,
             policy_number=detected_policy_num,
+            parent_chunks=parent_count,
+            child_chunks=child_count,
             total_chunks=len(final_chunks),
             avg_chars=(
                 sum(len(c.chunk_content) for c in final_chunks) // len(final_chunks)

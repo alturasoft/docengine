@@ -282,7 +282,71 @@ def process_rag(
         else:
             click.echo(f"   [FAIL] RAG processing failed: {report.errors}", err=True)
 
+@cli.command(name="query")
+@click.argument("question")
+@click.option(
+    "--company",
+    "company_sigla",
+    default=None,
+    metavar="SIGLA",
+    help="Filter search to a specific company sigla (e.g. CRI, ALI).",
+)
+@click.option(
+    "--policy-id",
+    default=None,
+    help="Filter search to a specific policy UUID.",
+)
+@click.option(
+    "--top-k",
+    default=None,
+    type=int,
+    help="Number of chunks/results to retrieve.",
+)
+@click.pass_context
+def query_rag(
+    ctx: click.Context,
+    question: str,
+    company_sigla: str | None,
+    policy_id: str | None,
+    top_k: int | None,
+) -> None:
+    """Ask a question to the RAG system using Parent-Child Hybrid Search + Reranking."""
+    from app.cli.rag_query_factory import create_rag_query_service  # noqa: PLC0415
 
+    query_service = create_rag_query_service()
+
+    filters: dict[str, str] = {}
+    if company_sigla:
+        filters["company_sigla"] = company_sigla.strip().upper()
+    if policy_id:
+        filters["policy_id"] = policy_id.strip()
+
+    click.echo(f"\n🔍 Question: {question}")
+    if filters:
+        click.echo(f"   Filters : {filters}")
+
+    start = time.perf_counter()
+    try:
+        response = query_service.query(
+            question=question,
+            top_k=top_k,
+            filters=filters if filters else None,
+        )
+    except Exception as exc:
+        click.echo(f"\n[ERROR] Query failed: {exc}", err=True)
+        sys.exit(1)
+
+    elapsed = time.perf_counter() - start
+
+    click.echo(f"\n💡 Answer (model: {response.model_used}):\n")
+    click.echo(response.answer)
+    click.echo("\n" + "=" * 60)
+    click.echo(f"📊 Sources used ({response.chunks_used} Parent chunks in {elapsed:.2f}s):")
+    for i, source in enumerate(response.sources, start=1):
+        click.echo(f"\n[{i}] {source.document_label} (Score: {source.similarity_score:.4f})")
+        preview = source.chunk_content[:200].replace("\n", " ")
+        click.echo(f"    Preview: {preview}...")
+    click.echo("=" * 60 + "\n")
 
 @cli.command()
 @click.pass_context
