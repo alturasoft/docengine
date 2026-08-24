@@ -36,7 +36,13 @@ def main() -> None:
 )
 def serve(host: str, port: int, reload: bool, workers: int) -> None:
     """Start the DocEngine REST API server."""
-    click.echo(f"🚀 Starting DocEngine API on {host}:{port}")
+    from app.config.settings import get_settings
+
+    settings = get_settings()
+    click.echo(
+        f"🚀 Starting DocEngine API on {host}:{port} "
+        f"[OS: {settings.os_type.upper()} | Threads: {settings.pipeline.num_threads} | Env: {settings.environment}]"
+    )
     uvicorn.run(
         "main:app",
         host=host,

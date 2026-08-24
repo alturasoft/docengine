@@ -25,12 +25,10 @@ def init_db() -> None:
     settings = get_settings()
     db_config = settings.database
 
-    sql_path = Path(__file__).parent / "001_add_rag_tables.sql"
-    if not sql_path.exists():
-        print(f"[ERROR] SQL file not found: {sql_path}")
+    sql_files = sorted(Path(__file__).parent.glob("*.sql"))
+    if not sql_files:
+        print("[ERROR] No SQL files found.")
         sys.exit(1)
-
-    sql_content = sql_path.read_text(encoding="utf-8")
 
     print(f"Connecting to PostgreSQL database '{db_config.name}' at {db_config.host}:{db_config.port}...")
 
@@ -44,10 +42,11 @@ def init_db() -> None:
         )
         conn.autocommit = True
         with conn.cursor() as cur:
-            print("Executing 001_add_rag_tables.sql...")
-            cur.execute(sql_content)
+            for sql_file in sql_files:
+                print(f"Executing {sql_file.name}...")
+                cur.execute(sql_file.read_text(encoding="utf-8"))
         conn.close()
-        print("[OK] Database tables and pgvector extension created/verified successfully!")
+        print("[OK] Database schema and migrations applied successfully!")
 
     except Exception as exc:
         print(f"[ERROR] Error initializing database: {exc}")

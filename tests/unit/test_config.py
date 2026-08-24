@@ -156,6 +156,22 @@ class TestAppSettings:
         settings = AppSettings()
         assert settings.extraction.do_ocr is False
 
+    def test_os_detection_attributes(self) -> None:
+        """Verify that OS detection properties and helper methods work."""
+        settings = AppSettings()
+        assert settings.os_type in ("linux", "windows", "macos", "unknown")
+        if settings.os_type == "linux":
+            assert settings.is_linux() is True
+            assert settings.is_windows() is False
+        elif settings.os_type == "windows":
+            assert settings.is_windows() is True
+            assert settings.is_linux() is False
+
+    def test_pipeline_threads_auto_calculated(self) -> None:
+        """Pipeline threads should be a positive integer calculated per OS/CPU."""
+        settings = AppSettings()
+        assert settings.pipeline.num_threads >= 1
+
 
 class TestGetSettingsSingleton:
     """Tests for the get_settings() singleton function."""
@@ -172,3 +188,4 @@ class TestGetSettingsSingleton:
         reset_settings()
         s2 = get_settings()
         assert s1 is not s2
+

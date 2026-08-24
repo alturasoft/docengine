@@ -19,9 +19,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 import sys
 
-# Load .env file into environment variables if present (except during pytest execution)
+# Operating System Detection
+IS_WINDOWS = sys.platform.startswith("win")
+IS_LINUX = sys.platform.startswith("linux")
+IS_MAC = sys.platform == "darwin"
+OS_NAME = "windows" if IS_WINDOWS else ("linux" if IS_LINUX else ("macos" if IS_MAC else "unknown"))
+
+# Build list of hierarchical .env files to load in priority order
+_env_files: list[str] = [".env"]
+_os_env = f".env.{OS_NAME}"
+if Path(_os_env).exists():
+    _env_files.append(_os_env)
+if Path(".env.local").exists():
+    _env_files.append(".env.local")
+
+# Load .env files in priority order into environment variables (except during pytest execution)
 if "pytest" not in sys.modules and os.getenv("PYTEST_CURRENT_TEST") is None:
-    load_dotenv()
+    for _env_path in _env_files:
+        if Path(_env_path).exists():
+            load_dotenv(_env_path, override=True)
 
 # Guarantee a valid, writable cache directory for HuggingFace / Docling / PyTorch
 # when running under system users with HOME=/nonexistent (e.g. Docker containers)
@@ -142,6 +158,15 @@ class ExtractionConfig(BaseSettings):
     )
 
 
+def _default_pipeline_threads() -> int:
+    """Calculate an optimal default thread count for pipeline execution per OS."""
+    cpu_cnt = os.cpu_count() or 4
+    if IS_LINUX:
+        # Utilize available cores up to 16 on Linux multi-core environments
+        return max(2, min(cpu_cnt, 16))
+    return max(1, min(cpu_cnt, 4))
+
+
 class PipelineConfig(BaseSettings):
     """Controls Docling pipeline behaviour and model loading.
 
@@ -178,7 +203,10 @@ class PipelineConfig(BaseSettings):
         default=None, description="Local Docling model artifacts path"
     )
     num_threads: int = Field(
-        default=4, description="CPU threads for pipeline", ge=1, le=64
+        default_factory=_default_pipeline_threads,
+        description="CPU threads for pipeline (auto-calculated per OS if not set)",
+        ge=1,
+        le=64,
     )
     accelerator_device: Literal["cpu", "cuda", "mps", "auto"] = Field(
         default="cpu", description="Hardware accelerator device"
@@ -489,13 +517,16 @@ class AppSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=tuple(_env_files),
         env_file_encoding="utf-8",
         env_prefix="DOCENGINE_",
         extra="ignore",
         case_sensitive=False,
     )
 
+    os_type: str = Field(
+        default=OS_NAME, description="Operating system detected (windows, linux, macos)"
+    )
     environment: Literal["development", "production", "test"] = Field(
         default="development", description="Runtime environment"
     )
@@ -540,6 +571,18 @@ class AppSettings(BaseSettings):
     def is_test(self) -> bool:
         """Return True if running in test mode."""
         return self.environment == "test"
+
+    def is_windows(self) -> bool:
+        """Return True if running on Windows."""
+        return self.os_type == "windows"
+
+    def is_linux(self) -> bool:
+        """Return True if running on Linux."""
+        return self.os_type == "linux"
+
+    def is_mac(self) -> bool:
+        """Return True if running on macOS."""
+        return self.os_type == "macos"
 
 
 # ---------------------------------------------------------------------------

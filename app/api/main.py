@@ -78,6 +78,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "DocEngine starting",
         version=settings.app_version,
         environment=settings.environment,
+        os=settings.os_type,
+        num_threads=settings.pipeline.num_threads,
         table_mode=settings.extraction.table_mode,
         ocr_enabled=settings.extraction.do_ocr,
     )

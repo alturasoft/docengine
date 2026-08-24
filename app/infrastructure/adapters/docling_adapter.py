@@ -123,6 +123,21 @@ class DoclingAdapter(IDocumentExtractor):
 
     def __init__(self, config: AppSettings) -> None:
         self._config = config
+        # Optimize PyTorch thread pool based on configured pipeline workers and CPU cores
+        try:
+            import torch
+            import os
+            total_cpus = os.cpu_count() or 4
+            workers = config.pipeline.num_threads
+            if workers > 1:
+                # Distribute available CPU cores evenly across parallel page workers
+                torch_threads = max(1, total_cpus // workers)
+            else:
+                torch_threads = max(1, total_cpus)
+            torch.set_num_threads(torch_threads)
+        except Exception:
+            pass
+
         self._converter: DocumentConverter = self._build_converter()
         logger.info(
             "DoclingAdapter initialized",
@@ -130,6 +145,7 @@ class DoclingAdapter(IDocumentExtractor):
             ocr_enabled=config.extraction.do_ocr,
             table_mode=config.extraction.table_mode,
             accelerator=config.pipeline.accelerator_device,
+            num_threads=config.pipeline.num_threads,
         )
 
     # ------------------------------------------------------------------
@@ -342,6 +358,25 @@ class DoclingAdapter(IDocumentExtractor):
         if cfg.pipeline.artifacts_path is not None:
             pipeline_options.artifacts_path = str(cfg.pipeline.artifacts_path)
 
+        # --- Accelerator & Threading Options ---
+        try:
+            from docling.datamodel.pipeline_options import (  # noqa: PLC0415
+                AcceleratorDevice,
+                AcceleratorOptions,
+            )
+            device_str = (cfg.pipeline.accelerator_device or "auto").lower()
+            try:
+                acc_dev = AcceleratorDevice(device_str)
+            except Exception:
+                acc_dev = AcceleratorDevice.AUTO
+
+            pipeline_options.accelerator_options = AcceleratorOptions(
+                num_threads=cfg.pipeline.num_threads,
+                device=acc_dev,
+            )
+        except Exception as exc:
+            logger.debug("Could not configure accelerator_options", error=str(exc))
+
         # --- PDF Backend ---
         # Selection is controlled by DOCENGINE_PIPELINE_PDF_BACKEND env var.
         # Default is 'pypdfium2' which avoids std::bad_alloc memory issues.
@@ -458,6 +493,25 @@ class DoclingAdapter(IDocumentExtractor):
         # --- Artifacts path (air-gapped environments) ---
         if cfg.pipeline.artifacts_path is not None:
             pipeline_options.artifacts_path = str(cfg.pipeline.artifacts_path)
+
+        # --- Accelerator & Threading Options ---
+        try:
+            from docling.datamodel.pipeline_options import (  # noqa: PLC0415
+                AcceleratorDevice,
+                AcceleratorOptions,
+            )
+            device_str = (cfg.pipeline.accelerator_device or "auto").lower()
+            try:
+                acc_dev = AcceleratorDevice(device_str)
+            except Exception:
+                acc_dev = AcceleratorDevice.AUTO
+
+            pipeline_options.accelerator_options = AcceleratorOptions(
+                num_threads=cfg.pipeline.num_threads,
+                device=acc_dev,
+            )
+        except Exception as exc:
+            logger.debug("Could not configure accelerator_options", error=str(exc))
 
         # --- PDF Backend (same selection logic as _build_converter) ---
         backend = cfg.pipeline.pdf_backend

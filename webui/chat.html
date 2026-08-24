@@ -793,25 +793,32 @@
   <script>
     // Config Server Base URL
     function getApiUrl() {
-      return localStorage.getItem('docengine_api_url') || 'http://localhost:8000';
+      const input = document.getElementById('apiBaseUrl');
+      if (input && input.value.trim()) {
+        return input.value.trim().replace(/\/+$/, '');
+      }
+      return (localStorage.getItem('docengine_api_url') || window.location.origin || 'http://localhost:8000').replace(/\/+$/, '');
     }
 
     function setApiUrl(url) {
-      document.getElementById('apiBaseUrl').value = url;
+      const input = document.getElementById('apiBaseUrl');
+      if (input) input.value = url;
       localStorage.setItem('docengine_api_url', url);
       checkHealth();
     }
 
     // Load saved settings
     document.addEventListener('DOMContentLoaded', () => {
-      const savedUrl = localStorage.getItem('docengine_api_url');
-      if (savedUrl) {
-        document.getElementById('apiBaseUrl').value = savedUrl;
+      const defaultUrl = window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:8000';
+      const savedUrl = localStorage.getItem('docengine_api_url') || defaultUrl;
+      const input = document.getElementById('apiBaseUrl');
+      if (input) {
+        input.value = savedUrl;
+        input.addEventListener('change', (e) => {
+          localStorage.setItem('docengine_api_url', e.target.value.trim());
+          checkHealth();
+        });
       }
-      document.getElementById('apiBaseUrl').addEventListener('change', (e) => {
-        localStorage.setItem('docengine_api_url', e.target.value);
-        checkHealth();
-      });
 
       // Init Theme
       initTheme();
