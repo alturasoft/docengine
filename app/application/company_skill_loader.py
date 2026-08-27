@@ -99,6 +99,8 @@ class CompanySkill:
     normalize_dates: bool = False
     currency_fields: list[str] = field(default_factory=list)
     table_column_alignment_fixes: list[dict] = field(default_factory=list)
+    header_metadata_patterns: list[dict] = field(default_factory=list)
+    table_cell_cleanup_rules: list[dict] = field(default_factory=list)
     skill_path: Path | None = None
 
     @property
@@ -110,6 +112,8 @@ class CompanySkill:
             and not self.table_split_hints
             and not self.currency_fields
             and not self.table_column_alignment_fixes
+            and not self.header_metadata_patterns
+            and not self.table_cell_cleanup_rules
         )
 
     @property
@@ -276,6 +280,8 @@ def load_company_skill(
         normalize_dates=bool(rules.get("normalize_dates", False)),
         currency_fields=list(rules.get("currency_fields", [])),
         table_column_alignment_fixes=list(rules.get("table_column_alignment_fixes", [])),
+        header_metadata_patterns=list(rules.get("header_metadata_patterns", [])),
+        table_cell_cleanup_rules=list(rules.get("table_cell_cleanup_rules", [])),
         skill_path=skill_path,
     )
 
@@ -373,6 +379,8 @@ def merge_skills(base: CompanySkill, override: CompanySkill) -> CompanySkill:
         normalize_dates=normalize_dates,
         currency_fields=_union(base.currency_fields, override.currency_fields),
         table_column_alignment_fixes=_union(base.table_column_alignment_fixes, override.table_column_alignment_fixes),
+        header_metadata_patterns=_union(base.header_metadata_patterns, override.header_metadata_patterns),
+        table_cell_cleanup_rules=_union(base.table_cell_cleanup_rules, override.table_cell_cleanup_rules),
         skill_path=override.skill_path,
     )
 
@@ -429,8 +437,12 @@ def load_company_skill_merged(
             normalize_dates=general.normalize_dates,
             currency_fields=list(general.currency_fields),
             table_column_alignment_fixes=list(general.table_column_alignment_fixes),
+            header_metadata_patterns=list(general.header_metadata_patterns),
+            table_cell_cleanup_rules=list(general.table_cell_cleanup_rules),
             skill_path=general.skill_path,
         )
+
+    return merge_skills(general, company)
 
     return merge_skills(general, company)
 

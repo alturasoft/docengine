@@ -20,7 +20,7 @@ from app.application.chunking_service import ChunkingService
 from app.application.embedding_service import EmbeddingService
 from app.application.openai_structured_extractor import OpenAIStructuredExtractor
 from app.domain.models.document import ExtractionResult
-from app.domain.models.rag_models import RagProcessingReport
+from app.domain.models.rag_models import PolicyProcessingStats, RagProcessingReport
 from app.infrastructure.database.pg_rag_repository import PgRagRepository
 from app.infrastructure.logging.logger import get_logger
 
@@ -71,7 +71,7 @@ class RagPipelineService:
         company_sigla = result.metadata.company_sigla
 
         logger.info(
-            "Starting RAG processing pipeline",
+            "[RAG] Iniciando pipeline RAG y almacenamiento vectorial...",
             file_name=file_name,
             file_hash=file_hash,
             company_sigla=company_sigla,
@@ -80,10 +80,14 @@ class RagPipelineService:
         job_id = None
         try:
             # 1. Idempotency Check
+            logger.info(
+                "[Idempotencia] Verificando si el documento ya existe en base de datos...",
+                file_hash=file_hash,
+            )
             existing_policy_id = self._repo.policy_exists_by_hash(file_hash)
             if existing_policy_id:
                 logger.info(
-                    "Policy already processed (hash exists in policies). Skipping execution.",
+                    "[Idempotencia] Póliza previamente procesada en BD. Omitiendo duplicado.",
                     file_name=file_name,
                     file_hash=file_hash,
                     policy_id=existing_policy_id,
@@ -108,9 +112,22 @@ class RagPipelineService:
             job_id = self._repo.create_job(file_name)
 
             # 2. Local Chunking (must run first — embeddings depend on chunks)
+            logger.info(
+                "[Chunking] Iniciando división del Markdown en fragmentos jerárquicos (Parent-Child)...",
+                file_name=file_name,
+                markdown_chars=len(result.markdown) if result.markdown else 0,
+            )
+            t_chunk_start = time.perf_counter()
             chunks = self._chunker.chunk_markdown(
                 markdown=result.markdown,
                 file_name=file_name,
+            )
+            chunking_duration = time.perf_counter() - t_chunk_start
+            logger.info(
+                "[Chunking] Chunking finalizado exitosamente",
+                total_chunks=len(chunks),
+                file_name=file_name,
+                duration_seconds=round(chunking_duration, 3),
             )
 
             # 3 & 4. Parallel execution: Embeddings + OpenAI (fully independent)
@@ -118,15 +135,47 @@ class RagPipelineService:
             t_parallel_start = time.perf_counter()
             chunks_with_embeddings: list
             structured_json: dict
+            embedding_duration: float = 0.0
+            openai_duration: float = 0.0
 
-            def _run_embeddings() -> list:
-                return self._embedder.generate_embeddings_for_chunks(chunks)
+            logger.info(
+                "[Paralelo] Iniciando generación de Embeddings (BGE-M3) y Extracción de JSON (OpenAI)...",
+                chunks_count=len(chunks),
+            )
 
-            def _run_openai() -> dict:
-                return self._extractor.extract_structured_json(
+            def _run_embeddings() -> tuple[list, float]:
+                logger.info(
+                    "[Embeddings] Generando vectores densos de 1024-d con modelo local BAAI/bge-m3...",
+                    total_chunks=len(chunks),
+                )
+                t_emb_start = time.perf_counter()
+                emb_res = self._embedder.generate_embeddings_for_chunks(chunks)
+                emb_dur = time.perf_counter() - t_emb_start
+                logger.info(
+                    "[Embeddings] Vectores generados exitosamente",
+                    total_vectors=len(emb_res),
+                    duration_seconds=round(emb_dur, 3),
+                )
+                return emb_res, emb_dur
+
+            def _run_openai() -> tuple[dict, float]:
+                logger.info(
+                    "[JSON Estructurado] Extrayendo entidades y coberturas de la póliza vía OpenAI LLM...",
+                    company_sigla=company_sigla,
+                )
+                t_oai_start = time.perf_counter()
+                json_res = self._extractor.extract_structured_json(
                     markdown=result.markdown,
                     company_sigla=company_sigla,
                 )
+                oai_dur = time.perf_counter() - t_oai_start
+                logger.info(
+                    "[JSON Estructurado] Extracción de JSON completada",
+                    coberturas_count=len(json_res.get("coberturas", [])),
+                    numero_poliza=json_res.get("numero_poliza"),
+                    duration_seconds=round(oai_dur, 3),
+                )
+                return json_res, oai_dur
 
             with ThreadPoolExecutor(max_workers=2) as executor:
                 future_emb = executor.submit(_run_embeddings)
@@ -138,16 +187,80 @@ class RagPipelineService:
                     if exc is not None:
                         raise exc
 
-                chunks_with_embeddings = future_emb.result()
-                structured_json = future_oai.result()
+                chunks_with_embeddings, embedding_duration = future_emb.result()
+                structured_json, openai_duration = future_oai.result()
 
             logger.info(
-                "Parallel steps (Embeddings + OpenAI) completed",
+                "[Paralelo] Embeddings y JSON estructurado completados",
                 duration_seconds=round(time.perf_counter() - t_parallel_start, 3),
                 chunks_count=len(chunks_with_embeddings),
             )
 
+            # Build PolicyProcessingStats
+            total_pages = result.metadata.page_count or 1
+            extraction_time = result.metadata.extraction_time_seconds or 0.0
+            time_per_page = extraction_time / max(1, total_pages)
+            raw_pdf_type = getattr(result.metadata, "pdf_type", None)
+            if raw_pdf_type:
+                file_type = raw_pdf_type.upper()
+            else:
+                file_type = "SCANNED" if getattr(result.metadata, "ocr_used", False) else "DIGITAL"
+
+            parent_chunks = sum(
+                1 for c in chunks_with_embeddings if getattr(c, "chunk_type", "parent") == "parent"
+            )
+            child_chunks = sum(
+                1 for c in chunks_with_embeddings if getattr(c, "chunk_type", "") == "child"
+            )
+
+            usage_dict = structured_json.get("_usage", {})
+            prompt_tokens = usage_dict.get("prompt_tokens", 0)
+            completion_tokens = usage_dict.get("completion_tokens", 0)
+            total_tokens = usage_dict.get("total_tokens", 0)
+            estimated_cost = usage_dict.get("estimated_cost_usd", 0.0)
+
+            # Memory tracking
+            mem_peak = None
+            try:
+                import psutil  # noqa: PLC0415
+                mem_peak = psutil.Process().memory_info().rss / (1024 * 1024)
+            except Exception:
+                pass
+
+            total_pipe_time = time.perf_counter() - start_time
+            stats = PolicyProcessingStats(
+                policy_id="",  # Assigned dynamically during repo transactional save
+                job_id=job_id,
+                policy_number=structured_json.get("numero_poliza"),
+                company_sigla=company_sigla,
+                file_type=file_type,
+                ocr_applied=getattr(result.metadata, "ocr_used", False),
+                scanned_page_ratio=getattr(result.metadata, "scanned_page_ratio", None),
+                total_pages=total_pages,
+                extraction_time_seconds=extraction_time,
+                time_per_page_seconds=time_per_page,
+                chunking_time_seconds=chunking_duration,
+                embedding_time_seconds=embedding_duration,
+                openai_time_seconds=openai_duration,
+                total_pipeline_time_seconds=total_pipe_time,
+                total_chunks=len(chunks_with_embeddings),
+                parent_chunks=parent_chunks,
+                child_chunks=child_chunks,
+                openai_prompt_tokens=prompt_tokens,
+                openai_completion_tokens=completion_tokens,
+                openai_total_tokens=total_tokens,
+                openai_estimated_cost_usd=estimated_cost,
+                coberturas_extracted_count=len(structured_json.get("coberturas", [])),
+                tables_detected=getattr(result.metadata, "tables_detected", 0),
+                memory_peak_mb=mem_peak,
+            )
+
             # 5. Transactional PostgreSQL Persistence
+            logger.info(
+                "[Persistencia BD] Guardando póliza, chunks, vectores y estadísticas en PostgreSQL (pgvector)...",
+                chunks_count=len(chunks_with_embeddings),
+                file_name=file_name,
+            )
             policy_id = self._repo.save_rag_policy_transactional(
                 file_name=file_name,
                 file_hash=file_hash,
@@ -157,6 +270,11 @@ class RagPipelineService:
                 markdown_content=result.markdown,
                 structured_data=structured_json,
                 chunks=chunks_with_embeddings,
+                stats=stats,
+            )
+            logger.info(
+                "[Persistencia BD] Registro transaccional completado en PostgreSQL",
+                policy_id=policy_id,
             )
 
             # 6. Update Job Status to COMPLETED
@@ -168,7 +286,7 @@ class RagPipelineService:
 
             elapsed = time.perf_counter() - start_time
             logger.info(
-                "RAG pipeline successfully completed",
+                "[RAG] Pipeline RAG completado exitosamente",
                 policy_id=policy_id,
                 file_name=file_name,
                 chunks_count=len(chunks_with_embeddings),
@@ -189,7 +307,7 @@ class RagPipelineService:
 
         except Exception as e:
             logger.error(
-                "RAG processing pipeline failed",
+                "[ERROR] [RAG] Fallo crítico durante la ejecución del pipeline RAG",
                 file_name=file_name,
                 error=str(e),
             )

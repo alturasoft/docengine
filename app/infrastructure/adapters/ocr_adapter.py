@@ -124,10 +124,17 @@ class TesseractOcrAdapter(IOcrEngine):
 
     @property
     def is_available(self) -> bool:
-        """Check if Tesseract binary is accessible."""
+        """Check if Tesseract binary is accessible and tesserocr Python library is installed."""
         import shutil
 
-        return shutil.which("tesseract") is not None
+        if shutil.which("tesseract") is None:
+            return False
+        try:
+            import tesserocr  # noqa: F401
+
+            return True
+        except (ImportError, Exception):
+            return False
 
 
 class RapidOcrAdapter(IOcrEngine):
@@ -199,28 +206,28 @@ def get_ocr_adapter(
         force_full_page_ocr: Whether to force full-page OCR.
 
     Returns:
-        An instance of IOcrEngine (EasyOcrAdapter, TesseractOcrAdapter,
-        RapidOcrAdapter, or NullOcrAdapter).
+        An instance of IOcrEngine (RapidOcrAdapter, EasyOcrAdapter,
+        TesseractOcrAdapter, or NullOcrAdapter).
     """
     ocr_cfg = getattr(config, "ocr", None)
-    engine_type = getattr(ocr_cfg, "engine", "easyocr").lower() if ocr_cfg else "easyocr"
+    engine_type = getattr(ocr_cfg, "engine", "rapidocr").lower() if ocr_cfg else "rapidocr"
     languages = getattr(ocr_cfg, "languages", ["es", "en"]) if ocr_cfg else ["es", "en"]
 
     adapters: dict[str, type[IOcrEngine]] = {
+        "rapidocr": RapidOcrAdapter,
         "easyocr": EasyOcrAdapter,
         "tesseract": TesseractOcrAdapter,
-        "rapidocr": RapidOcrAdapter,
     }
 
     # Attempt primary configured engine
-    adapter_cls = adapters.get(engine_type, EasyOcrAdapter)
+    adapter_cls = adapters.get(engine_type, RapidOcrAdapter)
     instance = _instantiate_ocr_adapter(adapter_cls, languages, force_full_page_ocr)
 
     if instance.is_available:
         return instance
 
-    # Fallback search if requested engine is unavailable
-    for candidate_cls in [EasyOcrAdapter, TesseractOcrAdapter, RapidOcrAdapter]:
+    # Fallback search if requested engine is unavailable (prioritizes RapidOCR)
+    for candidate_cls in [RapidOcrAdapter, EasyOcrAdapter, TesseractOcrAdapter]:
         if candidate_cls is adapter_cls:
             continue
         cand = _instantiate_ocr_adapter(candidate_cls, languages, force_full_page_ocr)

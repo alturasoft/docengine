@@ -839,13 +839,32 @@
       overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
-    .log-line { display: block; margin-bottom: 0.2rem; }
-    .log-line.info { color: #38bdf8; }
+    .log-line { display: block; margin-bottom: 0.3rem; font-family: var(--font-mono); font-size: 0.81rem; }
+    .log-line.info { color: #94a3b8; }
     .log-line.warn { color: #facc15; }
-    .log-line.error { color: #f87171; }
+    .log-line.error { color: #f87171; background: rgba(239, 68, 68, 0.08); padding: 0.2rem 0.4rem; border-radius: 4px; border-left: 3px solid #ef4444; }
+    .log-line.success { color: #34d399; }
+    
+    .log-tag { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-weight: 600; font-size: 0.72rem; margin-right: 0.35rem; font-family: var(--font-sans); }
+    .log-tag-docling { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+    .log-tag-skill { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .log-tag-chunking { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .log-tag-embeddings { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .log-tag-json { background: rgba(236, 72, 153, 0.2); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.35); }
+    .log-tag-bd { background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); }
+    .log-tag-rag { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.35); }
+    .log-tag-upload { background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.35); }
+    .log-tag-pipeline { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.35); }
+    .log-tag-error { background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: bold; }
+    .log-tag-default { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.35); }
+
+    .log-timestamp { color: var(--text-dim); font-size: 0.74rem; margin-right: 0.4rem; }
+    .log-key-val { color: #94a3b8; font-size: 0.78rem; }
+    .log-key { color: #64748b; }
+    .log-val { color: #e2e8f0; }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -901,6 +920,14 @@
   <main>
 
     <!-- Metrics Dashboard -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+      <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+        <i class="fa-solid fa-chart-simple" style="color: var(--accent-primary);"></i> Estadísticas de Extracción
+      </span>
+      <button class="btn-chip" style="font-size: 0.72rem; padding: 0.2rem 0.55rem;" onclick="resetServerMetrics()" title="Reiniciar contadores de estadísticas a 0">
+        <i class="fa-solid fa-rotate-left"></i> Reiniciar Métricas
+      </button>
+    </div>
     <div class="metrics-grid">
       <div class="metric-card">
         <div class="metric-icon"><i class="fa-solid fa-file-lines"></i></div>
@@ -1054,7 +1081,16 @@
             <span id="loaderStageDetail">Inicializando motor de extracción...</span>
           </div>
 
-          <p style="font-size: 0.76rem; color: var(--text-dim); margin-top: 0.75rem;" id="loaderSubtext">Docling está analizando maquetación, tablas y estructura RAG.</p>
+          <!-- Inline Realtime Log Box -->
+          <div id="loaderLiveLogBox" style="margin-top: 0.75rem; width: 100%; max-height: 100px; background: rgba(5, 8, 17, 0.9); border: 1px solid var(--bg-card-border); border-radius: 6px; padding: 0.5rem 0.75rem; font-family: var(--font-mono); font-size: 0.73rem; color: #94a3b8; overflow-y: auto; text-align: left; line-height: 1.45;">
+            <div id="loaderLiveLogText"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-primary);"></i> Esperando eventos del servidor...</div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.75rem;">
+            <button type="button" class="btn-chip" style="background: rgba(99, 102, 241, 0.2); border-color: var(--accent-primary); color: #c7d2fe; cursor: pointer; padding: 0.35rem 0.75rem; display: inline-flex; align-items: center; gap: 0.4rem;" onclick="openLogModal()">
+              <i class="fa-solid fa-terminal" style="color: #a5b4fc;"></i> Ver Consola de Logs Completa
+            </button>
+          </div>
         </div>
 
       </div>
@@ -1126,29 +1162,64 @@
 
   <!-- Log Viewer Modal -->
   <div id="logModal" class="modal-backdrop" style="display: none;">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 1050px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
       <div class="modal-header">
-        <h3 style="font-size: 1.05rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
-          <i class="fa-solid fa-terminal" style="color: var(--accent-primary);"></i> Consola de Logs del Servidor
-        </h3>
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <h3 style="font-size: 1.05rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            <i class="fa-solid fa-terminal" style="color: var(--accent-primary);"></i> Consola de Logs del Servidor
+          </h3>
+          <span id="logLiveBadge" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: #34d399; background: rgba(16, 185, 129, 0.12); padding: 0.2rem 0.55rem; border-radius: 9999px; border: 1px solid rgba(16, 185, 129, 0.25);">
+            <i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981;"></i> En vivo (1s)
+          </span>
+          <span id="logCountBadge" style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono); font-weight: 500;">0 eventos</span>
+        </div>
         <button class="btn-chip" onclick="closeLogModal()"><i class="fa-solid fa-xmark"></i> Cerrar</button>
       </div>
-      <div class="modal-toolbar">
-        <div style="display: flex; gap: 0.4rem;">
-          <button class="btn-chip active" id="btnLogFilterAll" onclick="filterLogsByLevel('ALL')">Todos</button>
-          <button class="btn-chip" id="btnLogFilterInfo" onclick="filterLogsByLevel('INFO')">INFO</button>
-          <button class="btn-chip" id="btnLogFilterWarn" onclick="filterLogsByLevel('WARN')">WARN</button>
-          <button class="btn-chip" id="btnLogFilterError" onclick="filterLogsByLevel('ERROR')">ERROR</button>
+
+      <!-- Stage & Level Filter Toolbar -->
+      <div class="modal-toolbar" style="gap: 0.5rem;">
+        <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 0.74rem; color: var(--text-dim); margin-right: 0.2rem; font-weight: 600;">Etapas:</span>
+          <button class="btn-chip active" id="btnLogStageAll" onclick="filterLogsByStage('ALL')">Todas</button>
+          <button class="btn-chip" id="btnLogStageDocling" onclick="filterLogsByStage('DOCLING')">Docling (MD)</button>
+          <button class="btn-chip" id="btnLogStageSkill" onclick="filterLogsByStage('SKILL')">Skill</button>
+          <button class="btn-chip" id="btnLogStageChunking" onclick="filterLogsByStage('CHUNKING')">Chunking</button>
+          <button class="btn-chip" id="btnLogStageEmbeddings" onclick="filterLogsByStage('EMBEDDINGS')">Embeddings</button>
+          <button class="btn-chip" id="btnLogStageJson" onclick="filterLogsByStage('JSON')">JSON (LLM)</button>
+          <button class="btn-chip" id="btnLogStageBd" onclick="filterLogsByStage('BD')">BD / RAG</button>
+          <button class="btn-chip" id="btnLogStageError" style="color: #f87171; border-color: rgba(239, 68, 68, 0.4);" onclick="filterLogsByStage('ERROR')">Errores</button>
         </div>
-        <input type="text" id="logSearchInput" placeholder="Filtrar palabra clave..." oninput="renderLogs()">
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="modal-toolbar" style="border-top: none; padding-top: 0.25rem;">
+        <input type="text" id="logSearchInput" placeholder="Filtrar por texto o palabra clave..." oninput="renderLogs()">
         <label style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
           <input type="checkbox" id="chkAutoRefreshLogs" checked onchange="toggleAutoRefreshLogs()"> Auto-refresco
+        </label>
+        <label style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+          <input type="checkbox" id="chkAutoScrollLogs" checked> Auto-scroll
         </label>
         <button class="btn-secondary" onclick="fetchServerLogs()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
         <button class="btn-secondary" onclick="clearServerLogBuffer()"><i class="fa-solid fa-trash-can"></i> Limpiar</button>
         <button class="btn-secondary" onclick="copyServerLogs()"><i class="fa-solid fa-copy"></i> Copiar</button>
+        <button class="btn-secondary" onclick="downloadServerLogs()"><i class="fa-solid fa-download"></i> Descargar</button>
       </div>
+
+      <!-- Console Container -->
       <pre id="logConsoleContainer" class="log-console"></pre>
+      
+      <!-- Stage Legend Footer -->
+      <div style="display: flex; gap: 0.75rem; padding: 0.5rem 1.25rem; background: rgba(15, 23, 42, 0.9); border-top: 1px solid var(--bg-card-border); font-size: 0.72rem; color: var(--text-dim); flex-wrap: wrap; align-items: center;">
+        <span style="font-weight: 600; color: var(--text-muted);">Guía de etapas:</span>
+        <span class="log-tag log-tag-upload">[Upload]</span> Subida
+        <span class="log-tag log-tag-docling">[Docling]</span> Extracción MD
+        <span class="log-tag log-tag-skill">[Skill]</span> Reglas Empresa
+        <span class="log-tag log-tag-chunking">[Chunking]</span> Parent-Child
+        <span class="log-tag log-tag-embeddings">[Embeddings]</span> BGE-M3 (1024-d)
+        <span class="log-tag log-tag-json">[JSON]</span> gpt-4o
+        <span class="log-tag log-tag-bd">[BD / RAG]</span> PostgreSQL pgvector
+      </div>
     </div>
   </div>
 
@@ -1277,6 +1348,24 @@
       document.getElementById('mTables').innerText = m.total_tables_detected || 0;
       document.getElementById('mAvgTime').innerText = `${(m.avg_extraction_time_seconds || 0).toFixed(1)}s`;
       document.getElementById('mMemory').innerText = `${(m.memory_usage_mb || 0).toFixed(0)} MB`;
+    }
+
+    async function resetServerMetrics() {
+      if (!confirm('¿Deseas reiniciar los contadores de estadísticas a 0?')) return;
+      try {
+        await fetch(`${getApiUrl()}/api/v1/metrics/reset`, { method: 'POST' });
+        localStorage.removeItem('docengine_cached_metrics');
+        updateMetricsUI({
+          total_extractions: 0,
+          successful_extractions: 0,
+          failed_extractions: 0,
+          total_tables_detected: 0,
+          avg_extraction_time_seconds: 0,
+          memory_usage_mb: 0
+        });
+      } catch(e) {
+        console.warn('Error resetting metrics:', e);
+      }
     }
 
     // Tab Switching
@@ -1435,6 +1524,43 @@
       return sigla;
     }
 
+    let extractionLogInterval = null;
+
+    function startExtractionLogPolling() {
+      stopExtractionLogPolling();
+      fetchServerLogs();
+      extractionLogInterval = setInterval(fetchServerLogs, 800);
+    }
+
+    function stopExtractionLogPolling() {
+      if (extractionLogInterval) {
+        clearInterval(extractionLogInterval);
+        extractionLogInterval = null;
+      }
+    }
+
+    function updateLoaderLiveLog(lastLogs) {
+      const box = document.getElementById('loaderLiveLogText');
+      if (!box || !lastLogs || lastLogs.length === 0) return;
+      
+      const recent = lastLogs.slice(-3);
+      box.innerHTML = recent.map(line => {
+        return `<div style="margin-bottom: 0.2rem;">${formatLogLine(line)}</div>`;
+      }).join('');
+      
+      const container = document.getElementById('loaderLiveLogBox');
+      if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    async function handleExtractionError(err) {
+      console.error('Extraction error:', err);
+      let msg = err.message || 'Error desconocido';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+        msg = `⚠️ No se pudo comunicar con el servidor DocEngine en "${getApiUrl()}".\n\nPosibles causas:\n1. El proceso del servidor ("python main.py serve") se cerró o se interrumpió.\n2. Revisa la ventana de PowerShell donde corriste el servidor para ver el error/traceback.\n3. Asegúrate de que el contenedor Docker (PostgreSQL) esté arriba con "docker compose ps".`;
+      }
+      alert(msg);
+    }
+
     // 1. File Upload Processing
     async function processFileUpload() {
       if (!selectedFile) return;
@@ -1442,14 +1568,13 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
-      await clearServerLogBuffer();
-
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('company_sigla', sigla);
 
       showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]...`);
       startProgressSimulation();
+      startExtractionLogPolling();
 
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/extract`, {
@@ -1467,8 +1592,9 @@
         await displaySingleResult(data);
         fetchMetrics();
       } catch (err) {
-        alert(`Error al procesar: ${err.message}`);
+        await handleExtractionError(err);
       } finally {
+        stopExtractionLogPolling();
         hideLoader();
       }
     }
@@ -1484,10 +1610,9 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
-      await clearServerLogBuffer();
-
       showLoader(`Descargando y extrayendo desde URL con Skill [${sigla}]...`);
       startProgressSimulation();
+      startExtractionLogPolling();
 
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/extract/url`, {
@@ -1506,8 +1631,9 @@
         await displaySingleResult(data);
         fetchMetrics();
       } catch (err) {
-        alert(`Error al procesar URL: ${err.message}`);
+        await handleExtractionError(err);
       } finally {
+        stopExtractionLogPolling();
         hideLoader();
       }
     }
@@ -1523,10 +1649,9 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
-      await clearServerLogBuffer();
-
       showLoader(`Procesando carpeta "${folderPath}" en lote con Skill [${sigla}]...`);
       startProgressSimulation();
+      startExtractionLogPolling();
 
       try {
         const res = await fetch(`${getApiUrl()}/api/v1/extract/folder`, {
@@ -1545,8 +1670,9 @@
         displayBatchResult(data);
         fetchMetrics();
       } catch (err) {
-        alert(`Error en extracción de carpeta: ${err.message}`);
+        await handleExtractionError(err);
       } finally {
+        stopExtractionLogPolling();
         hideLoader();
       }
     }
@@ -1742,7 +1868,7 @@
 
     // Log Console Logic
     let logBuffer = [];
-    let logFilterLevel = 'ALL';
+    let logFilterStage = 'ALL';
     let logInterval = null;
 
     function openLogModal() {
@@ -1760,16 +1886,25 @@
 
     function toggleAutoRefreshLogs() {
       const chk = document.getElementById('chkAutoRefreshLogs');
+      const badge = document.getElementById('logLiveBadge');
       if (chk.checked) {
         startAutoRefreshLogs();
+        if (badge) {
+          badge.innerHTML = '<i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981;"></i> En vivo (1s)';
+          badge.style.color = '#34d399';
+        }
       } else {
         stopAutoRefreshLogs();
+        if (badge) {
+          badge.innerHTML = '<i class="fa-solid fa-pause" style="font-size: 0.5rem; color: #f59e0b;"></i> Pausado';
+          badge.style.color = '#fbbf24';
+        }
       }
     }
 
     function startAutoRefreshLogs() {
       stopAutoRefreshLogs();
-      logInterval = setInterval(fetchServerLogs, 3000);
+      logInterval = setInterval(fetchServerLogs, 1000);
     }
 
     function stopAutoRefreshLogs() {
@@ -1791,7 +1926,7 @@
 
     async function fetchServerLogs() {
       try {
-        const res = await fetch(`${getApiUrl()}/api/v1/logs?lines=300`);
+        const res = await fetch(`${getApiUrl()}/api/v1/logs?lines=500`);
         if (res.ok) {
           const data = await res.json();
           logBuffer = data.logs || [];
@@ -1802,44 +1937,128 @@
       }
     }
 
-    function filterLogsByLevel(lvl) {
-      logFilterLevel = lvl;
-      ['All', 'Info', 'Warn', 'Error'].forEach(name => {
-        const btn = document.getElementById(`btnLogFilter${name}`);
+    function filterLogsByStage(stage) {
+      logFilterStage = stage;
+      const stages = ['All', 'Docling', 'Skill', 'Chunking', 'Embeddings', 'Json', 'Bd', 'Error'];
+      stages.forEach(name => {
+        const btn = document.getElementById(`btnLogStage${name}`);
         if (btn) {
-          btn.classList.toggle('active', name.toUpperCase() === lvl);
+          btn.classList.toggle('active', name.toUpperCase() === stage);
         }
       });
       renderLogs();
     }
 
+    function formatLogLine(rawLine) {
+      if (!rawLine) return '';
+      let parsed = null;
+      let timestamp = '';
+      let level = 'info';
+      let eventText = rawLine;
+      let extraPairs = [];
+
+      // Check if rawLine is JSON (structlog JSON output from Docker or JSON logger)
+      if (typeof rawLine === 'string' && rawLine.trim().startsWith('{') && rawLine.trim().endsWith('}')) {
+        try {
+          parsed = JSON.parse(rawLine);
+          level = (parsed.level || 'info').toLowerCase();
+          eventText = parsed.event || '';
+          if (parsed.timestamp) {
+            try {
+              const d = new Date(parsed.timestamp);
+              timestamp = d.toLocaleTimeString();
+            } catch(e) {
+              timestamp = parsed.timestamp.slice(11, 19);
+            }
+          }
+          // Collect extra parameters
+          for (const [k, v] of Object.entries(parsed)) {
+            if (!['event', 'level', 'timestamp', 'logger', 'version', 'environment', 'os'].includes(k)) {
+              const strVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+              extraPairs.push(`${k}=${strVal}`);
+            }
+          }
+        } catch(e) {
+          parsed = null;
+        }
+      }
+
+      let lineHtml = escapeHtml(eventText);
+      if (extraPairs.length > 0) {
+        lineHtml += ' ' + escapeHtml(extraPairs.join(' '));
+      }
+
+      let cls = 'info';
+      const isError = level === 'error' || /error|failed|fail|exception|traceback/i.test(lineHtml);
+      const isWarn = level === 'warn' || level === 'warning' || /warning|warn/i.test(lineHtml);
+      const isSuccess = /completad|exitos|succes|finalizad|ready/i.test(lineHtml);
+
+      if (isError) cls = 'error';
+      else if (isWarn) cls = 'warn';
+      else if (isSuccess) cls = 'success';
+
+      // Transform known stage tags into colorful badge pills
+      lineHtml = lineHtml.replace(/\[Docling\]/gi, '<span class="log-tag log-tag-docling"><i class="fa-solid fa-file-invoice"></i> Docling</span>');
+      lineHtml = lineHtml.replace(/\[Skill\]/gi, '<span class="log-tag log-tag-skill"><i class="fa-solid fa-shield-halved"></i> Skill</span>');
+      lineHtml = lineHtml.replace(/\[Chunking\]/gi, '<span class="log-tag log-tag-chunking"><i class="fa-solid fa-cubes-stacked"></i> Chunking</span>');
+      lineHtml = lineHtml.replace(/\[Embeddings\]/gi, '<span class="log-tag log-tag-embeddings"><i class="fa-solid fa-network-wired"></i> Embeddings</span>');
+      lineHtml = lineHtml.replace(/\[JSON Estructurado\]|\[JSON\]/gi, '<span class="log-tag log-tag-json"><i class="fa-solid fa-code-merge"></i> JSON LLM</span>');
+      lineHtml = lineHtml.replace(/\[Persistencia BD\]|\[BD\]/gi, '<span class="log-tag log-tag-bd"><i class="fa-solid fa-database"></i> BD pgvector</span>');
+      lineHtml = lineHtml.replace(/\[RAG\]/gi, '<span class="log-tag log-tag-rag"><i class="fa-solid fa-brain"></i> RAG</span>');
+      lineHtml = lineHtml.replace(/\[Upload\]/gi, '<span class="log-tag log-tag-upload"><i class="fa-solid fa-cloud-arrow-up"></i> Upload</span>');
+      lineHtml = lineHtml.replace(/\[Idempotencia\]/gi, '<span class="log-tag log-tag-default"><i class="fa-solid fa-fingerprint"></i> Hash ID</span>');
+      lineHtml = lineHtml.replace(/\[Paralelo\]/gi, '<span class="log-tag log-tag-default"><i class="fa-solid fa-arrows-split-up-and-left"></i> Paralelo</span>');
+      lineHtml = lineHtml.replace(/\[Pipeline\]/gi, '<span class="log-tag log-tag-pipeline"><i class="fa-solid fa-diagram-project"></i> Pipeline</span>');
+      lineHtml = lineHtml.replace(/\[Almacenamiento\]/gi, '<span class="log-tag log-tag-default"><i class="fa-solid fa-hard-drive"></i> Disco</span>');
+      lineHtml = lineHtml.replace(/\[ERROR\]/gi, '<span class="log-tag log-tag-error"><i class="fa-solid fa-triangle-exclamation"></i> ERROR</span>');
+
+      // Highlight key=val patterns
+      lineHtml = lineHtml.replace(/([a-zA-Z0-9_\-]+)=(&quot;[^&]*&quot;|&#039;[^&#]*&#039;|[^\s,]+)/g, '<span class="log-key-val"><span class="log-key">$1</span>=<span class="log-val">$2</span></span>');
+
+      const timePrefix = timestamp ? `<span class="log-timestamp">[${timestamp}]</span>` : '';
+      return `<span class="log-line ${cls}">${timePrefix}${lineHtml}</span>`;
+    }
+
     function renderLogs() {
       const consoleElem = document.getElementById('logConsoleContainer');
+      const countBadge = document.getElementById('logCountBadge');
       const searchQuery = (document.getElementById('logSearchInput')?.value || '').toLowerCase();
+      const autoScroll = document.getElementById('chkAutoScrollLogs')?.checked ?? true;
 
       let filtered = logBuffer.filter(line => {
-        if (logFilterLevel === 'INFO' && !line.includes('info') && !line.includes('INFO')) return false;
-        if (logFilterLevel === 'WARN' && !line.includes('warning') && !line.includes('WARN')) return false;
-        if (logFilterLevel === 'ERROR' && !line.includes('error') && !line.includes('ERROR')) return false;
+        const lineLower = line.toLowerCase();
+        
+        // Stage filtering
+        if (logFilterStage === 'DOCLING' && !lineLower.includes('docling')) return false;
+        if (logFilterStage === 'SKILL' && !lineLower.includes('skill')) return false;
+        if (logFilterStage === 'CHUNKING' && !lineLower.includes('chunk')) return false;
+        if (logFilterStage === 'EMBEDDINGS' && !lineLower.includes('embedding') && !lineLower.includes('vector')) return false;
+        if (logFilterStage === 'JSON' && !lineLower.includes('json') && !lineLower.includes('openai') && !lineLower.includes('cobertura')) return false;
+        if (logFilterStage === 'BD' && !lineLower.includes('bd') && !lineLower.includes('postgres') && !lineLower.includes('pgvector') && !lineLower.includes('rag') && !lineLower.includes('persistencia')) return false;
+        if (logFilterStage === 'ERROR' && !lineLower.includes('error') && !lineLower.includes('fail') && !lineLower.includes('exception')) return false;
 
-        if (searchQuery && !line.toLowerCase().includes(searchQuery)) return false;
+        // Keyword search
+        if (searchQuery && !lineLower.includes(searchQuery)) return false;
         return true;
       });
 
+      if (countBadge) {
+        countBadge.innerText = `${filtered.length} eventos${filtered.length !== logBuffer.length ? ` (de ${logBuffer.length})` : ''}`;
+      }
+
       if (filtered.length === 0) {
-        consoleElem.innerHTML = '<span style="color: var(--text-dim);">No hay entradas de log disponibles.</span>';
+        consoleElem.innerHTML = '<span style="color: var(--text-dim); padding: 1rem; display: block; text-align: center;">No hay eventos registrados para el filtro seleccionado.</span>';
         return;
       }
 
-      consoleElem.innerHTML = filtered.map(line => {
-        let cls = 'info';
-        if (line.includes('warning') || line.includes('WARN')) cls = 'warn';
-        if (line.includes('error') || line.includes('ERROR') || line.includes('failed') || line.includes('FAIL')) cls = 'error';
+      consoleElem.innerHTML = filtered.map(formatLogLine).join('');
 
-        return `<span class="log-line ${cls}">${escapeHtml(line)}</span>`;
-      }).join('');
+      if (autoScroll) {
+        consoleElem.scrollTop = consoleElem.scrollHeight;
+      }
 
-      consoleElem.scrollTop = consoleElem.scrollHeight;
+      // Update inline mini log container on the loader screen
+      updateLoaderLiveLog(filtered);
     }
 
     function copyServerLogs() {
@@ -1853,6 +2072,26 @@
       }).catch(err => {
         alert('Error al copiar logs: ' + err);
       });
+    }
+
+    function downloadServerLogs() {
+      if (!logBuffer || logBuffer.length === 0) {
+        alert('No hay logs para descargar.');
+        return;
+      }
+      const text = logBuffer.join('\n');
+      const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `docengine_server_logs_${now}.txt`;
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function escapeHtml(text) {

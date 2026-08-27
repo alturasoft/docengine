@@ -81,6 +81,13 @@ async def extract_file(
 
         sigla_clean = company_sigla.strip().upper() if company_sigla else None
 
+        logger.info(
+            "[Upload] Archivo PDF recibido para extracción",
+            filename=file.filename,
+            size_bytes=len(content),
+            company_sigla=sigla_clean or "NO_ESPECIFICADA",
+        )
+
         request = ExtractionRequest(
             source=temp_path,
             output_formats=["all"],
@@ -97,7 +104,7 @@ async def extract_file(
         return _to_schema(result, rag_report=rag_report_schema)
 
     except Exception as exc:
-        logger.error("File extraction endpoint error", error=str(exc))
+        logger.error("[ERROR] [Upload] Error durante la extracción del archivo", filename=file.filename, error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Extraction failed: {exc}",

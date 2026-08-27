@@ -140,4 +140,31 @@ class TestOcrAdapterFactory:
         adapter = get_ocr_adapter(app_settings)
         assert adapter is not None
 
+    def test_tesseract_adapter_is_available_without_tesserocr(self) -> None:
+        """TesseractOcrAdapter is_available returns False when tesserocr is not importable."""
+        from unittest.mock import patch
+        from app.infrastructure.adapters.ocr_adapter import TesseractOcrAdapter
+
+        adapter = TesseractOcrAdapter()
+        with patch.dict("sys.modules", {"tesserocr": None}):
+            assert not adapter.is_available
+
+    def test_get_ocr_adapter_falls_back_when_tesseract_unavailable(
+        self, app_settings: AppSettings
+    ) -> None:
+        """If configured engine is tesseract but tesserocr is missing, fallback returns an available engine."""
+        from unittest.mock import patch
+        from app.infrastructure.adapters.ocr_adapter import (
+            RapidOcrAdapter,
+            TesseractOcrAdapter,
+            get_ocr_adapter,
+        )
+
+        app_settings.ocr.engine = "tesseract"
+        with patch.object(TesseractOcrAdapter, "is_available", new=False):
+            with patch.object(RapidOcrAdapter, "is_available", new=True):
+                adapter = get_ocr_adapter(app_settings)
+                assert isinstance(adapter, RapidOcrAdapter)
+
+
 

@@ -13,6 +13,7 @@ import psycopg2
 from psycopg2.extras import Json, execute_values
 
 from app.domain.models.chunks import PolicyChunk
+from app.domain.models.rag_models import PolicyProcessingStats
 from app.infrastructure.database.db_connection import DatabaseManager
 from app.infrastructure.logging.logger import get_logger
 
@@ -106,14 +107,16 @@ class PgRagRepository:
         markdown_content: str,
         structured_data: dict[str, Any],
         chunks: list[PolicyChunk],
+        stats: PolicyProcessingStats | None = None,
     ) -> str:
         """Persist all RAG data into PostgreSQL within a single atomic transaction.
 
-        Inserts records across 4 tables:
+        Inserts records across up to 5 tables:
         1. policies
         2. policy_raw_md
         3. policy_structured_data
         4. policy_chunks
+        5. policy_processing_stats (if stats provided)
 
         Args:
             file_name: PDF filename.
@@ -124,6 +127,7 @@ class PgRagRepository:
             markdown_content: Markdown text extracted by Docling.
             structured_data: JSON dictionary atomized by gpt-4o.
             chunks: List of PolicyChunk objects with 1024d embeddings.
+            stats: Optional PolicyProcessingStats object with performance metrics.
 
         Returns:
             Newly created policy_id (UUID string).
@@ -199,6 +203,81 @@ class PgRagRepository:
                             template="(%s, %s, %s, %s, %s::vector, %s::uuid, %s::uuid, %s)",
                         )
 
+                    # 5. Insert into policy_processing_stats (if provided)
+                    if stats:
+                        cur.execute(
+                            """
+                            INSERT INTO policy_processing_stats (
+                                policy_id, job_id, policy_number, company_sigla, file_type,
+                                ocr_applied, scanned_page_ratio, total_pages, extraction_time_seconds,
+                                time_per_page_seconds, chunking_time_seconds, embedding_time_seconds,
+                                openai_time_seconds, total_pipeline_time_seconds, total_chunks,
+                                parent_chunks, child_chunks, openai_prompt_tokens, openai_completion_tokens,
+                                openai_total_tokens, openai_estimated_cost_usd, coberturas_extracted_count,
+                                tables_detected, memory_peak_mb
+                            )
+                            VALUES (
+                                %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s,
+                                %s, %s, %s,
+                                %s, %s, %s,
+                                %s, %s, %s, %s,
+                                %s, %s, %s,
+                                %s, %s
+                            )
+                            ON CONFLICT (policy_id) DO UPDATE SET
+                                job_id = EXCLUDED.job_id,
+                                policy_number = EXCLUDED.policy_number,
+                                company_sigla = EXCLUDED.company_sigla,
+                                file_type = EXCLUDED.file_type,
+                                ocr_applied = EXCLUDED.ocr_applied,
+                                scanned_page_ratio = EXCLUDED.scanned_page_ratio,
+                                total_pages = EXCLUDED.total_pages,
+                                extraction_time_seconds = EXCLUDED.extraction_time_seconds,
+                                time_per_page_seconds = EXCLUDED.time_per_page_seconds,
+                                chunking_time_seconds = EXCLUDED.chunking_time_seconds,
+                                embedding_time_seconds = EXCLUDED.embedding_time_seconds,
+                                openai_time_seconds = EXCLUDED.openai_time_seconds,
+                                total_pipeline_time_seconds = EXCLUDED.total_pipeline_time_seconds,
+                                total_chunks = EXCLUDED.total_chunks,
+                                parent_chunks = EXCLUDED.parent_chunks,
+                                child_chunks = EXCLUDED.child_chunks,
+                                openai_prompt_tokens = EXCLUDED.openai_prompt_tokens,
+                                openai_completion_tokens = EXCLUDED.openai_completion_tokens,
+                                openai_total_tokens = EXCLUDED.openai_total_tokens,
+                                openai_estimated_cost_usd = EXCLUDED.openai_estimated_cost_usd,
+                                coberturas_extracted_count = EXCLUDED.coberturas_extracted_count,
+                                tables_detected = EXCLUDED.tables_detected,
+                                memory_peak_mb = EXCLUDED.memory_peak_mb;
+                            """,
+                            (
+                                policy_id,
+                                stats.job_id,
+                                stats.policy_number,
+                                sigla,
+                                stats.file_type.upper() if stats.file_type else "UNKNOWN",
+                                stats.ocr_applied,
+                                stats.scanned_page_ratio,
+                                stats.total_pages,
+                                stats.extraction_time_seconds,
+                                stats.time_per_page_seconds,
+                                stats.chunking_time_seconds,
+                                stats.embedding_time_seconds,
+                                stats.openai_time_seconds,
+                                stats.total_pipeline_time_seconds,
+                                stats.total_chunks,
+                                stats.parent_chunks,
+                                stats.child_chunks,
+                                stats.openai_prompt_tokens,
+                                stats.openai_completion_tokens,
+                                stats.openai_total_tokens,
+                                stats.openai_estimated_cost_usd,
+                                stats.coberturas_extracted_count,
+                                stats.tables_detected,
+                                stats.memory_peak_mb,
+                            ),
+                        )
+
                 # Commit transaction
                 conn.commit()
                 logger.info(
@@ -206,6 +285,7 @@ class PgRagRepository:
                     policy_id=policy_id,
                     chunks_count=len(chunks),
                     company_sigla=sigla,
+                    has_stats=stats is not None,
                 )
                 return policy_id
 
@@ -217,3 +297,88 @@ class PgRagRepository:
                     error=str(e),
                 )
                 raise
+
+    def save_processing_stats(self, stats: PolicyProcessingStats) -> None:
+        """Persist or update processing statistics for a policy.
+
+        Args:
+            stats: PolicyProcessingStats instance.
+        """
+        query = """
+            INSERT INTO policy_processing_stats (
+                policy_id, job_id, policy_number, company_sigla, file_type,
+                ocr_applied, scanned_page_ratio, total_pages, extraction_time_seconds,
+                time_per_page_seconds, chunking_time_seconds, embedding_time_seconds,
+                openai_time_seconds, total_pipeline_time_seconds, total_chunks,
+                parent_chunks, child_chunks, openai_prompt_tokens, openai_completion_tokens,
+                openai_total_tokens, openai_estimated_cost_usd, coberturas_extracted_count,
+                tables_detected, memory_peak_mb
+            )
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s
+            )
+            ON CONFLICT (policy_id) DO UPDATE SET
+                job_id = EXCLUDED.job_id,
+                policy_number = EXCLUDED.policy_number,
+                company_sigla = EXCLUDED.company_sigla,
+                file_type = EXCLUDED.file_type,
+                ocr_applied = EXCLUDED.ocr_applied,
+                scanned_page_ratio = EXCLUDED.scanned_page_ratio,
+                total_pages = EXCLUDED.total_pages,
+                extraction_time_seconds = EXCLUDED.extraction_time_seconds,
+                time_per_page_seconds = EXCLUDED.time_per_page_seconds,
+                chunking_time_seconds = EXCLUDED.chunking_time_seconds,
+                embedding_time_seconds = EXCLUDED.embedding_time_seconds,
+                openai_time_seconds = EXCLUDED.openai_time_seconds,
+                total_pipeline_time_seconds = EXCLUDED.total_pipeline_time_seconds,
+                total_chunks = EXCLUDED.total_chunks,
+                parent_chunks = EXCLUDED.parent_chunks,
+                child_chunks = EXCLUDED.child_chunks,
+                openai_prompt_tokens = EXCLUDED.openai_prompt_tokens,
+                openai_completion_tokens = EXCLUDED.openai_completion_tokens,
+                openai_total_tokens = EXCLUDED.openai_total_tokens,
+                openai_estimated_cost_usd = EXCLUDED.openai_estimated_cost_usd,
+                coberturas_extracted_count = EXCLUDED.coberturas_extracted_count,
+                tables_detected = EXCLUDED.tables_detected,
+                memory_peak_mb = EXCLUDED.memory_peak_mb;
+        """
+        sigla = stats.company_sigla.upper() if stats.company_sigla else None
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    query,
+                    (
+                        stats.policy_id,
+                        stats.job_id,
+                        stats.policy_number,
+                        sigla,
+                        stats.file_type.upper() if stats.file_type else "UNKNOWN",
+                        stats.ocr_applied,
+                        stats.scanned_page_ratio,
+                        stats.total_pages,
+                        stats.extraction_time_seconds,
+                        stats.time_per_page_seconds,
+                        stats.chunking_time_seconds,
+                        stats.embedding_time_seconds,
+                        stats.openai_time_seconds,
+                        stats.total_pipeline_time_seconds,
+                        stats.total_chunks,
+                        stats.parent_chunks,
+                        stats.child_chunks,
+                        stats.openai_prompt_tokens,
+                        stats.openai_completion_tokens,
+                        stats.openai_total_tokens,
+                        stats.openai_estimated_cost_usd,
+                        stats.coberturas_extracted_count,
+                        stats.tables_detected,
+                        stats.memory_peak_mb,
+                    ),
+                )
+            conn.commit()
+

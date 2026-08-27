@@ -71,6 +71,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/001_add_rag_tables.sql:/docker-entrypoint-initdb.d/001_add_rag_tables.sql:ro
+      - ./scripts/002_parent_child_hybrid_search.sql:/docker-entrypoint-initdb.d/002_parent_child_hybrid_search.sql:ro
+      - ./scripts/003_add_processing_stats_table.sql:/docker-entrypoint-initdb.d/003_add_processing_stats_table.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d docengine"]
       interval: 5s

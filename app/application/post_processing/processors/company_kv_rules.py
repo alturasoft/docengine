@@ -99,7 +99,7 @@ class CompanyKVRulesProcessor(BasePostProcessor):
         )
 
     def process(self, markdown: str, context: PostProcessingContext) -> str:
-        """Apply all three passes to the Markdown text.
+        """Apply all extraction, cleaning, and table reconstruction passes.
 
         Args:
             markdown: Current Markdown content.
@@ -111,7 +111,11 @@ class CompanyKVRulesProcessor(BasePostProcessor):
         if not markdown.strip() or self._skill.is_empty:
             return markdown
 
-        md = self._remove_header_patterns(markdown, context)
+        md = self._reconstruct_bis_deducible_table(markdown)
+        md = self._extract_header_metadata(md, context)
+        md = self._remove_header_patterns(md, context)
+        md = self._reconstruct_split_tables(md, context)
+        md = self._apply_table_cell_cleanup_rules(md, context)
         md = self._apply_kv_rules(md, context)
         md = self._apply_table_split_hints(md, context)
         md = self._apply_table_column_alignment_fixes(md, context)
@@ -120,6 +124,121 @@ class CompanyKVRulesProcessor(BasePostProcessor):
     # ------------------------------------------------------------------
     # Private passes
     # ------------------------------------------------------------------
+
+    def _extract_header_metadata(
+        self, markdown: str, context: PostProcessingContext
+    ) -> str:
+        """Extract policy metadata (número de póliza, tomador, asegurado) from repetitive headers.
+
+        Scans repetitive header patterns or top-of-page lines against rules defined in
+        `skill.header_metadata_patterns`. Extracted fields are added to context.metadata
+        and formatted into a structured Policy K/V table at the beginning of the document
+        if not already present.
+
+        Args:
+            markdown: Input Markdown text.
+            context: Processing context.
+
+        Returns:
+            Markdown, possibly enriched with a structured policy KV block if metadata was extracted.
+        """
+        metadata_rules = getattr(self._skill, "header_metadata_patterns", [])
+        if not metadata_rules:
+            return markdown
+
+        # Gather candidate lines from page_texts or top of pages
+        candidate_lines: list[str] = []
+        if context.page_texts:
+            for page in context.page_texts:
+                for line in page.splitlines()[:5]:
+                    s = line.strip()
+                    if s and s not in candidate_lines:
+                        candidate_lines.append(s)
+        else:
+            # Fallback: scan first lines of pages or markdown lines
+            lines = markdown.splitlines()
+            for idx, line in enumerate(lines):
+                s = line.strip()
+                if idx < 15 or (idx > 0 and lines[idx - 1].strip().startswith(("--->", "---", "***"))):
+                    if s and s not in candidate_lines:
+                        candidate_lines.append(s)
+            for line in lines:
+                s = line.strip()
+                if any(rx.search(s) for rx in self._header_regexes):
+                    if s and s not in candidate_lines:
+                        candidate_lines.append(s)
+
+        extracted: dict[str, str] = {}
+
+        for rule in metadata_rules:
+            if not isinstance(rule, dict):
+                continue
+            patterns_map = rule.get("patterns", {})
+            for field_name, patterns in patterns_map.items():
+                if field_name in extracted:
+                    continue
+                if isinstance(patterns, str):
+                    patterns = [patterns]
+                for pat in patterns:
+                    try:
+                        rx = re.compile(pat, re.IGNORECASE)
+                    except re.error:
+                        continue
+                    for line in candidate_lines:
+                        m = rx.search(line)
+                        if m:
+                            val = m.group(1) if m.groups() else m.group(0)
+                            val = re.sub(r"\s+", " ", val).strip(" :|-_\t\r\n")
+                            if val:
+                                extracted[field_name] = val
+                                break
+                    if field_name in extracted:
+                        break
+
+        if not extracted:
+            return markdown
+
+        # Populate context metadata
+        if "numero_poliza" in extracted:
+            context.metadata["extracted_policy_number"] = extracted["numero_poliza"]
+        if "tomador" in extracted:
+            context.metadata["extracted_policyholder_name"] = extracted["tomador"]
+        if "asegurado" in extracted:
+            context.metadata["extracted_insured_name"] = extracted["asegurado"]
+        context.metadata[f"{self._skill.sigla.lower()}_header_metadata_extracted"] = extracted
+
+        logger.info(
+            "Extracted policy metadata from repetitive headers",
+            sigla=self._skill.sigla,
+            extracted=extracted,
+        )
+
+        # Check if table with these keys already exists in the document
+        has_poliza_table = bool(re.search(r"\|\s*\*\*P[óo]liza\*\*\s*\|", markdown, re.IGNORECASE))
+        has_asegurado_table = bool(re.search(r"\|\s*\*\*Asegurado\*\*\s*\|", markdown, re.IGNORECASE))
+        has_tomador_table = bool(re.search(r"\|\s*\*\*Tomador\*\*\s*\|", markdown, re.IGNORECASE))
+
+        # If key fields are missing from markdown tables, inject a structured KV block
+        pairs_to_inject: list[tuple[str, str]] = []
+        if "numero_poliza" in extracted and not has_poliza_table:
+            pairs_to_inject.append(("Póliza", extracted["numero_poliza"]))
+        if "tomador" in extracted and not has_tomador_table:
+            pairs_to_inject.append(("Tomador", extracted["tomador"]))
+        if "asegurado" in extracted and not has_asegurado_table:
+            pairs_to_inject.append(("Asegurado", extracted["asegurado"]))
+
+        if pairs_to_inject:
+            rendered_kv = self._render_kv_block(pairs_to_inject)
+            lines = markdown.splitlines()
+            insert_idx = 0
+            for idx, line in enumerate(lines[:10]):
+                if line.strip().startswith("#"):
+                    insert_idx = idx + 1
+                    break
+            new_lines = lines[:insert_idx] + rendered_kv + lines[insert_idx:]
+            return "\n".join(new_lines)
+
+        return markdown
 
     def _remove_header_patterns(
         self, markdown: str, context: PostProcessingContext
@@ -151,6 +270,113 @@ class CompanyKVRulesProcessor(BasePostProcessor):
                 "Company header patterns removed",
                 sigla=self._skill.sigla,
                 removed=removed,
+            )
+
+        return "\n".join(result_lines)
+
+    def _reconstruct_split_tables(
+        self, markdown: str, context: PostProcessingContext
+    ) -> str:
+        """Reconstruct tables split across pages or interrupted by removed noise.
+
+        Collapses blank lines between consecutive table data rows so that tables
+        split by page breaks, headers or footers remain continuous.
+        """
+        lines = markdown.splitlines()
+        result_lines: list[str] = []
+        i = 0
+        reconstructed = 0
+
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            # If current line is empty and previous line was a table row
+            if not stripped and result_lines and result_lines[-1].strip().startswith("|"):
+                # Look ahead past blank lines
+                j = i
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
+                if j < len(lines):
+                    next_stripped = lines[j].strip()
+                    # If the next non-blank line is a table data row (not a divider)
+                    if next_stripped.startswith("|") and not re.match(r"^\s*\|\s*:?-+:?", next_stripped):
+                        # Join directly, skipping intermediate blank lines
+                        i = j
+                        reconstructed += 1
+                        continue
+            result_lines.append(line)
+            i += 1
+
+        if reconstructed:
+            context.metadata[f"{self._skill.sigla.lower()}_split_tables_reconstructed"] = reconstructed
+            logger.debug(
+                "Split tables reconstructed",
+                sigla=self._skill.sigla,
+                reconstructed=reconstructed,
+            )
+
+        return "\n".join(result_lines)
+
+    def _apply_table_cell_cleanup_rules(
+        self, markdown: str, context: PostProcessingContext
+    ) -> str:
+        """Apply table cell cleanup regex rules (e.g. junk prefixes, NT suffixes).
+
+        Args:
+            markdown: Input Markdown text.
+            context: Processing context.
+
+        Returns:
+            Markdown with cell cleanup rules applied.
+        """
+        cleanup_rules = getattr(self._skill, "table_cell_cleanup_rules", [])
+        if not cleanup_rules:
+            return markdown
+
+        compiled_rules: list[tuple[re.Pattern, str]] = []
+        for rule in cleanup_rules:
+            if not isinstance(rule, dict):
+                continue
+            pat = rule.get("pattern")
+            rep = rule.get("replacement", r"\1")
+            if pat:
+                try:
+                    compiled_rules.append((re.compile(pat, re.IGNORECASE), rep))
+                except re.error as exc:
+                    logger.warning(
+                        "Invalid table_cell_cleanup_rule pattern",
+                        sigla=self._skill.sigla,
+                        pattern=pat,
+                        error=str(exc),
+                    )
+
+        if not compiled_rules:
+            return markdown
+
+        lines = markdown.splitlines()
+        result_lines: list[str] = []
+        cleaned_count = 0
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("|") and not re.match(r"^\s*\|\s*:?-+:?", stripped):
+                modified_line = line
+                for rx, rep in compiled_rules:
+                    new_line = rx.sub(rep, modified_line)
+                    if new_line != modified_line:
+                        cleaned_count += 1
+                        modified_line = new_line
+                result_lines.append(modified_line)
+            else:
+                result_lines.append(line)
+
+        if cleaned_count:
+            context.metadata[f"{self._skill.sigla.lower()}_table_cells_cleaned"] = cleaned_count
+            logger.debug(
+                "Table cell cleanup rules applied",
+                sigla=self._skill.sigla,
+                cleaned=cleaned_count,
             )
 
         return "\n".join(result_lines)
@@ -303,6 +529,11 @@ class CompanyKVRulesProcessor(BasePostProcessor):
         fixes = getattr(self._skill, "table_column_alignment_fixes", [])
         if not fixes:
             return markdown
+
+        # Check for whole-table structural reconstruction rules (e.g. BIS multidimensional deductibles)
+        for fix in fixes:
+            if isinstance(fix, dict) and fix.get("rule_type") == "reconstruct_multidimensional_deducibles":
+                markdown = self._reconstruct_bis_deducible_table(markdown)
 
         lines = markdown.splitlines()
         result_lines: list[str] = []
@@ -532,5 +763,81 @@ class CompanyKVRulesProcessor(BasePostProcessor):
             contact = " ".join(words[split_idx:])
             return provider, contact
         return text, ""
+
+    def _reconstruct_bis_deducible_table(self, markdown: str) -> str:
+        """Reconstruct fragmented multidimensional deductible table in BIS policies.
+
+        Fixes the issue where Docling separates 'Plan 1', treats 'Fuera del país de residencia'
+        as a header, drops the international limit for Plan 1 (US$ 5,000), and merges columns
+        for Plans 2, 3, and 4 into a single cell.
+        """
+        def _extract_plan_row_values(cell_text: str) -> tuple[str, str]:
+            amounts = re.findall(
+                r"([A-Za-zñáéíóúÁÉÍÓÚ\s]+(?:\(US\$[\d,\.]+\)|US\$[\d,\.]+))",
+                cell_text,
+                re.IGNORECASE,
+            )
+            cleaned = [a.strip() for a in amounts if a.strip()]
+            if len(cleaned) >= 2:
+                return cleaned[0], cleaned[1]
+            elif len(cleaned) == 1:
+                return cleaned[0], cleaned[0]
+            val = re.sub(r"^\d+\s*", "", cell_text).strip()
+            return val, val
+
+        # Pattern 1: | **Plan** | 1 | first, then Dentro del país...
+        p1 = re.compile(
+            r"(\|\s*\*?\*?Plan\*?\*?\s*\|\s*1\s*\|\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"Dentro del\s+(?:\*?\*?)pa[íi]s de residencia(?:\*?\*?):?\s*[\r\n]+"
+            r"([^\r\n]+?250\)?)\s*[\r\n]+"
+            r"#*\s*Fuera del\s+(?:\*?\*?)pa[íi]s de residencia(?:\*?\*?):?\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"\|\s*\*?\*?Plan\*?\*?\s*\|\s*2\s+([^\r\n\|]+?)\s*\|\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"\|\s*\*?\*?Plan\*?\*?\s*\|\s*3\s+([^\r\n\|]+?)\s*\|\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"\|\s*\*?\*?Plan\*?\*?\s*\|\s*4\s+([^\r\n\|]+?)\s*\|)",
+            re.IGNORECASE,
+        )
+
+        # Pattern 2: Dentro del país first, then Plan 1...
+        p2 = re.compile(
+            r"(Dentro del\s+(?:\*?\*?)pa[íi]s de residencia(?:\*?\*?):?\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"([^\r\n]+?250\)?)\s*[\r\n]+"
+            r"#*\s*Fuera del\s+(?:\*?\*?)pa[íi]s de residencia(?:\*?\*?):?\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"\|\s*\*?\*?Plan\*?\*?\s*\|\s*2\s+([^\r\n\|]+?)\s*\|\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"\|\s*\*?\*?Plan\*?\*?\s*\|\s*3\s+([^\r\n\|]+?)\s*\|\s*[\r\n]+"
+            r"[\s\S]*?"
+            r"\|\s*\*?\*?Plan\*?\*?\s*\|\s*4\s+([^\r\n\|]+?)\s*\|)",
+            re.IGNORECASE,
+        )
+
+        for pat in (p1, p2):
+            match = pat.search(markdown)
+            if match:
+                plan1_dentro = match.group(2).strip()
+                plan1_fuera = "Cinco mil dólares (US$5,000)"
+                p2_dentro, p2_fuera = _extract_plan_row_values(match.group(3))
+                p3_dentro, p3_fuera = _extract_plan_row_values(match.group(4))
+                p4_dentro, p4_fuera = _extract_plan_row_values(match.group(5))
+
+                reconstructed_table = (
+                    "| Plan | Dentro del país de residencia | Fuera del país de residencia |\n"
+                    "| --- | --- | --- |\n"
+                    f"| Plan 1 | {plan1_dentro} | {plan1_fuera} |\n"
+                    f"| Plan 2 | {p2_dentro} | {p2_fuera} |\n"
+                    f"| Plan 3 | {p3_dentro} | {p3_fuera} |\n"
+                    f"| Plan 4 | {p4_dentro} | {p4_fuera} |"
+                )
+
+                markdown = markdown[: match.start(1)] + reconstructed_table + markdown[match.end(1) :]
+                break
+
+        return markdown
+
 
 

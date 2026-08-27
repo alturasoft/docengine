@@ -91,20 +91,41 @@ class ExtractionService:
         pipeline_start = time.perf_counter()
 
         logger.info(
-            "Pipeline start",
+            "[Docling] Iniciando extracción y conversión del PDF a Markdown...",
             source=str(request.source),
             formats=request.effective_formats(),
+            company_sigla=request.company_sigla,
             memory_mb_before=round(mem_before, 1),
         )
 
         # 1. Run extraction
         result = self._extractor.extract(request)
 
+        if result.is_successful:
+            logger.info(
+                "[Docling] Extracción base de Docling completada",
+                document_id=result.document_id,
+                page_count=result.metadata.page_count,
+                tables_detected=result.metadata.tables_detected,
+                ocr_used=result.metadata.ocr_used,
+            )
+        else:
+            logger.error(
+                "[ERROR] [Docling] Falló la extracción base de Docling",
+                document_id=result.document_id,
+                errors=result.metadata.errors,
+            )
+
         # 2. Post-process Markdown (only if extraction succeeded)
         if result.is_successful and result.markdown:
             company_sigla = request.company_sigla or getattr(request, "_company_sigla", None)
             if company_sigla and not result.metadata.company_sigla:
                 result.metadata.company_sigla = company_sigla
+
+            logger.info(
+                "[Skill] Aplicando reglas y patrones de aseguradora al Markdown...",
+                company_sigla=company_sigla or "GENERAL",
+            )
 
             company_skill = getattr(request, "_company_skill", None)
             if company_skill is None:
@@ -131,6 +152,14 @@ class ExtractionService:
                 processed_markdown=result.markdown,
             )
 
+            logger.info(
+                "[Skill] Post-procesamiento completado exitosamente",
+                company_sigla=company_sigla or "GENERAL",
+                headers_removed=post_result.headers_removed,
+                footers_removed=post_result.footers_removed,
+                markdown_chars=len(result.markdown),
+            )
+
         # 4. Validate quality
         self._validation_service.validate_result(result)
 
@@ -138,12 +167,18 @@ class ExtractionService:
         saved_paths = self._storage.save_result(result)
         result.output_paths = saved_paths
 
+        logger.info(
+            "[Almacenamiento] Artefactos locales guardados en disco",
+            document_id=result.document_id,
+            saved_paths={k: str(v) for k, v in saved_paths.items()},
+        )
+
         # Log pipeline summary
         pipeline_elapsed = time.perf_counter() - pipeline_start
         mem_after = self._metadata_service.estimate_memory_usage_mb()
 
         logger.info(
-            "Pipeline complete",
+            "[Pipeline] Extracción de documento finalizada",
             document_id=result.document_id,
             status=result.status.value,
             total_duration_seconds=round(pipeline_elapsed, 3),

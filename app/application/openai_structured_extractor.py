@@ -7,6 +7,7 @@ from Markdown using OpenAI gpt-4o with Structured Outputs (Pydantic).
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -68,6 +69,7 @@ class OpenAIStructuredExtractor:
             logger.warning("OPENAI_API_KEY not set. Returning basic structured fallback.")
             return self._build_fallback_dict(company_sigla)
 
+        t_start = time.perf_counter()
         try:
             from openai import OpenAI  # noqa: PLC0415
 
@@ -93,6 +95,7 @@ class OpenAIStructuredExtractor:
                 temperature=0.0,
             )
 
+            duration = time.perf_counter() - t_start
             parsed_data = completion.choices[0].message.parsed
             if parsed_data is None:
                 logger.warning("OpenAI parsed message is None. Using fallback dict.")
@@ -100,6 +103,20 @@ class OpenAIStructuredExtractor:
 
             result_dict = parsed_data.model_dump()
 
+            # Capture OpenAI usage statistics
+            prompt_tokens = getattr(completion.usage, "prompt_tokens", 0) if hasattr(completion, "usage") and completion.usage else 0
+            completion_tokens = getattr(completion.usage, "completion_tokens", 0) if hasattr(completion, "usage") and completion.usage else 0
+            total_tokens = getattr(completion.usage, "total_tokens", 0) if hasattr(completion, "usage") and completion.usage else 0
+            # GPT-4o approx pricing: $2.50 / 1M prompt, $10.00 / 1M completion
+            estimated_cost = (prompt_tokens * 0.0000025) + (completion_tokens * 0.0000100)
+
+            result_dict["_usage"] = {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+                "estimated_cost_usd": round(estimated_cost, 5),
+                "duration_seconds": round(duration, 3),
+            }
 
             if company_sigla and not result_dict.get("sigla_empresa"):
                 result_dict["sigla_empresa"] = company_sigla.upper()
@@ -108,6 +125,8 @@ class OpenAIStructuredExtractor:
                 "Structured JSON extraction succeeded via gpt-4o",
                 coberturas_count=len(result_dict.get("coberturas", [])),
                 sigla=result_dict.get("sigla_empresa"),
+                total_tokens=total_tokens,
+                duration_seconds=round(duration, 3),
             )
             return result_dict
 

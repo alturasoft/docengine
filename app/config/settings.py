@@ -298,7 +298,7 @@ class OCRConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DOCENGINE_OCR_", extra="ignore")
 
     engine: Literal["tesseract", "easyocr", "rapidocr"] = Field(
-        default="easyocr", description="OCR engine"
+        default="rapidocr", description="OCR engine"
     )
     languages: list[str] = Field(
         default=["es", "en"], description="OCR language codes"

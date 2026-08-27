@@ -104,9 +104,24 @@ class EmbeddingService:
                 device=device,
                 **kwargs,
             )
+            # Optimize sequence length for insurance policy chunks to avoid redundant 8192-token padding
+            if hasattr(self._model, "max_seq_length") and self._model.max_seq_length > 1024:
+                self._model.max_seq_length = 1024
+
+            # Ensure optimal CPU parallelism across Zen 4 cores
+            try:
+                import torch  # noqa: PLC0415
+                if str(device) == "cpu" and hasattr(torch, "set_num_threads"):
+                    import os  # noqa: PLC0415
+                    threads = os.cpu_count() or 8
+                    torch.set_num_threads(min(threads, 8))
+            except Exception:
+                pass
+
             logger.info(
-                "Embedding model successfully loaded",
+                "Embedding model successfully loaded and optimized",
                 model_name=self._config.model_name,
+                max_seq_length=getattr(self._model, "max_seq_length", None),
             )
         return self._model
 
@@ -134,14 +149,25 @@ class EmbeddingService:
             batch_size=self._config.batch_size,
         )
 
-        # Generate vectors using batch encoding
-        embeddings_matrix = model.encode(
-            texts,
-            batch_size=self._config.batch_size,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        )
+        # Generate vectors using batch encoding with minimal memory overhead
+        try:
+            import torch  # noqa: PLC0415
+            with torch.inference_mode():
+                embeddings_matrix = model.encode(
+                    texts,
+                    batch_size=self._config.batch_size,
+                    show_progress_bar=False,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                )
+        except ImportError:
+            embeddings_matrix = model.encode(
+                texts,
+                batch_size=self._config.batch_size,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
 
         for chunk, emb in zip(chunks, embeddings_matrix):
             emb_list = emb.tolist()
