@@ -1,0 +1,62 @@
+1. Datos Generales de la Póliza y Aseguradora
+¿Cuál es el tipo o ramo de esta póliza de seguro?
+¿Qué compañía o aseguradora emite esta póliza?
+¿Cuál es el número o código de registro regulatorio de la póliza?
+¿Cuál es el número oficial de esta póliza?
+¿Esta póliza tiene registrada una póliza anterior o de renovación? ¿Cuál es su número?
+
+2. Datos del Asegurado y Ubicación
+¿Quién es el asegurado titular que figura en la póliza?
+¿Cuál es el NIT o documento de identidad del asegurado?
+¿Qué actividad económica o giro comercial tiene declarado el asegurado?
+¿Cuál es la dirección del asegurado registrada en la póliza?
+¿En qué zona o barrio se ubica el domicilio del asegurado?
+¿A qué distrito o municipio pertenece el asegurado?
+¿Qué número de teléfono fijo figura para el asegurado?
+¿Cuál es el número de celular de contacto registrado?
+¿Qué correo electrónico figura registrado para el asegurado?
+
+3. Vigencia y Horarios
+¿A partir de qué fecha entra en vigencia la póliza?
+¿A qué hora exacta inicia la vigencia de la póliza?
+¿En qué fecha vence o finaliza la cobertura de la póliza?
+¿A qué hora exacta culmina la vigencia de la póliza?
+¿Cuál es el periodo completo de vigencia (fechas y horas de inicio y fin)?
+
+4. Objeto Asegurado y Alcance Territorial
+¿Cuántos ítems tiene la póliza y qué número de ítem corresponde a cada bien?
+¿Cuál es el objeto o bien asegurado de esta póliza?
+¿Qué características o detalles específicos tiene el bien asegurado (placa, modelo, ubicación, serie)?
+¿Cuál es el valor declarado o tasado del bien asegurado?
+¿En qué moneda está expresado el valor del bien asegurado?
+¿Cuál es el alcance territorial o delimitación geográfica de la cobertura?
+
+5. Coberturas y Aclaraciones
+¿Cuáles son todas las coberturas contratadas en esta póliza?
+¿Cuál es el límite o valor asegurado para la cobertura de [Nombre de Cobertura]?
+¿Qué aclaraciones, alcances o restricciones aplican para la cobertura de [Nombre de Cobertura]?
+
+6. Franquicias y Deducibles
+¿Cuáles son los deducibles o franquicias aplicables en la póliza?
+¿Qué monto o porcentaje de deducible aplica para la cobertura de [Nombre de Cobertura]?
+¿Bajo qué condiciones se aplica el deducible (por evento, reclamo, pérdida total)?
+
+7. Primas y Forma de Pago
+¿Cuál es el monto total de la prima a pagar?
+¿Cuál es el valor de la prima individual emitida por cada ítem?
+¿Cuál es la forma y cronograma de pago acordado (al contado, cuotas, debito bancario)?
+
+8. Cláusulas y Anexos
+¿Qué cláusulas adicionales, anexos o endosos están incluidos en la póliza?
+¿Qué establece la cláusula o anexo de [Nombre de la Cláusula] y qué límites o deducibles tiene?
+
+9. Observaciones, Notas y Emisión
+¿Qué observaciones particulares contiene la póliza?
+¿Existen aclaraciones o acuerdos adicionales especificados en el documento?
+¿Cuáles son las notas o advertencias importantes señaladas en la póliza?
+¿En qué ciudad o lugar fue emitida la póliza?
+¿En qué fecha fue emitida la póliza?
+
+
+ 
+

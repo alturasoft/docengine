@@ -886,16 +886,6 @@
         </div>
       </div>
 
-      <!-- Server Selector -->
-      <div class="server-config">
-        <label><i class="fa-solid fa-server"></i> API Target:</label>
-        <div class="server-input-group">
-          <input type="text" id="apiBaseUrl" value="http://localhost:8000">
-          <button class="btn-chip" onclick="setApiUrl('http://localhost:8000')">Local</button>
-          <button class="btn-chip" onclick="setApiUrl('http://172.24.25.30:8000')">Server Linux</button>
-        </div>
-      </div>
-
       <!-- Log Console Button, Theme Toggle & Health Status -->
       <div style="display: flex; align-items: center; gap: 0.75rem;">
         <button class="btn-chip" id="themeToggleBtn" style="padding: 0.4rem 0.65rem;" onclick="toggleTheme()" title="Cambiar Tema (Oscuro / Claro)">
@@ -1217,7 +1207,7 @@
         <span class="log-tag log-tag-skill">[Skill]</span> Reglas Empresa
         <span class="log-tag log-tag-chunking">[Chunking]</span> Parent-Child
         <span class="log-tag log-tag-embeddings">[Embeddings]</span> BGE-M3 (1024-d)
-        <span class="log-tag log-tag-json">[JSON]</span> gpt-4o
+        <span class="log-tag log-tag-json">[JSON]</span> gpt-4.1-mini
         <span class="log-tag log-tag-bd">[BD / RAG]</span> PostgreSQL pgvector
       </div>
     </div>
@@ -1231,7 +1221,6 @@
     let healthInterval = null;
 
     // DOM Elements
-    const apiBaseUrlInput = document.getElementById('apiBaseUrl');
     const healthBadge = document.getElementById('healthBadge');
     const healthText = document.getElementById('healthText');
     const dropZone = document.getElementById('dropZone');
@@ -1265,18 +1254,6 @@
         if (icon) { icon.className = 'fa-solid fa-moon'; icon.style.color = '#6366f1'; }
       }
 
-      // Load saved API URL from localStorage if exists
-      const savedUrl = localStorage.getItem('docengine_api_url');
-      if (savedUrl) {
-        apiBaseUrlInput.value = savedUrl;
-      }
-
-      apiBaseUrlInput.addEventListener('change', () => {
-        localStorage.setItem('docengine_api_url', getApiUrl());
-        checkHealth();
-        fetchMetrics();
-      });
-
       setupDragAndDrop();
       checkHealth();
       fetchMetrics();
@@ -1286,15 +1263,10 @@
     });
 
     function getApiUrl() {
-      let url = apiBaseUrlInput.value.trim();
-      return url.replace(/\/+$/, '');
-    }
-
-    function setApiUrl(url) {
-      apiBaseUrlInput.value = url;
-      localStorage.setItem('docengine_api_url', url);
-      checkHealth();
-      fetchMetrics();
+      if (window.location.origin && window.location.origin.startsWith('http')) {
+        return window.location.origin.replace(/\/+$/, '');
+      }
+      return 'http://localhost:8000';
     }
 
     // Health & Metrics Polling

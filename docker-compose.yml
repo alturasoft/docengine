@@ -31,8 +31,10 @@ services:
     environment:
       - DOCENGINE_ENV=development
       - DOCENGINE_LOG_LEVEL=INFO
-      - DOCENGINE_LOG_FORMAT=json
-      - DOCENGINE_EXTRACTION_DO_OCR=false
+      - DOCENGINE_EXTRACTOR_ENGINE=pdfextract
+      - DOCENGINE_EXTRACTION_DO_OCR=true
+      - DOCENGINE_EXTRACTION_FORCE_OCR_ALL_PAGES=true
+      - DOCENGINE_OCR_ENGINE=rapidocr
       - DOCENGINE_EXTRACTION_TABLE_MODE=ACCURATE
       - DOCENGINE_OUTPUT_OUTPUT_DIR=/app/outputs
       - DOCENGINE_DB_HOST=postgres_db

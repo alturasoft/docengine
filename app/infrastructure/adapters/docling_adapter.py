@@ -5,7 +5,7 @@ and invoked. All other components interact with IDocumentExtractor only.
 
 Design decisions:
 - DocumentConverter is built once (expensive — loads ML models) and reused.
-- OCR is explicitly disabled for Phase 1 (do_ocr=False).
+- Gold Standard: OCR is always active with OcrMode.FULL_PAGE for maximum fidelity.
 - TableFormerMode.ACCURATE is used for maximum table fidelity.
 - convert_all() is used for batches, convert() for single documents.
 - All Docling exceptions are caught and translated to domain exceptions.
@@ -19,7 +19,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import docling
 from docling.datamodel.base_models import ConversionStatus, InputFormat
@@ -28,6 +28,7 @@ from docling.datamodel.pipeline_options import (
     PdfPipelineOptions,
     TableFormerMode,
     TableStructureOptions,
+    TableStructureV2Options,
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
@@ -143,6 +144,7 @@ class DoclingAdapter(IDocumentExtractor):
             "DoclingAdapter initialized",
             extractor=self.extractor_name,
             ocr_enabled=config.extraction.do_ocr,
+            force_ocr_all_pages=config.extraction.force_ocr_all_pages,
             table_mode=config.extraction.table_mode,
             accelerator=config.pipeline.accelerator_device,
             num_threads=config.pipeline.num_threads,
@@ -173,19 +175,29 @@ class DoclingAdapter(IDocumentExtractor):
         logger.info("Starting extraction", document_id=doc_id, source=source)
         start_time = time.perf_counter()
 
-        # --- Dynamic OCR detection (Phase 2) ---
-        # Classify the PDF type BEFORE calling Docling so we can configure
-        # do_ocr correctly from the start. Uses the default converter (no OCR)
-        # for digital PDFs to preserve startup efficiency.
-        pdf_type_result = self._detect_pdf_type(source)
-        if pdf_type_result.is_scanned:
-            converter = self._build_converter_with_ocr(
-                force_full_page=pdf_type_result.force_full_page_ocr
-            )
+        # --- Gold Standard: OCR always active ---
+        # When force_ocr_all_pages=True, the pre-built converter already
+        # includes OCR with OcrMode.FULL_PAGE. Skip PDF type detection
+        # for converter selection (still run it for metadata capture).
+        if self._config.extraction.force_ocr_all_pages:
+            # PDF type detection for metadata only (does not affect converter)
+            pdf_type_result = self._detect_pdf_type(source)
+            converter = self._converter  # Pre-built with OCR + FULL_PAGE
             ocr_was_used = True
         else:
-            converter = self._converter  # Reuse the pre-built no-OCR converter
-            ocr_was_used = self._config.extraction.do_ocr
+            # --- Legacy path: Dynamic OCR detection ---
+            # Classify the PDF type BEFORE calling Docling so we can configure
+            # do_ocr correctly from the start. Uses the default converter (no OCR)
+            # for digital PDFs to preserve startup efficiency.
+            pdf_type_result = self._detect_pdf_type(source)
+            if pdf_type_result.is_scanned:
+                converter = self._build_converter_with_ocr(
+                    force_full_page=pdf_type_result.force_full_page_ocr
+                )
+                ocr_was_used = True
+            else:
+                converter = self._converter  # Reuse the pre-built no-OCR converter
+                ocr_was_used = self._config.extraction.do_ocr
 
         try:
             conv_result = converter.convert(source, raises_on_error=False)
@@ -305,6 +317,24 @@ class DoclingAdapter(IDocumentExtractor):
     # Private helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _build_table_structure_options(
+        ext_cfg: Any,
+    ) -> TableStructureOptions | TableStructureV2Options:
+        """Create table structure options based on configured engine (v1 or v2)."""
+        if getattr(ext_cfg, "table_engine", "v1") == "v2":
+            return TableStructureV2Options(
+                do_cell_matching=ext_cfg.do_cell_matching,
+            )
+        return TableStructureOptions(
+            do_cell_matching=ext_cfg.do_cell_matching,
+            mode=(
+                TableFormerMode.ACCURATE
+                if ext_cfg.table_mode == "ACCURATE"
+                else TableFormerMode.FAST
+            ),
+        )
+
     def _build_converter(self) -> DocumentConverter:
         """Construct and configure the Docling DocumentConverter.
 
@@ -329,20 +359,31 @@ class DoclingAdapter(IDocumentExtractor):
         pipeline_options = PdfPipelineOptions()
 
         # --- OCR ---
-        # Phase 1: OCR explicitly disabled.
-        # Phase 2: Set do_ocr=True and configure ocr_options via IOcrEngine.
+        # Gold Standard: When force_ocr_all_pages=True, the default converter
+        # is built WITH OCR + OcrMode.FULL_PAGE from the start.
         pipeline_options.do_ocr = ext_cfg.do_ocr
+
+        if ext_cfg.force_ocr_all_pages:
+            from app.infrastructure.adapters.ocr_adapter import (  # noqa: PLC0415
+                get_ocr_adapter,
+            )
+            ocr_engine_adapter = get_ocr_adapter(cfg, force_full_page_ocr=True)
+            pipeline_options.ocr_options = ocr_engine_adapter.get_ocr_options()
+            logger.info(
+                "Gold Standard: Default converter built with OCR + FULL_PAGE",
+                ocr_engine=ocr_engine_adapter.engine_name,
+                do_ocr=True,
+            )
+        elif ext_cfg.do_ocr:
+            from app.infrastructure.adapters.ocr_adapter import (  # noqa: PLC0415
+                get_ocr_adapter,
+            )
+            ocr_engine_adapter = get_ocr_adapter(cfg, force_full_page_ocr=False)
+            pipeline_options.ocr_options = ocr_engine_adapter.get_ocr_options()
 
         # --- Table Structure ---
         pipeline_options.do_table_structure = ext_cfg.do_table_structure
-        pipeline_options.table_structure_options = TableStructureOptions(
-            do_cell_matching=ext_cfg.do_cell_matching,
-            mode=(
-                TableFormerMode.ACCURATE
-                if ext_cfg.table_mode == "ACCURATE"
-                else TableFormerMode.FAST
-            ),
-        )
+        pipeline_options.table_structure_options = self._build_table_structure_options(ext_cfg)
 
         # --- Layout Analysis Scale ---
         # Higher scale improves region detection for dense multi-column layouts
@@ -477,14 +518,7 @@ class DoclingAdapter(IDocumentExtractor):
 
         # --- Table Structure (same as default converter) ---
         pipeline_options.do_table_structure = ext_cfg.do_table_structure
-        pipeline_options.table_structure_options = TableStructureOptions(
-            do_cell_matching=ext_cfg.do_cell_matching,
-            mode=(
-                TableFormerMode.ACCURATE
-                if ext_cfg.table_mode == "ACCURATE"
-                else TableFormerMode.FAST
-            ),
-        )
+        pipeline_options.table_structure_options = self._build_table_structure_options(ext_cfg)
 
         # --- Layout and image scale (same as default converter) ---
         pipeline_options.images_scale = cfg.pipeline.images_scale

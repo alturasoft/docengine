@@ -24,10 +24,15 @@ from app.config.settings import (
 class TestExtractionConfig:
     """Tests for ExtractionConfig."""
 
-    def test_default_ocr_is_disabled(self) -> None:
-        """OCR must be False by default for Phase 1."""
+    def test_default_ocr_is_enabled(self) -> None:
+        """OCR must be True by default for Gold Standard configuration."""
         cfg = ExtractionConfig()
-        assert cfg.do_ocr is False
+        assert cfg.do_ocr is True
+
+    def test_default_force_ocr_all_pages_is_enabled(self) -> None:
+        """force_ocr_all_pages must be True by default for Gold Standard."""
+        cfg = ExtractionConfig()
+        assert cfg.force_ocr_all_pages is True
 
     def test_default_table_mode_is_accurate(self) -> None:
         """TableFormer mode must default to ACCURATE for maximum quality."""
@@ -39,10 +44,15 @@ class TestExtractionConfig:
         cfg = ExtractionConfig()
         assert cfg.do_table_structure is True
 
-    def test_default_cell_matching_enabled(self) -> None:
-        """Cell matching improves table accuracy — must be enabled."""
+    def test_default_table_engine_is_v2(self) -> None:
+        """Table engine must default to v2."""
         cfg = ExtractionConfig()
-        assert cfg.do_cell_matching is True
+        assert cfg.table_engine == "v2"
+
+    def test_default_cell_matching_is_false(self) -> None:
+        """Cell matching defaults to False for TableFormer V2."""
+        cfg = ExtractionConfig()
+        assert cfg.do_cell_matching is False
 
     def test_page_range_none_by_default(self) -> None:
         """No page range restriction by default."""
@@ -151,10 +161,11 @@ class TestAppSettings:
         assert isinstance(settings.performance, PerformanceConfig)
         assert isinstance(settings.markdown, MarkdownConfig)
 
-    def test_ocr_disabled_in_extraction_config(self) -> None:
-        """Core invariant: OCR must be disabled for Phase 1."""
+    def test_ocr_enabled_in_extraction_config(self) -> None:
+        """Gold Standard: OCR must be enabled by default."""
         settings = AppSettings()
-        assert settings.extraction.do_ocr is False
+        assert settings.extraction.do_ocr is True
+        assert settings.extraction.force_ocr_all_pages is True
 
     def test_os_detection_attributes(self) -> None:
         """Verify that OS detection properties and helper methods work."""
@@ -188,4 +199,24 @@ class TestGetSettingsSingleton:
         reset_settings()
         s2 = get_settings()
         assert s1 is not s2
+
+
+class TestRAGQueryConfig:
+    """Tests for RAGQueryConfig and RerankerConfig defaults."""
+
+    def test_rag_query_config_defaults(self) -> None:
+        from app.config.settings import RAGQueryConfig
+
+        cfg = RAGQueryConfig()
+        assert cfg.top_k == 10
+        assert cfg.similarity_threshold == 0.20
+        assert cfg.llm_model == "gpt-4.1-mini"
+
+    def test_reranker_config_defaults(self) -> None:
+        from app.config.settings import RerankerConfig
+
+        cfg = RerankerConfig()
+        assert cfg.top_n == 8
+        assert cfg.enabled is True
+
 

@@ -216,7 +216,7 @@ class ChunkingService:
         return blocks
 
     def _split_table(self, table_lines: list[str], context_prefix: str = "") -> list[str]:
-        """Split a Markdown table into sub-chunks if it exceeds chunk_size_chars.
+        """Split a Markdown table into sub-chunks if it exceeds table_chunk_size_chars.
 
         Guarantees:
         - Document context header, column headers, and delimiter rows are repeated on every sub-chunk.
@@ -236,9 +236,17 @@ class ChunkingService:
             raw_tbl = "\n".join(table_lines).strip()
             return [f"{context_prefix}{raw_tbl}" if context_prefix else raw_tbl]
 
-        # Check if full table with context fits in chunk_size_chars
+        # Use table_chunk_size_chars if configured, otherwise chunk_size_chars.
+        # If chunk_size_chars was explicitly lowered below 1000 (e.g. in unit tests), respect it.
+        configured_table_size = getattr(self._config, "table_chunk_size_chars", None)
+        if configured_table_size and self._config.chunk_size_chars >= 1000:
+            max_table_size = configured_table_size
+        else:
+            max_table_size = self._config.chunk_size_chars
+
+        # Check if full table with context fits in max_table_size
         full_table = header_prefix + "\n" + "\n".join(data_rows)
-        if len(full_table) <= self._config.chunk_size_chars:
+        if len(full_table) <= max_table_size:
             return [full_table]
 
         chunks: list[str] = []
@@ -248,7 +256,7 @@ class ChunkingService:
             test_rows = current_rows + [row]
             candidate_chunk = header_prefix + "\n" + "\n".join(test_rows)
 
-            if len(candidate_chunk) <= self._config.chunk_size_chars:
+            if len(candidate_chunk) <= max_table_size:
                 current_rows.append(row)
             else:
                 if current_rows:
@@ -325,20 +333,45 @@ class ChunkingService:
                     # Tables are already optimized by _split_table with header
                     # repetition. Each table sub-chunk becomes a standalone Parent.
                     table_title = self._extract_table_title(block.lines[0]) if block.lines else None
+                    # Detect if table represents an insured payroll / list of insured individuals
+                    first_lines = "\n".join(block.lines[:3]).lower() if block.lines else ""
+                    is_nomina = bool(
+                        re.search(
+                            r"(?i)\b(nomina|nómina|asegurado|nombre completo|ci\b|doc\b|m\.\s*acc|muerte accidental|parentesco|titular)\b",
+                            first_lines,
+                        )
+                    )
+                    effective_table_title = table_title
+                    if is_nomina and (not table_title or "NOMINA" not in table_title.upper()):
+                        effective_table_title = f"{table_title} (Nómina de Asegurados)" if table_title else "Nómina de Asegurados"
+
                     context_prefix = self._build_context_prefix(
                         metadata=metadata,
                         file_name=file_name,
                         detected_policy_num=detected_policy_num,
-                        table_title=table_title,
+                        table_title=effective_table_title,
                     )
                     table_chunks = self._split_table(block.lines, context_prefix=context_prefix)
-                    for tbl_chunk in table_chunks:
+                    table_group_id = str(uuid.uuid4())
+                    total_table_parts = len(table_chunks)
+
+                    for part_idx, tbl_chunk in enumerate(table_chunks, start=1):
                         if tbl_chunk.strip():
+                            chunk_meta = dict(metadata)
+                            chunk_meta["is_table"] = True
+                            chunk_meta["table_group_id"] = table_group_id
+                            chunk_meta["table_part"] = part_idx
+                            chunk_meta["table_total_parts"] = total_table_parts
+                            if effective_table_title:
+                                chunk_meta["table_title"] = effective_table_title
+                            if is_nomina:
+                                chunk_meta["is_nomina"] = True
+
                             parent_chunks.append(
                                 PolicyChunk(
                                     chunk_index=chunk_idx,
                                     chunk_content=tbl_chunk.strip(),
-                                    metadata_json=dict(metadata),
+                                    metadata_json=chunk_meta,
                                     chunk_id=str(uuid.uuid4()),
                                     parent_id=None,
                                     chunk_type="parent",

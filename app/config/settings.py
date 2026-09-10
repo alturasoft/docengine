@@ -65,13 +65,16 @@ class ExtractionConfig(BaseSettings):
     """Controls what Docling extracts and how it handles document elements.
 
     Attributes:
-        do_ocr: Enable OCR pipeline. MUST remain False for Phase 1.
-            All infrastructure is prepared for Phase 2 activation.
+        do_ocr: Enable OCR pipeline. True for Gold Standard configuration.
+        force_ocr_all_pages: When True, OCR is applied to ALL pages of ALL PDFs
+            using OcrMode.FULL_PAGE, regardless of whether the PDF has embedded
+            text. This overrides auto-detection decisions and guarantees maximum
+            extraction fidelity at the cost of processing time.
         do_table_structure: Enable table detection and reconstruction.
         table_mode: TableFormer mode. ACCURATE for maximum fidelity.
             Options: 'ACCURATE' | 'FAST'
         do_cell_matching: Match PDF cells to table structure (improves accuracy).
-        generate_picture_images: Extract image binaries from PDF (unused in Phase 1).
+        generate_picture_images: Extract image binaries from PDF.
         page_range_start: First page to extract (1-indexed). None = beginning.
         page_range_end: Last page to extract (1-indexed). None = end.
         fix_spaced_text: Post-process Markdown to collapse letter-spaced text
@@ -85,12 +88,31 @@ class ExtractionConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="DOCENGINE_EXTRACTION_", extra="ignore")
 
-    do_ocr: bool = Field(default=False, description="Enable OCR pipeline (Phase 2 only)")
-    do_table_structure: bool = Field(default=True, description="Enable table detection")
-    table_mode: Literal["ACCURATE", "FAST"] = Field(
-        default="ACCURATE", description="TableFormer mode"
+    do_ocr: bool = Field(default=True, description="Enable OCR pipeline (Gold Standard: always True)")
+    force_ocr_all_pages: bool = Field(
+        default=True,
+        description=(
+            "Force full-page OCR on ALL PDFs, including those with embedded text. "
+            "Maximizes extraction fidelity at the cost of processing time. "
+            "When True, the default converter is built with OCR + OcrMode.FULL_PAGE."
+        ),
     )
-    do_cell_matching: bool = Field(default=True, description="Cell matching for tables")
+    do_table_structure: bool = Field(default=True, description="Enable table detection")
+    table_engine: Literal["v1", "v2"] = Field(
+        default="v2",
+        description="Table structure model: 'v1' (TableFormer V1) or 'v2' (TableFormer V2)",
+    )
+    table_mode: Literal["ACCURATE", "FAST"] = Field(
+        default="ACCURATE", description="TableFormer mode (V1 only)"
+    )
+    do_cell_matching: bool = Field(
+        default=False,
+        description=(
+            "Match PDF text cells to table predictions. "
+            "False: Model defines text cells directly (better for borderless tables). "
+            "True: Matches predictions back to PDF cells."
+        ),
+    )
     generate_picture_images: bool = Field(
         default=False, description="Extract image binaries"
     )
@@ -282,11 +304,11 @@ class LoggingConfig(BaseSettings):
 
 
 class OCRConfig(BaseSettings):
-    """OCR configuration stub — Phase 2 activation ready.
+    """OCR engine configuration.
 
-    This configuration class is fully implemented so that enabling OCR
-    in Phase 2 only requires changing do_ocr=True in ExtractionConfig
-    and selecting an engine here. No core code needs to change.
+    Controls which OCR engine Docling uses and engine-specific settings.
+    The Gold Standard configuration uses force_full_page_ocr=True to
+    ensure OCR processes entire pages for maximum text extraction fidelity.
 
     Attributes:
         engine: OCR engine to use. 'tesseract' | 'easyocr' | 'rapidocr'.
@@ -304,7 +326,7 @@ class OCRConfig(BaseSettings):
         default=["es", "en"], description="OCR language codes"
     )
     force_full_page_ocr: bool = Field(
-        default=False, description="Force full-page OCR"
+        default=True, description="Force full-page OCR (Gold Standard: always True)"
     )
     tessdata_prefix: Path | None = Field(
         default=None, description="Tesseract data directory"
@@ -416,7 +438,13 @@ class EmbeddingConfig(BaseSettings):
     model_name: str = Field(default="BAAI/bge-m3", description="Local embedding model name")
     batch_size: int = Field(default=32, description="Encoding batch size", ge=1, le=256)
     device: str = Field(default="cpu", description="Hardware device for embeddings")
-    chunk_size_chars: int = Field(default=1800, description="Target chunk size in characters", ge=200, le=10000)
+    chunk_size_chars: int = Field(default=2500, description="Target chunk size in characters", ge=200, le=10000)
+    table_chunk_size_chars: int | None = Field(
+        default=3500,
+        description="Target chunk size in characters specifically for Markdown tables",
+        ge=200,
+        le=15000,
+    )
     chunk_overlap_chars: int = Field(default=200, description="Chunk overlap in characters", ge=0, le=1000)
     child_chunk_size_chars: int = Field(default=800, description="Child chunk size for Parent-Child retrieval", ge=100, le=2000)
     child_chunk_overlap_chars: int = Field(default=100, description="Child chunk overlap for Parent-Child retrieval", ge=0, le=500)
@@ -438,7 +466,7 @@ class RAGQueryConfig(BaseSettings):
             included in the context (0.0–1.0). Lower values increase recall
             at the cost of noise; higher values increase precision.
         llm_model: OpenAI chat completion model to use for answer generation.
-            'gpt-4o-mini' (fast, cost-effective) or 'gpt-4o' (higher quality).
+            'gpt-4.1-mini' (fast, cost-effective) or 'gpt-4o' (higher quality).
         max_tokens: Maximum tokens in the LLM completion response.
         temperature: Sampling temperature. Fixed at 0.0 for maximum factual
             fidelity — do NOT change unless explicitly required.
@@ -446,14 +474,14 @@ class RAGQueryConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="DOCENGINE_RAG_", extra="ignore")
 
-    top_k: int = Field(default=5, description="Default top-K chunks per query", ge=1, le=20)
+    top_k: int = Field(default=10, description="Default top-K chunks per query", ge=1, le=50)
     similarity_threshold: float = Field(
-        default=0.3,
+        default=0.20,
         description="Minimum cosine similarity threshold (0.0–1.0)",
         ge=0.0,
         le=1.0,
     )
-    llm_model: str = Field(default="gpt-4o-mini", description="OpenAI chat completion model")
+    llm_model: str = Field(default="gpt-4.1-mini", description="OpenAI chat completion model")
     max_tokens: int = Field(default=2048, description="Max tokens for LLM response", ge=128, le=8192)
     temperature: float = Field(default=0.0, description="Sampling temperature (0.0 = deterministic)", ge=0.0, le=2.0)
 
@@ -482,7 +510,7 @@ class RerankerConfig(BaseSettings):
 
     enabled: bool = Field(default=True, description="Enable cross-encoder reranking (False for dev mock)")
     model_name: str = Field(default="BAAI/bge-reranker-v2-m3", description="Cross-encoder model")
-    top_n: int = Field(default=3, description="Number of parent chunks after reranking", ge=1, le=10)
+    top_n: int = Field(default=8, description="Number of parent chunks after reranking", ge=1, le=30)
     device: str = Field(default="cpu", description="Hardware device for reranker")
     cache_folder: Path | None = Field(
         default=None,
@@ -535,6 +563,12 @@ class AppSettings(BaseSettings):
     )
     app_version: str = Field(
         default="1.0.0", description="Application version"
+    )
+    extractor_engine: Literal["pdfextract", "docling"] = Field(
+        default="pdfextract", description="Active document extractor engine ('pdfextract' or 'docling')"
+    )
+    skip_skills: bool = Field(
+        default=True, description="Whether to omit Step 4 (Skills postprocessing)"
     )
 
     # Sub-configurations — each reads its own env vars independently

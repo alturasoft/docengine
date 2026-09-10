@@ -530,10 +530,14 @@ class CompanyKVRulesProcessor(BasePostProcessor):
         if not fixes:
             return markdown
 
-        # Check for whole-table structural reconstruction rules (e.g. BIS multidimensional deductibles)
+        # Check for whole-table structural reconstruction rules (e.g. BIS multidimensional deductibles, talleres tables)
         for fix in fixes:
-            if isinstance(fix, dict) and fix.get("rule_type") == "reconstruct_multidimensional_deducibles":
-                markdown = self._reconstruct_bis_deducible_table(markdown)
+            if isinstance(fix, dict):
+                rule_type = fix.get("rule_type")
+                if rule_type == "reconstruct_multidimensional_deducibles":
+                    markdown = self._reconstruct_bis_deducible_table(markdown)
+                elif rule_type == "reconstruct_talleres_table":
+                    markdown = self._reconstruct_talleres_table(markdown)
 
         lines = markdown.splitlines()
         result_lines: list[str] = []
@@ -838,6 +842,276 @@ class CompanyKVRulesProcessor(BasePostProcessor):
                 break
 
         return markdown
+
+    def _reconstruct_talleres_table(self, markdown: str) -> str:
+        """Reconstruct and repair fragmented workshop and provider directory tables.
+
+        Fixes issues where Docling splits tables due to multi-line wrapping in header
+        cells (e.g. '## O PROPIETARIO', '## PROPIETARIO'), misclassifies mid-cell text
+        as section headers (e.g. '## LOPEZ)', '## NO1657', '## BURBOA', '## LEONES',
+        '## SHUGAMOTORS', '## CAMIONES FLOTAS'), fractures multi-line table rows,
+        and shifts single-character tokens across column boundaries.
+
+        Args:
+            markdown: Input Markdown text.
+
+        Returns:
+            Markdown with clean, unified 5-column workshop tables.
+        """
+        # Ensure section headers glued to table lines are properly detached
+        markdown = re.sub(
+            r"(\|\s*)(#+\s*LISTA\s+DE\s+TALLERES[^\r\n]*)",
+            r"\1\n\n\2\n",
+            markdown,
+            flags=re.IGNORECASE,
+        )
+
+        lines = markdown.splitlines()
+        result_lines: list[str] = []
+        i = 0
+
+        def _is_taller_header(line_str: str) -> bool:
+            s = line_str.upper()
+            return (
+                ("NOMBRE" in s or "TALLER" in s or "TALLE" in s)
+                and (
+                    "DIRECC" in s
+                    or "TELEF" in s
+                    or "ELEF" in s
+                    or "REPRES" in s
+                    or "PROP" in s
+                )
+            )
+
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+
+            is_sec_header = bool(
+                re.match(r"^#+\s*LISTA\s+DE\s+TALLERES", stripped, re.IGNORECASE)
+            )
+            is_tbl_header = stripped.startswith("|") and _is_taller_header(stripped)
+
+            if is_sec_header or is_tbl_header:
+                section_header = None
+                if is_sec_header:
+                    section_header = stripped
+                    i += 1
+                    while i < len(lines) and not lines[i].strip():
+                        i += 1
+
+                raw_entries: list[dict[str, str]] = []
+                current_entry: dict[str, str] | None = None
+                pending_spurious_text: list[str] = []
+
+                while i < len(lines):
+                    cur = lines[i].strip()
+                    if not cur:
+                        j = i + 1
+                        while j < len(lines) and not lines[j].strip():
+                            j += 1
+                        if j < len(lines):
+                            next_line = lines[j].strip()
+                            if next_line.startswith("|") or (
+                                next_line.startswith("##")
+                                and not re.match(
+                                    r"^#+\s*LISTA\s+DE\s+TALLERES",
+                                    next_line,
+                                    re.IGNORECASE,
+                                )
+                                and not re.match(
+                                    r"^#+\s*(?:CONDICION|P[ÓO]LIZA|SEGURO|COBERTURA|DISPOSICION|CLAUSULA|ANEXO|\d+\.)",
+                                    next_line,
+                                    re.IGNORECASE,
+                                )
+                            ):
+                                i = j
+                                continue
+                        break
+
+                    if cur.startswith("#"):
+                        if re.match(
+                            r"^#+\s*LISTA\s+DE\s+TALLERES", cur, re.IGNORECASE
+                        ):
+                            break
+                        if re.match(
+                            r"^#+\s*(?:CONDICION|P[ÓO]LIZA|SEGURO|COBERTURA|DISPOSICION|CLAUSULA|ANEXO|\d+\.)",
+                            cur,
+                            re.IGNORECASE,
+                        ):
+                            break
+
+                        header_text = re.sub(r"^#+\s*", "", cur).strip()
+                        if header_text.upper() in ("O PROPIETARIO", "PROPIETARIO"):
+                            i += 1
+                            continue
+
+                        if current_entry:
+                            if any(
+                                k in header_text.upper()
+                                for k in (
+                                    "CALLE",
+                                    "AV",
+                                    "KM",
+                                    "NO",
+                                    "Nº",
+                                    "ZONA",
+                                    "BARRIO",
+                                    "ROTON",
+                                    "LEONES",
+                                    "GUARDIA",
+                                    "COMBATIENTES",
+                                )
+                            ):
+                                current_entry["address"] = (
+                                    current_entry["address"] + " " + header_text
+                                ).strip()
+                            elif header_text.startswith('"') or any(
+                                k in header_text.upper()
+                                for k in (
+                                    "SHUGA",
+                                    "FLOTA",
+                                    "CAMION",
+                                    "TALLER",
+                                    "MECANIC",
+                                )
+                            ):
+                                current_entry["name"] = (
+                                    current_entry["name"] + " " + header_text
+                                ).strip()
+                            else:
+                                if current_entry["rep"]:
+                                    current_entry["rep"] = (
+                                        current_entry["rep"] + " " + header_text
+                                    ).strip()
+                                else:
+                                    current_entry["address"] = (
+                                        current_entry["address"] + " " + header_text
+                                    ).strip()
+                        else:
+                            pending_spurious_text.append(header_text)
+                        i += 1
+                        continue
+
+                    if cur.startswith("|"):
+                        if re.match(r"^\s*\|\s*:?-+:?", cur):
+                            i += 1
+                            continue
+                        if _is_taller_header(cur):
+                            i += 1
+                            if i < len(lines):
+                                nxt = lines[i].strip()
+                                if (
+                                    nxt.startswith("|")
+                                    and (
+                                        "TALLER" in nxt.upper()
+                                        or "PROPIETARIO" in nxt.upper()
+                                    )
+                                    and not re.search(r"\d+", nxt)
+                                ):
+                                    i += 1
+                            continue
+
+                        cells = [c.strip() for c in cur.strip("|").split("|")]
+                        while len(cells) < 5:
+                            cells.append("")
+                        c_no, c_name, c_rep, c_addr, c_tel = (
+                            cells[0],
+                            cells[1],
+                            cells[2],
+                            cells[3],
+                            cells[4],
+                        )
+
+                        no_match = re.match(r"^\s*(\d+)\.?\s*$", c_no)
+                        if no_match:
+                            item_num = no_match.group(1)
+                            if len(c_rep) <= 2 and c_rep.isalpha() and not c_rep.isspace():
+                                c_name = (c_name + " " + c_rep).strip()
+                                c_rep = ""
+
+                            current_entry = {
+                                "no": item_num,
+                                "name": c_name,
+                                "rep": c_rep,
+                                "address": c_addr,
+                                "tel": c_tel,
+                            }
+                            if pending_spurious_text:
+                                for pst in pending_spurious_text:
+                                    current_entry["address"] = (
+                                        pst + " " + current_entry["address"]
+                                    ).strip()
+                                pending_spurious_text.clear()
+
+                            raw_entries.append(current_entry)
+                        else:
+                            if current_entry:
+                                if c_rep:
+                                    if len(c_rep) <= 2 and c_rep.isalpha():
+                                        current_entry["name"] = (
+                                            current_entry["name"] + " " + c_rep
+                                        ).strip()
+                                    elif not current_entry["rep"]:
+                                        current_entry["rep"] = c_rep.strip()
+                                    else:
+                                        current_entry["rep"] = (
+                                            current_entry["rep"] + " " + c_rep
+                                        ).strip()
+                                if c_name:
+                                    current_entry["name"] = (
+                                        current_entry["name"] + " " + c_name
+                                    ).strip()
+                                if c_addr:
+                                    current_entry["address"] = (
+                                        current_entry["address"] + " " + c_addr
+                                    ).strip()
+                                if c_tel:
+                                    current_entry["tel"] = (
+                                        current_entry["tel"] + " / " + c_tel
+                                    ).strip()
+                            else:
+                                if any(cells):
+                                    current_entry = {
+                                        "no": "",
+                                        "name": c_name,
+                                        "rep": c_rep,
+                                        "address": c_addr,
+                                        "tel": c_tel,
+                                    }
+                                    raw_entries.append(current_entry)
+                        i += 1
+                        continue
+
+                    break
+
+                if raw_entries:
+                    if section_header:
+                        result_lines.append(section_header)
+                        result_lines.append("")
+                    result_lines.append(
+                        "| No. | NOMBRE DE TALLER | REPRESENTANTE LEGAL O PROPIETARIO | DIRECCION | TELEFONO |"
+                    )
+                    result_lines.append(
+                        "| --- | --- | --- | --- | --- |"
+                    )
+                    for ent in raw_entries:
+                        clean_no = ent["no"]
+                        clean_name = re.sub(r"\s+", " ", ent["name"]).strip()
+                        clean_rep = re.sub(r"\s+", " ", ent["rep"]).strip()
+                        clean_addr = re.sub(r"\s+", " ", ent["address"]).strip()
+                        clean_tel = re.sub(r"\s+", " ", ent["tel"]).strip()
+                        result_lines.append(
+                            f"| {clean_no} | {clean_name} | {clean_rep} | {clean_addr} | {clean_tel} |"
+                        )
+                    result_lines.append("")
+                    continue
+
+            result_lines.append(line)
+            i += 1
+
+        return "\n".join(result_lines)
+
 
 
 

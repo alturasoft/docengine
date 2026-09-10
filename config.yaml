@@ -1,0 +1,47 @@
+# ==============================================================================
+# Configuración pdfextract para DocEngine
+# Fuerza el uso exclusivo de Docling por defecto y deshabilita table_postprocessing
+# ==============================================================================
+
+processing:
+  parallel: false
+  max_workers: 2
+  timeout_seconds: 600
+
+engines:
+  docling:
+    enabled: true
+    ocr_enabled: true
+    ocr_engine: "auto"
+    do_table_structure: true
+    table_mode: "accurate"
+    force_ocr: false
+  paddleocr:
+    enabled: false
+
+output:
+  output_dir: "./output"
+  save_original: true
+  save_txt: true
+  save_markdown: true
+  save_json: true
+  include_raw_engine_data: true
+  generate_rag_chunks: true
+
+document_analysis:
+  min_chars_native_page: 50
+  page_by_page_inspection: true
+  merge_consecutive_multipage_tables: true
+
+table_postprocessing:
+  enabled: false
+
+text_rules:
+  enabled: true
+  general_enabled: true
+  docling_enabled: true
+  paddleocr_enabled: false
+
+logging:
+  level: "INFO"
+  save_log_file: true

@@ -16,6 +16,7 @@ Search Strategy:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.domain.models.query_models import RetrievedChunk
@@ -23,6 +24,68 @@ from app.infrastructure.database.db_connection import DatabaseManager
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Conversational words and generic fillers to omit when constructing the flexible tsquery
+_CONVERSATIONAL_STOPWORDS = {
+    "dame", "dar", "da", "dime", "decir", "cual", "cuál", "cuales", "cuáles",
+    "que", "qué", "quien", "quién", "como", "cómo", "donde", "dónde", "cuando",
+    "por", "favor", "existe", "existen", "hay", "tiene", "tienen", "lista",
+    "figura", "figuran", "muestra", "muestrame", "muéstrame", "completa", "todos",
+    "todas", "personas", "numero", "número", "nro", "poliza", "póliza", "archivo",
+    "documento", "documentos", "adjunto", "adjuntos", "tabla", "tablas", "sobre"
+}
+
+
+def _build_flexible_tsquery(query_text: str) -> str:
+    """Build a high-precision query for websearch_to_tsquery from semantic keywords.
+
+    Filters conversational stopwords and standalone policy codes (handled by metadata/filters),
+    and creates a targeted search: (keywords AND) or primary keyword.
+    """
+    tokens = re.findall(r"[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\-_]{3,}", query_text)
+    keywords: list[str] = []
+    for t in tokens:
+        tl = t.lower()
+        if tl in _CONVERSATIONAL_STOPWORDS:
+            continue
+        # Skip pure policy code tokens (e.g. SCE0651635, CAC-SCE0651635)
+        # to prevent penalizing table rows that don't repeat the policy code in their text
+        if re.match(r"^[A-Za-z]{2,5}-?[A-Za-z0-9]{4,15}$", t) and any(c.isdigit() for c in t):
+            continue
+        keywords.append(t)
+
+    if not keywords:
+        # Fallback: keep words >= 4 chars not in stopwords
+        keywords = [t for t in tokens if len(t) >= 4 and t.lower() not in _CONVERSATIONAL_STOPWORDS]
+
+    if not keywords:
+        return query_text
+
+    if len(keywords) > 1:
+        # e.g. "(nómina asegurados) or nómina"
+        and_part = " ".join(keywords[:4])
+        return f"({and_part}) or {keywords[0]}"
+    return keywords[0]
+
+
+def _is_table_content(content: str, metadata: dict[str, Any] | None = None) -> bool:
+    """Determine if a chunk content or its metadata indicates a Markdown table."""
+    if metadata and metadata.get("is_table"):
+        return True
+    if "Tabla:" in content:
+        return True
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    table_lines = [l for l in lines if l.startswith("|") and l.endswith("|")]
+    return len(table_lines) >= 3
+
+
+def _extract_table_signature(content: str) -> str | None:
+    """Extract table header row signature to match related table fragments."""
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("|") and line.endswith("|") and not re.match(r"^\|\s*:?-+:?\s*\|", line):
+            return line
+    return None
 
 # ---------------------------------------------------------------------------
 # Hybrid RRF query template
@@ -64,13 +127,22 @@ text_search AS (
         pc.parent_id,
         pc.chunk_type,
         ROW_NUMBER() OVER (
-            ORDER BY ts_rank_cd(pc.content_tsvector, plainto_tsquery('spanish', %(query_text)s)) DESC
+            ORDER BY ts_rank_cd(
+                pc.content_tsvector,
+                websearch_to_tsquery('spanish', %(flexible_query)s)
+            ) DESC
         ) AS text_rank
     FROM policy_chunks pc
     {join_clause}
-    WHERE pc.content_tsvector @@ plainto_tsquery('spanish', %(query_text)s)
+    WHERE (
+        pc.content_tsvector @@ plainto_tsquery('spanish', %(query_text)s)
+        OR pc.content_tsvector @@ websearch_to_tsquery('spanish', %(flexible_query)s)
+    )
       {filter_clause}
-    ORDER BY ts_rank_cd(pc.content_tsvector, plainto_tsquery('spanish', %(query_text)s)) DESC
+    ORDER BY ts_rank_cd(
+        pc.content_tsvector,
+        websearch_to_tsquery('spanish', %(flexible_query)s)
+    ) DESC
     LIMIT %(rrf_pool)s
 ),
 rrf_combined AS (
@@ -158,7 +230,7 @@ class PgHybridSearchRepository:
         Raises:
             psycopg2.DatabaseError: On connection or query failure.
         """
-        top_k_children = min(max(1, top_k_children), 50)
+        top_k_children = min(max(1, top_k_children), 100)
 
         # Step 1: Execute hybrid RRF search
         children = self._hybrid_search(
@@ -259,9 +331,11 @@ class PgHybridSearchRepository:
             join_clause=join_clause,
         )
 
+        flexible_query = _build_flexible_tsquery(query_text)
         params: dict[str, Any] = {
             "query_vector": vector_str,
             "query_text": query_text,
+            "flexible_query": flexible_query,
             "top_k": top_k,
             "rrf_pool": rrf_pool,
         }
@@ -318,6 +392,147 @@ class PgHybridSearchRepository:
             )
 
         return parents
+
+    def expand_table_chunks(
+        self, parent_chunks: list[RetrievedChunk]
+    ) -> list[RetrievedChunk]:
+        """Expand partial table sub-chunks into their complete contiguous table sequence.
+
+        Strategy:
+        1. If a chunk has metadata['table_group_id'], all chunks belonging to that table_group_id
+           are retrieved from PostgreSQL in sequential order of table_part.
+        2. Heuristic fallback for documents stored prior to table_group_id:
+           Checks if chunk is a Markdown table and scans adjacent chunk indices (chunk_index +/- 5)
+           on the same policy sharing the same table header or table title signature.
+        3. Preserves ordering and deduplicates chunks.
+
+        Args:
+            parent_chunks: List of retrieved parent chunks.
+
+        Returns:
+            List of parent chunks with full contiguous table fragments assembled.
+        """
+        if not parent_chunks:
+            return []
+
+        expanded: list[RetrievedChunk] = []
+        seen_ids: set[str] = set()
+
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                for chunk in parent_chunks:
+                    cid = chunk.chunk_id or f"{chunk.policy_id}_{chunk.chunk_index}"
+                    if cid in seen_ids:
+                        continue
+
+                    # Check if chunk represents a Markdown table
+                    if not _is_table_content(chunk.chunk_content, chunk.metadata_json):
+                        seen_ids.add(cid)
+                        expanded.append(chunk)
+                        continue
+
+                    table_group_id = chunk.metadata_json.get("table_group_id")
+                    if table_group_id:
+                        # Fetch all parts of this table group
+                        cur.execute(
+                            """
+                            SELECT id, chunk_id, chunk_content, policy_id::text, chunk_index,
+                                   metadata_json, chunk_type
+                            FROM policy_chunks
+                            WHERE policy_id = %(policy_id)s::uuid
+                              AND metadata_json->>'table_group_id' = %(group_id)s
+                              AND chunk_type = 'parent'
+                            ORDER BY (metadata_json->>'table_part')::int ASC, chunk_index ASC;
+                            """,
+                            {"policy_id": chunk.policy_id, "group_id": str(table_group_id)},
+                        )
+                        rows = cur.fetchall()
+                        for r in rows:
+                            part_cid = str(r[1]) if r[1] else str(r[0])
+                            if part_cid not in seen_ids:
+                                seen_ids.add(part_cid)
+                                expanded.append(
+                                    RetrievedChunk(
+                                        chunk_id=part_cid,
+                                        policy_id=str(r[3]),
+                                        chunk_index=r[4],
+                                        chunk_content=r[2],
+                                        metadata_json=r[5] if isinstance(r[5], dict) else {},
+                                        similarity_score=chunk.similarity_score,
+                                    )
+                                )
+                    else:
+                        # Heuristic fallback: inspect adjacent parent chunks
+                        header_sig = _extract_table_signature(chunk.chunk_content)
+                        curr_idx = chunk.chunk_index
+                        cur.execute(
+                            """
+                            SELECT id, chunk_id, chunk_content, policy_id::text, chunk_index,
+                                   metadata_json, chunk_type
+                            FROM policy_chunks
+                            WHERE policy_id = %(policy_id)s::uuid
+                              AND chunk_type = 'parent'
+                              AND chunk_index BETWEEN %(min_idx)s AND %(max_idx)s
+                            ORDER BY chunk_index ASC;
+                            """,
+                            {
+                                "policy_id": chunk.policy_id,
+                                "min_idx": max(0, curr_idx - 5),
+                                "max_idx": curr_idx + 5,
+                            },
+                        )
+                        neighbor_rows = cur.fetchall()
+                        by_index = {r[4]: r for r in neighbor_rows}
+
+                        collected_indices = [curr_idx]
+                        # Scan backwards
+                        scan_idx = curr_idx - 1
+                        while scan_idx in by_index:
+                            nb_content = by_index[scan_idx][2]
+                            nb_sig = _extract_table_signature(nb_content)
+                            if _is_table_content(nb_content, by_index[scan_idx][5]) and (
+                                nb_sig == header_sig or ("Tabla:" in chunk.chunk_content and "Tabla:" in nb_content)
+                            ):
+                                collected_indices.insert(0, scan_idx)
+                                scan_idx -= 1
+                            else:
+                                break
+
+                        # Scan forwards
+                        scan_idx = curr_idx + 1
+                        while scan_idx in by_index:
+                            nb_content = by_index[scan_idx][2]
+                            nb_sig = _extract_table_signature(nb_content)
+                            if _is_table_content(nb_content, by_index[scan_idx][5]) and (
+                                nb_sig == header_sig or ("Tabla:" in chunk.chunk_content and "Tabla:" in nb_content)
+                            ):
+                                collected_indices.append(scan_idx)
+                                scan_idx += 1
+                            else:
+                                break
+
+                        for idx in collected_indices:
+                            r = by_index[idx]
+                            part_cid = str(r[1]) if r[1] else str(r[0])
+                            if part_cid not in seen_ids:
+                                seen_ids.add(part_cid)
+                                expanded.append(
+                                    RetrievedChunk(
+                                        chunk_id=part_cid,
+                                        policy_id=str(r[3]),
+                                        chunk_index=r[4],
+                                        chunk_content=r[2],
+                                        metadata_json=r[5] if isinstance(r[5], dict) else {},
+                                        similarity_score=chunk.similarity_score,
+                                    )
+                                )
+
+        logger.info(
+            "Table chunk expansion complete",
+            original_chunks=len(parent_chunks),
+            expanded_chunks=len(expanded),
+        )
+        return expanded
 
 
 # ---------------------------------------------------------------------------

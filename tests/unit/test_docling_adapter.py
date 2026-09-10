@@ -23,14 +23,15 @@ class TestDoclingAdapterInit:
         assert adapter is not None
 
     @patch("app.infrastructure.adapters.docling_adapter.DocumentConverter")
-    def test_ocr_disabled_in_phase1(
+    def test_ocr_disabled_when_configured(
         self, mock_converter_cls: MagicMock, app_settings: AppSettings
     ) -> None:
-        """OCR must be explicitly disabled (do_ocr=False) in Phase 1."""
+        """OCR can be explicitly disabled by setting do_ocr=False and force_ocr_all_pages=False."""
         app_settings.extraction.do_ocr = False
+        app_settings.extraction.force_ocr_all_pages = False
         adapter = DoclingAdapter(config=app_settings)
-        # Verify PdfPipelineOptions was called with do_ocr=False
         assert not app_settings.extraction.do_ocr
+        assert not app_settings.extraction.force_ocr_all_pages
 
     @patch("app.infrastructure.adapters.docling_adapter.DocumentConverter")
     def test_table_structure_enabled(
@@ -61,6 +62,24 @@ class TestDoclingAdapterInit:
         """supports_ocr must return True (Phase 2 capable)."""
         adapter = DoclingAdapter(config=app_settings)
         assert adapter.supports_ocr is True
+
+    def test_build_table_structure_options_v2(self, app_settings: AppSettings) -> None:
+        """Table engine v2 creates TableStructureV2Options."""
+        from docling.datamodel.pipeline_options import TableStructureV2Options
+        app_settings.extraction.table_engine = "v2"
+        app_settings.extraction.do_cell_matching = False
+        opts = DoclingAdapter._build_table_structure_options(app_settings.extraction)
+        assert isinstance(opts, TableStructureV2Options)
+        assert opts.do_cell_matching is False
+
+    def test_build_table_structure_options_v1(self, app_settings: AppSettings) -> None:
+        """Table engine v1 creates TableStructureOptions."""
+        from docling.datamodel.pipeline_options import TableStructureOptions
+        app_settings.extraction.table_engine = "v1"
+        app_settings.extraction.do_cell_matching = True
+        opts = DoclingAdapter._build_table_structure_options(app_settings.extraction)
+        assert isinstance(opts, TableStructureOptions)
+        assert opts.do_cell_matching is True
 
 
 class TestDoclingAdapterExtractFailure:

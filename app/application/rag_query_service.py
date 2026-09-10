@@ -5,7 +5,7 @@ Orchestrates the full RAG query pipeline:
 2. Generates a query embedding using the shared EmbeddingService (bge-m3).
 3. Retrieves top-K similar chunks from PgVectorSearchRepository.
 4. Assembles a context string with per-chunk metadata labels.
-5. Calls OpenAI (gpt-4o-mini) with a strict anti-hallucination system prompt.
+5. Calls OpenAI (gpt-4.1-mini) with a strict anti-hallucination system prompt.
 6. Returns a typed QueryResponse with the answer and source references.
 
 This module is strictly read-only with respect to the database — it does NOT
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.application.embedding_service import EmbeddingService
     from app.application.reranker_service import RerankerService
     from app.infrastructure.database.pg_hybrid_search import PgHybridSearchRepository
+    from app.infrastructure.database.pg_structured_search import PgStructuredSearchRepository
     from app.infrastructure.database.pg_vector_search import PgVectorSearchRepository
 
 logger = get_logger(__name__)
@@ -37,22 +38,39 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = """\
-Eres un asistente especializado en análisis de pólizas de seguros bolivianas.
+Eres un consultor experto en análisis de pólizas de seguros bolivianas. Tu objetivo es orientar y resolver las consultas del usuario analizando exhaustivamente la documentación proporcionada en el CONTEXTO.
 
-INSTRUCCIONES ESTRICTAS:
-1. Responde ÚNICA Y EXCLUSIVAMENTE utilizando la información del CONTEXTO proporcionado a continuación.
-2. Está TERMINANTEMENTE PROHIBIDO inventar, inferir o usar conocimiento externo no presente en el contexto.
-3. Cita el documento fuente cuando sea relevante para la respuesta, usando la etiqueta proporcionada.
-4. Si la información solicitada NO está en el contexto, responde EXACTAMENTE:
-   "No dispongo de esa información en los documentos proporcionados."
-5. Responde en el mismo idioma en que fue formulada la pregunta.
-6. Sé preciso, conciso y estructurado en tu respuesta.
+DIRECTRICES DE RESPUESTA:
+
+1. Exhaustividad y Enfoque Constructivo:
+   - Examina con atención todos los fragmentos del contexto (tablas, cláusulas particulares, condiciones generales, exclusiones, notas y anexos).
+   - Proporciona respuestas útiles, completas y fundamentadas. Si la información en el contexto no cubre el 100% de la pregunta pero incluye datos relacionados o bases contractuales pertinentes, explica claramente lo que sí está estipulado y aclara con precisión qué detalle específico no figura.
+
+2. Flexibilidad Semántica y Vocabulario Asegurador:
+   - Relaciona el lenguaje cotidiano del usuario con la terminología técnica de seguros bolivianos (ej. deducible / franquicia; costo / prima; cobertura / amparo / materia asegurada; grúa / remolque / auxilio mecánico; vigencia / plazo; valor asegurado / límite de indemnización).
+   - En preguntas de ubicación, talleres o proveedores (ej. "4to anillo", avenidas, intersecciones), reconoce variaciones de nombres bolivianos. Si hay un taller o proveedor en esa zona o calle en el contexto, detállalo (nombre, dirección, teléfono). Si no existe exactamente en ese punto pero sí en la misma ciudad o zona circundante, presenta las opciones disponibles para orientar al asegurado.
+
+3. Análisis de Escenarios y Deducción Lógica:
+   - Si el usuario plantea un caso práctico, escenario o pregunta situacional (ej. siniestros en circunstancias particulares, requisitos de procedencia o eventos no típicos), DEDUCE lógicamente a partir de las cláusulas, exclusiones y alcance estipulados si procede, no procede o bajo qué condiciones aplicaría, citando la cláusula o sección correspondiente.
+
+4. Fidelidad al Documento y Transparencia:
+   - Basa tus conclusiones en la documentación del contexto. No inventes montos asegurados, tasas ni coberturas no respaldadas.
+   - Si tras una revisión exhaustiva de todos los fragmentos resulta evidente que un tema consultado no se menciona en absoluto en el contexto, indícalo con naturalidad y cortesía (ej. "En el documento  digitalizado de la póliza no se especifica información sobre [tema]..."), y complementa con cualquier dato afín que sí esté estipulado.
+
+5. Estilo, Estructura y Citación:
+   - Responde en el mismo idioma de la pregunta, con tono profesional, empático y estructurado (emplea viñetas o tablas cuando facilite la comprensión). Cita la sección, anexo o cláusula fuente cuando sea relevante.
 """
 
-_CONTEXT_HEADER = "CONTEXTO:\n{context}\n\nPREGUNTA:\n{question}"
+_CONTEXT_HEADER = """\
+CONTEXTO:
+{context}
+
+PREGUNTA:
+{question}"""
 
 # Contingency response — returned verbatim when no chunks pass the threshold
 _NO_CONTEXT_ANSWER = "No dispongo de esa información en los documentos proporcionados."
+
 
 
 class RAGQueryService:
@@ -79,12 +97,15 @@ class RAGQueryService:
         # --- Parent-Child Retrieval dependencies (optional, backward-compatible) ---
         hybrid_search: PgHybridSearchRepository | None = None,
         reranker: RerankerService | None = None,
+        # --- Structured Data Search dependency (optional, backward-compatible) ---
+        structured_search: PgStructuredSearchRepository | None = None,
     ) -> None:
         self._embedder = embedding_service
         self._vector_search = vector_search
         self._config = config
         self._hybrid_search = hybrid_search
         self._reranker = reranker
+        self._structured_search = structured_search
         self._openai_client: openai.OpenAI | None = None
 
     # ------------------------------------------------------------------
@@ -127,35 +148,85 @@ class RAGQueryService:
             else self._config.similarity_threshold
         )
 
+        effective_filters = dict(filters) if filters else {}
+
         logger.info(
             "RAG query started",
             question_preview=question[:80],
             top_k=resolved_top_k,
             threshold=resolved_threshold,
-            filters=filters,
+            filters=effective_filters or None,
         )
+
+        # Step 0: Check for structured policy data (JSONB)
+        structured_chunks: list[RetrievedChunk] = []
+        if self._structured_search is not None:
+            policy_id_filter = effective_filters.get("policy_id")
+            if policy_id_filter:
+                record = self._structured_search.find_by_policy_id(policy_id_filter)
+                if record:
+                    structured_chunks.append(
+                        self._structured_search.format_structured_chunk(record)
+                    )
+            else:
+                matched_records = self._structured_search.search_by_query_text(
+                    question, limit=2
+                )
+                for record in matched_records:
+                    structured_chunks.append(
+                        self._structured_search.format_structured_chunk(record)
+                    )
+                    # If exactly one policy matched, focus downstream search on it
+                    if len(matched_records) == 1 and not effective_filters.get("policy_id"):
+                        effective_filters["policy_id"] = record["policy_id"]
 
         # Step 1: Embed the query using the shared bge-m3 model
         query_vector = self._embed_query(question)
 
-        # Step 2: Retrieve relevant chunks
-        # Use hybrid search + reranking when available, fall back to vector-only
-        if self._hybrid_search is not None:
-            retrieved_chunks = self._retrieve_and_rerank(
-                query_vector=query_vector,
-                query_text=question,
-                filters=filters,
-            )
+        # Step 2: Retrieve policy chunks (recuperación de la póliza completa)
+        target_policy_id = effective_filters.get("policy_id")
+        if target_policy_id and hasattr(self._vector_search, "get_all_chunks_for_policy"):
+            logger.info("Recuperando toda la póliza completa para contexto", policy_id=target_policy_id)
+            retrieved_chunks = self._vector_search.get_all_chunks_for_policy(target_policy_id)
         else:
-            retrieved_chunks = self._retrieve_chunks(
-                query_vector=query_vector,
-                top_k=resolved_top_k,
-                threshold=resolved_threshold,
-                filters=filters,
-            )
+            search_filters = effective_filters if effective_filters else None
+            if self._hybrid_search is not None:
+                initial_chunks = self._retrieve_and_rerank(
+                    query_vector=query_vector,
+                    query_text=question,
+                    top_k=resolved_top_k,
+                    filters=search_filters,
+                )
+            else:
+                initial_chunks = self._retrieve_chunks(
+                    query_vector=query_vector,
+                    top_k=resolved_top_k,
+                    threshold=resolved_threshold,
+                    filters=search_filters,
+                )
+
+            # Si la búsqueda detecta la póliza más relevante, recuperar toda la póliza completa
+            if initial_chunks and initial_chunks[0].policy_id and hasattr(self._vector_search, "get_all_chunks_for_policy"):
+                detected_policy_id = initial_chunks[0].policy_id
+                logger.info(
+                    "Póliza identificada por búsqueda; recuperando toda la póliza completa",
+                    policy_id=detected_policy_id,
+                )
+                retrieved_chunks = self._vector_search.get_all_chunks_for_policy(detected_policy_id)
+            else:
+                retrieved_chunks = initial_chunks
+
+        # Merge structured chunks (highest priority) with retrieved text chunks
+        seen_ids = {sc.chunk_id for sc in structured_chunks if sc.chunk_id}
+        merged_chunks = list(structured_chunks)
+        for chunk in retrieved_chunks:
+            if chunk.chunk_id not in seen_ids:
+                merged_chunks.append(chunk)
+                if chunk.chunk_id:
+                    seen_ids.add(chunk.chunk_id)
 
         # Step 3: Contingency path — no relevant chunks found
-        if not retrieved_chunks:
+        if not merged_chunks:
             logger.info(
                 "No chunks above similarity threshold — returning contingency answer",
                 threshold=resolved_threshold,
@@ -170,23 +241,23 @@ class RAGQueryService:
             )
 
         # Step 4: Assemble context string with per-chunk labels
-        context_text = self._build_context(retrieved_chunks)
+        context_text = self._build_context(merged_chunks)
 
         # Step 5: Call OpenAI for answer generation
         answer = self._generate_answer(question=question, context_text=context_text)
 
         logger.info(
             "RAG query completed",
-            chunks_used=len(retrieved_chunks),
+            chunks_used=len(merged_chunks),
             model=self._config.llm_model,
             answer_preview=answer[:80],
         )
 
         return QueryResponse(
             answer=answer,
-            sources=retrieved_chunks,
+            sources=merged_chunks,
             query=question,
-            chunks_used=len(retrieved_chunks),
+            chunks_used=len(merged_chunks),
             model_used=self._config.llm_model,
             no_context_found=False,
         )
@@ -258,7 +329,8 @@ class RAGQueryService:
         self,
         query_vector: list[float],
         query_text: str,
-        filters: dict[str, Any] | None,
+        top_k: int = 5,
+        filters: dict[str, Any] | None = None,
     ) -> list[RetrievedChunk]:
         """Retrieve via hybrid search, resolve parents, and rerank.
 
@@ -273,17 +345,20 @@ class RAGQueryService:
         Args:
             query_vector: 1024-dim query embedding.
             query_text: Original user question for FTS and reranking.
+            top_k: Maximum number of parent chunks to return.
             filters: Optional pre-filter parameters.
 
         Returns:
             List of top-N RetrievedChunk instances (Parent Chunks).
         """
+        top_k_children = max(30, top_k * 3)
+        rrf_pool = max(60, top_k_children * 2)
         try:
             parent_chunks = self._hybrid_search.search_and_resolve(
                 query_vector=query_vector,
                 query_text=query_text,
-                top_k_children=20,
-                rrf_pool=60,
+                top_k_children=top_k_children,
+                rrf_pool=rrf_pool,
                 filters=filters,
             )
         except Exception as exc:
@@ -299,6 +374,7 @@ class RAGQueryService:
                 parent_chunks = self._reranker.rerank(
                     query=query_text,
                     parent_chunks=parent_chunks,
+                    top_n=top_k,
                 )
             except Exception as exc:
                 logger.warning(
@@ -306,6 +382,18 @@ class RAGQueryService:
                     error=str(exc),
                 )
                 # Graceful degradation: use hybrid results as-is
+                parent_chunks = parent_chunks[:top_k]
+        else:
+            parent_chunks = parent_chunks[:top_k]
+
+        # Expand any partial table sub-chunks into their complete contiguous sequence
+        if hasattr(self._hybrid_search, "expand_table_chunks"):
+            try:
+                expanded = self._hybrid_search.expand_table_chunks(parent_chunks)
+                if isinstance(expanded, list):
+                    parent_chunks = expanded
+            except Exception as exc:
+                logger.warning("Table chunk expansion failed — using retrieved chunks as-is", error=str(exc))
 
         return parent_chunks
 

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS policy_processing_stats (
     parent_chunks INT DEFAULT 0,
     child_chunks INT DEFAULT 0,
     
-    -- Consumo y Costo de Tokens OpenAI (gpt-4o)
+    -- Consumo y Costo de Tokens OpenAI (gpt-4.1-mini)
     openai_prompt_tokens INT DEFAULT 0,
     openai_completion_tokens INT DEFAULT 0,
     openai_total_tokens INT DEFAULT 0,

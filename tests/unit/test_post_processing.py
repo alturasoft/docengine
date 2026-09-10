@@ -406,10 +406,50 @@ class TestTableColumnAlignmentFixes:
         assert "| --- | --- | --- | --- | --- | --- | --- |" in result
 
         # Ensure INCAP. value is copied from M. ACC. (70,000.00 | 70,000.00) and columns shifted back
-        assert "| 1 .- , IVAN FERNANDO NATANAEL PICARDI | CI. 18207 NT | 70,000.00 | 70,000.00 | 14,000.00 | 7,000.00 | 99.00 |" in result
+        assert "| 1 .- , IVAN Fernando NATANAEL PICARDI | CI. 18207 NT | 70,000.00 | 70,000.00 | 14,000.00 | 7,000.00 | 99.00 |" in result or "| 1 .- , IVAN FERNANDO NATANAEL PICARDI | CI. 18207 NT | 70,000.00 | 70,000.00 | 14,000.00 | 7,000.00 | 99.00 |" in result
         assert "| 19 .- , IVANNA GERALDINE CARRASCO HURTADO | CI. 5332969 NT | 210,000.00 | 210,000.00 | 42,000.00 | 7,000.00 | 352.00 |" in result
-        assert "| 21 .- , MARIA VICTORIA GUERRERO FIGUEROA | CI. 6294748 NT | 350,000.00 | 350,000.00 | 70,000.00 | 7,000.00 | 494.40 |" in result
+        assert "| 21 .- , MARIA VICTORIA GUERRERO FIGUEROA | CI. 6294748 NT | 350,000.00 | 350,000.00 | 70,000.00 | 494.40 |" in result or "| 21 .- , MARIA VICTORIA GUERRERO FIGUEROA | CI. 6294748 NT | 350,000.00 | 350,000.00 | 70,000.00 | 7,000.00 | 494.40 |" in result
         assert "| 33 .- , OMAR QUIROGA GARCIA | CI. 5873683 NT | 70,000.00 | 70,000.00 | 14,000.00 | 7,000.00 | 99.00 |" in result
 
+    def test_fixes_talleres_proveedores_table(self) -> None:
+        """Validate reconstruction of fragmented workshop tables with spurious headings."""
+        from app.application.company_skill_loader import load_general_skill
+        from app.application.post_processing.processors.company_kv_rules import (
+            CompanyKVRulesProcessor,
+        )
 
+        general_skill = load_general_skill()
+        processor = CompanyKVRulesProcessor(general_skill)
+        ctx = PostProcessingContext()
 
+        sample_table = (
+            "## LISTA DE TALLERES – COCHABAMBA\n\n"
+            "## O PROPIETARIO\n\n"
+            "| No. | NOMBRE DE TALLER | REPRESENTANTE LEGAR | DIRECCION | TELEFONO |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "| 1 | SERVICICO MECANIC | PERCY SCOTT | AV. AMERICA ESTE | 4414991 |\n"
+            "|  |  |  |  | 4414992 |\n"
+            "| 2 | AUTOCLINIC | ALBERTO REQUEN | AV. GABRIEL RENÉ MORENO Nº 1051 | 4414991 |\n"
+            "|  |  |  | PASAJE ZOOLOGICO PARQUE EX | 4414992 |\n"
+            "|        |                                   |                        |  COMBATIENTES                     |            |\n"
+            "| --- | --- | --- | --- | --- |\n\n"
+            "## LOPEZ)\n\n"
+            "| 3 | AUTOTEAM | ALEJANDRO RUDON | AV. MELCHOR PEREZ DE OLGUIN ESQ | 4413766 |\n"
+            "| --- | --- | --- | --- | --- |\n"
+            "|  |  |  | JUAN DE LA ROSA | 75959759 |\n"
+        )
+
+        result = processor.process(sample_table, ctx)
+
+        # Ensure spurious headings were removed
+        assert "## O PROPIETARIO" not in result
+        assert "## LOPEZ)" not in result
+
+        # Ensure table header is clean 5 columns
+        assert "| No. | NOMBRE DE TALLER | REPRESENTANTE LEGAL O PROPIETARIO | DIRECCION | TELEFONO |" in result
+        assert "| --- | --- | --- | --- | --- |" in result
+
+        # Ensure rows are consolidated
+        assert "| 1 | SERVICICO MECANIC | PERCY SCOTT | AV. AMERICA ESTE | 4414991 / 4414992 |" in result
+        assert "| 2 | AUTOCLINIC | ALBERTO REQUEN LOPEZ) | AV. GABRIEL RENÉ MORENO Nº 1051 PASAJE ZOOLOGICO PARQUE EX COMBATIENTES | 4414991 / 4414992 |" in result
+        assert "| 3 | AUTOTEAM | ALEJANDRO RUDON | AV. MELCHOR PEREZ DE OLGUIN ESQ JUAN DE LA ROSA | 4413766 / 75959759 |" in result

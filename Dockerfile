@@ -19,9 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # --- Install Python dependencies ---
-COPY requirements.txt requirements-dev.txt ./
+COPY requirements.txt requirements-dev.txt pdfextract-1.0.0-py3-none-any.whl ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements-dev.txt
+    pip install --no-cache-dir -r requirements-dev.txt && \
+    pip install --no-cache-dir ./pdfextract-1.0.0-py3-none-any.whl
 
 # --- Copy application code and extraction skills ---
 COPY app/ ./app/
@@ -31,12 +32,13 @@ COPY webui/ ./webui/
 COPY scripts/ ./scripts/
 COPY main.py .
 
-# --- Create output, sample and cache directories ---
-RUN mkdir -p outputs samples /tmp/huggingface /home/docengine
+# --- Create output, sample and cache directories and pre-initialize models ---
+RUN mkdir -p outputs samples /tmp/huggingface /home/docengine && \
+    python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"
 
 # --- Non-root user for security ---
 RUN addgroup --system docengine && adduser --system --home /home/docengine --group docengine && \
-    chown -R docengine:docengine /app /home/docengine /tmp/huggingface
+    chown -R docengine:docengine /app /home/docengine /tmp/huggingface /usr/local/lib/python3.12/site-packages
 
 ENV HOME=/home/docengine
 ENV HF_HOME=/tmp/huggingface

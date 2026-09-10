@@ -1,11 +1,13 @@
-"""DocEngine — Infrastructure Adapter: OCR (Phase 2 Stub).
+"""DocEngine — Infrastructure Adapter: OCR.
 
-Phase 1: NullOcrAdapter is the only implementation. It is injected
-wherever an IOcrEngine is required and does nothing.
+Provides OCR engine adapters that wrap Docling’s OCR options into the
+IOcrEngine interface.  The DoclingAdapter uses these adapters to configure
+OCR on the PDF pipeline.
 
-Phase 2: Implement TesseractOcrAdapter, EasyOcrAdapter, or RapidOcrAdapter
-by subclassing IOcrEngine. The DoclingAdapter will automatically pick up
-the engine via dependency injection — no core code changes needed.
+Gold Standard configuration: All adapters support OcrMode.FULL_PAGE for
+maximum extraction fidelity.  When force_full_page_ocr=True, the adapter
+sets mode=OcrMode.FULL_PAGE on the returned options, which tells Docling
+to OCR the entire page image regardless of detected text regions.
 """
 
 from __future__ import annotations
@@ -64,15 +66,22 @@ class EasyOcrAdapter(IOcrEngine):
     def get_ocr_options(self) -> Any:
         """Return EasyOcrOptions configured for the selected languages.
 
+        When force_full_page_ocr=True, sets mode=OcrMode.FULL_PAGE
+        (the modern Docling 2.x equivalent of the deprecated flag).
+
         Returns:
             EasyOcrOptions instance for Docling pipeline configuration.
         """
-        from docling.datamodel.pipeline_options import EasyOcrOptions  # noqa: PLC0415
+        from docling.datamodel.pipeline_options import EasyOcrOptions, OcrMode  # noqa: PLC0415
 
-        return EasyOcrOptions(
+        opts = EasyOcrOptions(
             force_full_page_ocr=self._force_full_page_ocr,
             lang=self._languages,
         )
+        # Explicitly set mode for Docling 2.119+ (force_full_page_ocr is deprecated)
+        if self._force_full_page_ocr:
+            opts.mode = OcrMode.FULL_PAGE
+        return opts
 
     @property
     def engine_name(self) -> str:
@@ -107,15 +116,22 @@ class TesseractOcrAdapter(IOcrEngine):
     def get_ocr_options(self) -> Any:
         """Return TesseractOcrOptions configured for the selected languages.
 
+        When force_full_page_ocr=True, sets mode=OcrMode.FULL_PAGE
+        (the modern Docling 2.x equivalent of the deprecated flag).
+
         Returns:
             TesseractOcrOptions instance for Docling pipeline configuration.
         """
-        from docling.datamodel.pipeline_options import TesseractOcrOptions  # noqa: PLC0415
+        from docling.datamodel.pipeline_options import TesseractOcrOptions, OcrMode  # noqa: PLC0415
 
-        return TesseractOcrOptions(
+        opts = TesseractOcrOptions(
             force_full_page_ocr=self._force_full_page_ocr,
             lang=self._languages,
         )
+        # Explicitly set mode for Docling 2.119+ (force_full_page_ocr is deprecated)
+        if self._force_full_page_ocr:
+            opts.mode = OcrMode.FULL_PAGE
+        return opts
 
     @property
     def engine_name(self) -> str:
@@ -138,23 +154,38 @@ class TesseractOcrAdapter(IOcrEngine):
 
 
 class RapidOcrAdapter(IOcrEngine):
-    """RapidOCR engine adapter — Phase 2.
+    """RapidOCR engine adapter.
 
     Requires: pip install "docling[rapidocr]"
     """
 
-    def __init__(self, force_full_page_ocr: bool = False) -> None:
+    def __init__(
+        self,
+        languages: list[str] | None = None,
+        force_full_page_ocr: bool = False,
+    ) -> None:
+        self._languages = languages or ["latin"]
         self._force_full_page_ocr = force_full_page_ocr
 
     def get_ocr_options(self) -> Any:
         """Return RapidOcrOptions.
 
+        When force_full_page_ocr=True, sets mode=OcrMode.FULL_PAGE
+        (the modern Docling 2.x equivalent of the deprecated flag).
+
         Returns:
             RapidOcrOptions instance for Docling pipeline configuration.
         """
-        from docling.datamodel.pipeline_options import RapidOcrOptions  # noqa: PLC0415
+        from docling.datamodel.pipeline_options import RapidOcrOptions, OcrMode  # noqa: PLC0415
 
-        return RapidOcrOptions(force_full_page_ocr=self._force_full_page_ocr)
+        opts = RapidOcrOptions(
+            force_full_page_ocr=self._force_full_page_ocr,
+            lang=self._languages,
+        )
+        # Explicitly set mode for Docling 2.119+ (force_full_page_ocr is deprecated)
+        if self._force_full_page_ocr:
+            opts.mode = OcrMode.FULL_PAGE
+        return opts
 
     @property
     def engine_name(self) -> str:
@@ -184,7 +215,7 @@ def _instantiate_ocr_adapter(
 ) -> IOcrEngine:
     """Instantiate a concrete IOcrEngine implementation safely."""
     if adapter_cls is RapidOcrAdapter:
-        return RapidOcrAdapter(force_full_page_ocr=force_full_page_ocr)
+        return RapidOcrAdapter(languages=languages, force_full_page_ocr=force_full_page_ocr)
     if adapter_cls is TesseractOcrAdapter:
         return TesseractOcrAdapter(languages=languages, force_full_page_ocr=force_full_page_ocr)
     if adapter_cls is EasyOcrAdapter:

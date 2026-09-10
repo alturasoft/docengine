@@ -168,15 +168,15 @@ class QueryRequest(BaseModel):
         min_length=3,
         max_length=2000,
     )
-    top_k: int = Field(
-        default=5,
-        description="Maximum number of document chunks to retrieve (1–20).",
+    top_k: int | None = Field(
+        default=None,
+        description="Maximum number of document chunks to retrieve (1–50). Defaults to service config if omitted.",
         ge=1,
-        le=20,
+        le=50,
     )
-    similarity_threshold: float = Field(
-        default=0.3,
-        description="Minimum cosine similarity score for a chunk to be included (0.0–1.0).",
+    similarity_threshold: float | None = Field(
+        default=None,
+        description="Minimum cosine similarity score for a chunk to be included (0.0–1.0). Defaults to service config if omitted.",
         ge=0.0,
         le=1.0,
     )

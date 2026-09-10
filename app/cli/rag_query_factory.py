@@ -14,6 +14,7 @@ from app.application.reranker_service import RerankerService
 from app.config.settings import get_settings
 from app.infrastructure.database.db_connection import DatabaseManager
 from app.infrastructure.database.pg_hybrid_search import PgHybridSearchRepository
+from app.infrastructure.database.pg_structured_search import PgStructuredSearchRepository
 from app.infrastructure.database.pg_vector_search import PgVectorSearchRepository
 
 
@@ -49,6 +50,7 @@ def create_rag_query_service(
     db_manager = DatabaseManager(settings.database)
     vector_search = PgVectorSearchRepository(db_manager)
     hybrid_search = PgHybridSearchRepository(db_manager)
+    structured_search = PgStructuredSearchRepository(db_manager)
 
     # Reranker — lazy model loading; mock mode when enabled=False
     reranker = RerankerService(settings.reranker)
@@ -63,5 +65,7 @@ def create_rag_query_service(
         config=settings.rag_query,
         hybrid_search=hybrid_search,
         reranker=reranker,
+        structured_search=structured_search,
     )
+
 

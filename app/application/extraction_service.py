@@ -66,6 +66,7 @@ class ExtractionService:
         validation_service: ValidationService,
         storage: IStorageService,
         config: AppSettings,
+        skip_skills: bool | None = None,
     ) -> None:
         self._extractor = extractor
         self._markdown_service = markdown_service
@@ -73,6 +74,9 @@ class ExtractionService:
         self._validation_service = validation_service
         self._storage = storage
         self._config = config
+        self._skip_skills = (
+            skip_skills if skip_skills is not None else getattr(config, "skip_skills", True)
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -91,7 +95,7 @@ class ExtractionService:
         pipeline_start = time.perf_counter()
 
         logger.info(
-            "[Docling] Iniciando extracción y conversión del PDF a Markdown...",
+            f"[{self._extractor.extractor_name}] Iniciando extracción y conversión del PDF a Markdown...",
             source=str(request.source),
             formats=request.effective_formats(),
             company_sigla=request.company_sigla,
@@ -103,7 +107,7 @@ class ExtractionService:
 
         if result.is_successful:
             logger.info(
-                "[Docling] Extracción base de Docling completada",
+                f"[{self._extractor.extractor_name}] Extracción base completada",
                 document_id=result.document_id,
                 page_count=result.metadata.page_count,
                 tables_detected=result.metadata.tables_detected,
@@ -111,7 +115,7 @@ class ExtractionService:
             )
         else:
             logger.error(
-                "[ERROR] [Docling] Falló la extracción base de Docling",
+                f"[ERROR] [{self._extractor.extractor_name}] Falló la extracción base",
                 document_id=result.document_id,
                 errors=result.metadata.errors,
             )
@@ -122,43 +126,49 @@ class ExtractionService:
             if company_sigla and not result.metadata.company_sigla:
                 result.metadata.company_sigla = company_sigla
 
-            logger.info(
-                "[Skill] Aplicando reglas y patrones de aseguradora al Markdown...",
-                company_sigla=company_sigla or "GENERAL",
-            )
-
-            company_skill = getattr(request, "_company_skill", None)
-            if company_skill is None:
-                from app.application.company_skill_loader import (  # noqa: PLC0415
-                    load_company_skill_merged,
-                    load_general_skill,
+            if self._skip_skills:
+                logger.info(
+                    "[Skill] Paso 4 (post-procesamiento con skills) omitido por configuración",
+                    company_sigla=company_sigla or "GENERAL",
                 )
-                if company_sigla:
-                    company_skill = load_company_skill_merged(company_sigla)
-                else:
-                    company_skill = load_general_skill()
+            else:
+                logger.info(
+                    "[Skill] Aplicando reglas y patrones de aseguradora al Markdown...",
+                    company_sigla=company_sigla or "GENERAL",
+                )
 
-            post_result = self._markdown_service.post_process(
-                result.markdown,
-                company_skill=company_skill,
-            )
-            result.markdown = post_result.markdown
+                company_skill = getattr(request, "_company_skill", None)
+                if company_skill is None:
+                    from app.application.company_skill_loader import (  # noqa: PLC0415
+                        load_company_skill_merged,
+                        load_general_skill,
+                    )
+                    if company_sigla:
+                        company_skill = load_company_skill_merged(company_sigla)
+                    else:
+                        company_skill = load_general_skill()
 
-            # 3. Enrich metadata with post-processing statistics
-            self._metadata_service.enrich_metadata(
-                metadata=result.metadata,
-                headers_removed=post_result.headers_removed,
-                footers_removed=post_result.footers_removed,
-                processed_markdown=result.markdown,
-            )
+                post_result = self._markdown_service.post_process(
+                    result.markdown,
+                    company_skill=company_skill,
+                )
+                result.markdown = post_result.markdown
 
-            logger.info(
-                "[Skill] Post-procesamiento completado exitosamente",
-                company_sigla=company_sigla or "GENERAL",
-                headers_removed=post_result.headers_removed,
-                footers_removed=post_result.footers_removed,
-                markdown_chars=len(result.markdown),
-            )
+                # 3. Enrich metadata with post-processing statistics
+                self._metadata_service.enrich_metadata(
+                    metadata=result.metadata,
+                    headers_removed=post_result.headers_removed,
+                    footers_removed=post_result.footers_removed,
+                    processed_markdown=result.markdown,
+                )
+
+                logger.info(
+                    "[Skill] Post-procesamiento completado exitosamente",
+                    company_sigla=company_sigla or "GENERAL",
+                    headers_removed=post_result.headers_removed,
+                    footers_removed=post_result.footers_removed,
+                    markdown_chars=len(result.markdown),
+                )
 
         # 4. Validate quality
         self._validation_service.validate_result(result)
@@ -310,17 +320,23 @@ class ExtractionService:
             company_sigla: str | None = getattr(request, "_company_sigla", None)
 
             if result.is_successful and result.markdown:
-                post_result = self._markdown_service.post_process(
-                    result.markdown,
-                    company_skill=company_skill,
-                )
-                result.markdown = post_result.markdown
-                self._metadata_service.enrich_metadata(
-                    metadata=result.metadata,
-                    headers_removed=post_result.headers_removed,
-                    footers_removed=post_result.footers_removed,
-                    processed_markdown=result.markdown,
-                )
+                if not self._skip_skills:
+                    post_result = self._markdown_service.post_process(
+                        result.markdown,
+                        company_skill=company_skill,
+                    )
+                    result.markdown = post_result.markdown
+                    self._metadata_service.enrich_metadata(
+                        metadata=result.metadata,
+                        headers_removed=post_result.headers_removed,
+                        footers_removed=post_result.footers_removed,
+                        processed_markdown=result.markdown,
+                    )
+                else:
+                    logger.info(
+                        "[Skill] Paso 4 (post-procesamiento con skills) omitido en lote",
+                        company_sigla=company_sigla or "GENERAL",
+                    )
 
             # Tag result metadata with company sigla for organised storage
             if company_sigla:

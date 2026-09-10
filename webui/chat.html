@@ -650,16 +650,6 @@
         </div>
       </a>
 
-      <!-- Server Selector -->
-      <div class="server-config">
-        <label><i class="fa-solid fa-server"></i> API Target:</label>
-        <div class="server-input-group">
-          <input type="text" id="apiBaseUrl" value="http://localhost:8000">
-          <button class="btn-chip" onclick="setApiUrl('http://localhost:8000')">Local</button>
-          <button class="btn-chip" onclick="setApiUrl('http://172.24.25.30:8000')">Server Linux</button>
-        </div>
-      </div>
-
       <!-- Navigation & Actions -->
       <div style="display: flex; align-items: center; gap: 0.75rem;">
         <button class="btn-chip" id="themeToggleBtn" style="padding: 0.4rem 0.65rem;" onclick="toggleTheme()" title="Cambiar Tema (Oscuro / Claro)">
@@ -779,6 +769,15 @@
 
         <!-- Chat Input Form -->
         <div class="chat-input-area">
+          <div id="activePolicyBanner" style="display: none; padding: 0.35rem 0.8rem; margin-bottom: 0.5rem; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; font-size: 0.78rem; color: #c7d2fe; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <i class="fa-solid fa-thumbtack" style="color: var(--accent-primary);"></i>
+              <span>Contexto activo: <strong id="activePolicyLabel">Póliza</strong></span>
+            </div>
+            <button type="button" onclick="clearActivePolicy()" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0 0.3rem;" title="Desvincular póliza (eliminar contexto)">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
           <div class="chat-input-wrapper">
             <textarea id="questionInput" placeholder="Escribe tu consulta sobre las pólizas aquí... (Enter para enviar)" rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="btn-send" id="btnSend" onclick="submitQuestion()" title="Enviar Pregunta">
@@ -791,35 +790,36 @@
   </main>
 
   <script>
-    // Config Server Base URL
-    function getApiUrl() {
-      const input = document.getElementById('apiBaseUrl');
-      if (input && input.value.trim()) {
-        return input.value.trim().replace(/\/+$/, '');
+    // Context State
+    let activePolicyContext = null;
+
+    function setActivePolicy(policyId, label) {
+      if (!policyId) return;
+      activePolicyContext = { policy_id: policyId, label: label };
+      const banner = document.getElementById('activePolicyBanner');
+      const lbl = document.getElementById('activePolicyLabel');
+      if (banner && lbl) {
+        lbl.innerText = label || `Póliza ${policyId.substring(0, 8)}`;
+        banner.style.display = 'flex';
       }
-      return (localStorage.getItem('docengine_api_url') || window.location.origin || 'http://localhost:8000').replace(/\/+$/, '');
     }
 
-    function setApiUrl(url) {
-      const input = document.getElementById('apiBaseUrl');
-      if (input) input.value = url;
-      localStorage.setItem('docengine_api_url', url);
-      checkHealth();
+    function clearActivePolicy() {
+      activePolicyContext = null;
+      const banner = document.getElementById('activePolicyBanner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    // Config Server Base URL
+    function getApiUrl() {
+      if (window.location.origin && window.location.origin.startsWith('http')) {
+        return window.location.origin.replace(/\/+$/, '');
+      }
+      return 'http://localhost:8000';
     }
 
     // Load saved settings
     document.addEventListener('DOMContentLoaded', () => {
-      const defaultUrl = window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:8000';
-      const savedUrl = localStorage.getItem('docengine_api_url') || defaultUrl;
-      const input = document.getElementById('apiBaseUrl');
-      if (input) {
-        input.value = savedUrl;
-        input.addEventListener('change', (e) => {
-          localStorage.setItem('docengine_api_url', e.target.value.trim());
-          checkHealth();
-        });
-      }
-
       // Init Theme
       initTheme();
 
@@ -864,7 +864,7 @@
         const response = await fetch(`${getApiUrl()}/api/v1/query/health`, { method: 'GET' });
         if (response.ok) {
           const data = await response.json();
-          if (data.status === 'ok') {
+          if (data.status === 'ready') {
             badge.className = 'status-badge';
             text.innerText = 'RAG Online';
             return;
@@ -905,6 +905,7 @@
     }
 
     function clearChatHistory() {
+      clearActivePolicy();
       const stream = document.getElementById('chatStream');
       stream.innerHTML = `
         <div class="chat-message assistant">
@@ -967,11 +968,17 @@
       const topK = parseInt(document.getElementById('topKInput').value, 10) || 5;
       const similarityThreshold = parseFloat(document.getElementById('similarityThresholdInput').value) || 0.3;
 
+      const filters = {};
+      if (companySigla) filters.company_sigla = companySigla;
+      if (activePolicyContext && activePolicyContext.policy_id) {
+        filters.policy_id = activePolicyContext.policy_id;
+      }
+
       const payload = {
         question: question,
         top_k: topK,
         similarity_threshold: similarityThreshold,
-        filters: companySigla ? { company_sigla: companySigla } : null
+        filters: Object.keys(filters).length > 0 ? filters : null
       };
 
       try {
@@ -1010,6 +1017,15 @@
 
       // Render answer using marked
       let parsedAnswer = marked.parse(data.answer || '');
+
+      // Auto-update active policy context if sources available
+      if (data.sources && data.sources.length > 0) {
+        const topSource = data.sources[0];
+        if (topSource.policy_id) {
+          const label = topSource.document_label || `Póliza ${topSource.policy_id.substring(0, 8)}`;
+          setActivePolicy(topSource.policy_id, label);
+        }
+      }
 
       // Build Sources HTML
       let sourcesHtml = '';

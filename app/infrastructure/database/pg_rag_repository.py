@@ -20,6 +20,22 @@ from app.infrastructure.logging.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _normalize_file_type(raw_file_type: str | None) -> str:
+    """Normalize file_type string to satisfy SQL check constraint.
+
+    Allowed: 'DIGITAL', 'SCANNED', 'HYBRID', 'UNKNOWN'.
+    'NATIVE' is mapped to 'DIGITAL'.
+    """
+    if not raw_file_type:
+        return "UNKNOWN"
+    val = str(raw_file_type).strip().upper()
+    if val in ("DIGITAL", "NATIVE"):
+        return "DIGITAL"
+    if val in ("SCANNED", "HYBRID"):
+        return val
+    return "UNKNOWN"
+
+
 class PgRagRepository:
     """Repository for managing policy RAG persistence in PostgreSQL + pgvector."""
 
@@ -125,7 +141,7 @@ class PgRagRepository:
             total_pages: Number of pages in PDF.
             file_size_bytes: Size of PDF in bytes.
             markdown_content: Markdown text extracted by Docling.
-            structured_data: JSON dictionary atomized by gpt-4o.
+            structured_data: JSON dictionary atomized by gpt-4.1-mini.
             chunks: List of PolicyChunk objects with 1024d embeddings.
             stats: Optional PolicyProcessingStats object with performance metrics.
 
@@ -255,7 +271,7 @@ class PgRagRepository:
                                 stats.job_id,
                                 stats.policy_number,
                                 sigla,
-                                stats.file_type.upper() if stats.file_type else "UNKNOWN",
+                                _normalize_file_type(stats.file_type),
                                 stats.ocr_applied,
                                 stats.scanned_page_ratio,
                                 stats.total_pages,
@@ -358,7 +374,7 @@ class PgRagRepository:
                         stats.job_id,
                         stats.policy_number,
                         sigla,
-                        stats.file_type.upper() if stats.file_type else "UNKNOWN",
+                        _normalize_file_type(stats.file_type),
                         stats.ocr_applied,
                         stats.scanned_page_ratio,
                         stats.total_pages,

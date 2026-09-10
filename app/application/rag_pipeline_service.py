@@ -169,10 +169,15 @@ class RagPipelineService:
                     company_sigla=company_sigla,
                 )
                 oai_dur = time.perf_counter() - t_oai_start
+                numero_pol = (
+                    json_res.get("datos_cabecera", {}).get("numero_poliza")
+                    if isinstance(json_res.get("datos_cabecera"), dict)
+                    else json_res.get("numero_poliza")
+                )
                 logger.info(
                     "[JSON Estructurado] Extracción de JSON completada",
                     coberturas_count=len(json_res.get("coberturas", [])),
-                    numero_poliza=json_res.get("numero_poliza"),
+                    numero_poliza=numero_pol,
                     duration_seconds=round(oai_dur, 3),
                 )
                 return json_res, oai_dur
@@ -202,7 +207,13 @@ class RagPipelineService:
             time_per_page = extraction_time / max(1, total_pages)
             raw_pdf_type = getattr(result.metadata, "pdf_type", None)
             if raw_pdf_type:
-                file_type = raw_pdf_type.upper()
+                raw_upper = str(raw_pdf_type).strip().upper()
+                if raw_upper in ("NATIVE", "DIGITAL"):
+                    file_type = "DIGITAL"
+                elif raw_upper in ("SCANNED", "HYBRID"):
+                    file_type = raw_upper
+                else:
+                    file_type = "UNKNOWN"
             else:
                 file_type = "SCANNED" if getattr(result.metadata, "ocr_used", False) else "DIGITAL"
 
@@ -228,10 +239,15 @@ class RagPipelineService:
                 pass
 
             total_pipe_time = time.perf_counter() - start_time
+            extracted_policy_num = (
+                structured_json.get("datos_cabecera", {}).get("numero_poliza")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("numero_poliza")
+            )
             stats = PolicyProcessingStats(
                 policy_id="",  # Assigned dynamically during repo transactional save
                 job_id=job_id,
-                policy_number=structured_json.get("numero_poliza"),
+                policy_number=extracted_policy_num,
                 company_sigla=company_sigla,
                 file_type=file_type,
                 ocr_applied=getattr(result.metadata, "ocr_used", False),

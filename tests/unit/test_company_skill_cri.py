@@ -143,3 +143,33 @@ Página 3 de 10
         assert "Página 3 de 10" not in processed
         assert expected in processed
 
+    def test_ocr_truncation_cleanup_rules(self) -> None:
+        skill = load_company_skill_merged("CRI")
+        processor = CompanyKVRulesProcessor(skill)
+
+        sample_markdown = """| No. | NOMBRE DE TALLER | PROPIETARIO | DIRECCION | TELEFONO |
+| --- | --- | --- | --- | --- |
+| 1 | SERVICICO MECANIC | ANDRÉS CABALLE | Av. Principal | 70012345 |
+| 2 | Punto Axz | JUAN PEREZ | Calle 2 | 70054321 |
+"""
+        context = PostProcessingContext()
+        processed = processor.process(sample_markdown, context)
+
+        assert "| Servicios Mecánicos |" in processed
+        assert "| Andrés Caballero |" in processed
+        assert "| Punto Axzo |" in processed
+
+    def test_email_celular_split_cleanup(self) -> None:
+        skill = load_company_skill_merged("CRI")
+        processor = CompanyKVRulesProcessor(skill)
+
+        sample_markdown = """| Contacto |
+| --- |
+| jsteer@ag.com.bo 70059881 |
+"""
+        context = PostProcessingContext()
+        processed = processor.process(sample_markdown, context)
+
+        assert "| jsteer@ag.com.bo | 70059881 |" in processed
+
+

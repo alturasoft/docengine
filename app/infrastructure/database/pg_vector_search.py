@@ -82,7 +82,7 @@ class PgVectorSearchRepository:
         Raises:
             psycopg2.DatabaseError: On connection or query failure.
         """
-        top_k = min(max(1, top_k), 20)  # Clamp to [1, 20]
+        top_k = min(max(1, top_k), 50)  # Clamp to [1, 50]
 
         where_clauses: list[str] = []
         params: list[Any] = []
@@ -166,6 +166,55 @@ class PgVectorSearchRepository:
             threshold=similarity_threshold,
         )
 
+        return results
+
+
+
+    def get_all_chunks_for_policy(
+        self,
+        policy_id: str,
+    ) -> list[RetrievedChunk]:
+        """Fetch ALL parent chunks for a given policy in sequential order (chunk_index ASC).
+
+        Used when full policy retrieval is required rather than top-K slicing.
+
+        Args:
+            policy_id: UUID of the policy.
+
+        Returns:
+            List of all parent RetrievedChunk instances for the policy.
+        """
+        sql = """
+            SELECT
+                pc.id                                          AS chunk_id,
+                pc.policy_id::text                             AS policy_id,
+                pc.chunk_index                                 AS chunk_index,
+                pc.chunk_content                               AS chunk_content,
+                pc.metadata_json                               AS metadata_json,
+                1.0                                            AS similarity_score
+            FROM policy_chunks pc
+            WHERE pc.policy_id = %s::uuid
+              AND (pc.chunk_type = 'parent' OR pc.parent_id IS NULL)
+            ORDER BY pc.chunk_index ASC;
+        """
+        results: list[RetrievedChunk] = []
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (policy_id,))
+                rows = cur.fetchall()
+
+        for row in rows:
+            chunk_id, pid, chunk_index, chunk_content, metadata_json, similarity_score = row
+            results.append(
+                RetrievedChunk(
+                    chunk_id=str(chunk_id),
+                    policy_id=str(pid),
+                    chunk_index=chunk_index,
+                    chunk_content=chunk_content,
+                    metadata_json=metadata_json if isinstance(metadata_json, dict) else {},
+                    similarity_score=float(similarity_score),
+                )
+            )
         return results
 
 

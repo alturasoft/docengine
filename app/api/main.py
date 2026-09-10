@@ -42,7 +42,12 @@ def _build_extraction_service(settings: AppSettings) -> ExtractionService:
     Returns:
         Configured ExtractionService ready for use.
     """
-    extractor = DoclingAdapter(config=settings)
+    if getattr(settings, "extractor_engine", "pdfextract") == "pdfextract":
+        from app.infrastructure.adapters.pdfextract_adapter import PdfExtractAdapter
+        extractor = PdfExtractAdapter(config=settings)
+    else:
+        extractor = DoclingAdapter(config=settings)
+
     storage = LocalStorageService(config=settings)
     markdown_service = MarkdownService(config=settings)
     metadata_service = MetadataService()
