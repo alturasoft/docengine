@@ -222,3 +222,37 @@ class QueryResponseSchema(BaseModel):
         description="Ordered list of source chunks (most relevant first).",
     )
     created_at: datetime = Field(description="UTC timestamp of the response.")
+
+
+# ---------------------------------------------------------------------------
+# Policy Basic Info & Search Schemas
+# ---------------------------------------------------------------------------
+
+
+class PolicyBasicInfoSchema(BaseModel):
+    """Basic context information of an insurance policy."""
+
+    policy_id: str = Field(description="UUID of the policy document.")
+    numero_poliza: str = Field(description="Número de póliza.")
+    ramo: str = Field(description="Ramo de la póliza.")
+    asegurado: str = Field(description="Nombre del asegurado o tomador.")
+    numero_documento: str = Field(description="Documento de identidad (CI / NIT).")
+    vigencia: str = Field(description="Período de vigencia (Desde - Hasta).")
+    prima_total: str = Field(description="Prima total y moneda.")
+    company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora.")
+    file_name: str | None = Field(default=None, description="Nombre del archivo original.")
+    created_at: str | None = Field(default=None, description="Fecha de registro en la base de datos.")
+
+
+class RecentPoliciesResponseSchema(BaseModel):
+    """Response body for GET /api/v1/policies/recent."""
+
+    total: int = Field(description="Cantidad de pólizas retornadas.")
+    policies: list[PolicyBasicInfoSchema] = Field(description="Listado de pólizas recientes.")
+
+
+class PolicySearchResponseSchema(BaseModel):
+    """Response body for GET /api/v1/policies/search."""
+
+    found: bool = Field(description="Indica si se encontró la póliza.")
+    policy: PolicyBasicInfoSchema | None = Field(default=None, description="Datos básicos de la póliza encontrada.")

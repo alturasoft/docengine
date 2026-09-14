@@ -43,6 +43,122 @@ _SEARCH_BY_CANDIDATES_QUERY = """
     LIMIT %s;
 """
 
+_RECENT_POLICIES_QUERY = """
+    SELECT
+        p.id::text AS policy_id,
+        p.file_name,
+        p.company_sigla,
+        p.created_at::text,
+        psd.data
+    FROM policies p
+    LEFT JOIN policy_structured_data psd ON p.id = psd.policy_id
+    ORDER BY p.created_at DESC
+    LIMIT %s;
+"""
+
+_FIND_BASIC_QUERY = """
+    SELECT
+        p.id::text AS policy_id,
+        p.file_name,
+        p.company_sigla,
+        p.created_at::text,
+        psd.data
+    FROM policies p
+    LEFT JOIN policy_structured_data psd ON p.id = psd.policy_id
+    WHERE
+        p.id::text = %s
+        OR LOWER(REGEXP_REPLACE(COALESCE(psd.data->'datos_cabecera'->>'numero_poliza', ''), '[^a-zA-Z0-9]', '', 'g')) = %s
+        OR psd.data->'datos_cabecera'->>'numero_poliza' ILIKE %s
+        OR p.file_name ILIKE %s
+        OR psd.data->'datos_cabecera'->>'asegurado' ILIKE %s
+    ORDER BY p.created_at DESC
+    LIMIT 1;
+"""
+
+
+def extract_basic_info(record: dict[str, Any]) -> dict[str, Any]:
+    """Extract and normalize standard basic policy fields from a structured record.
+
+    Fields extracted in the required order:
+    1. numero_poliza
+    2. ramo
+    3. asegurado
+    4. numero_documento
+    5. vigencia
+    6. prima_total
+    """
+    data = record.get("data") if isinstance(record.get("data"), dict) else {}
+    cabecera = data.get("datos_cabecera") if isinstance(data.get("datos_cabecera"), dict) else {}
+    objeto = data.get("objeto_asegurado") if isinstance(data.get("objeto_asegurado"), dict) else {}
+
+    # 1. Número de la póliza
+    num_poliza = (
+        cabecera.get("numero_poliza")
+        or record.get("file_name", "Desconocido")
+    )
+
+    # 2. Ramo (fallback: objeto_asegurado.tipo_bien -> actividad_economica -> 'No especificado')
+    ramo = (
+        cabecera.get("ramo")
+        or (objeto.get("tipo_bien") if isinstance(objeto, dict) else None)
+        or cabecera.get("actividad_economica")
+        or "No especificado"
+    )
+
+    # 3. Asegurado
+    asegurado = (
+        cabecera.get("asegurado")
+        or cabecera.get("tomador")
+        or "No especificado"
+    )
+
+    # 4. Número de documento (CI o NIT)
+    doc_identidad = cabecera.get("documento_identidad")
+    nit = cabecera.get("nit")
+    if doc_identidad and nit and doc_identidad != nit:
+        numero_documento = f"CI: {doc_identidad} / NIT: {nit}"
+    elif doc_identidad:
+        numero_documento = str(doc_identidad)
+    elif nit:
+        numero_documento = f"NIT: {nit}"
+    else:
+        numero_documento = "No registrado"
+
+    # 5. Vigencia
+    v_desde = cabecera.get("vigencia_desde")
+    v_hasta = cabecera.get("vigencia_hasta")
+    if v_desde and v_hasta:
+        vigencia = f"Desde {v_desde} hasta {v_hasta}"
+    elif v_desde:
+        vigencia = f"Desde {v_desde}"
+    elif v_hasta:
+        vigencia = f"Hasta {v_hasta}"
+    else:
+        vigencia = "No especificada"
+
+    # 6. Prima total
+    prima = cabecera.get("prima_total")
+    moneda = cabecera.get("moneda")
+    if prima and moneda:
+        prima_total = f"{prima} {moneda}"
+    elif prima:
+        prima_total = str(prima)
+    else:
+        prima_total = "No especificada"
+
+    return {
+        "policy_id": record.get("policy_id", ""),
+        "numero_poliza": num_poliza,
+        "ramo": ramo,
+        "asegurado": asegurado,
+        "numero_documento": numero_documento,
+        "vigencia": vigencia,
+        "prima_total": prima_total,
+        "company_sigla": record.get("company_sigla"),
+        "file_name": record.get("file_name"),
+        "created_at": str(record.get("created_at", "")) if record.get("created_at") else None,
+    }
+
 
 class PgStructuredSearchRepository:
     """Read-only repository for querying policy structured JSON data."""
@@ -249,3 +365,70 @@ class PgStructuredSearchRepository:
             },
             similarity_score=1.0,
         )
+
+    def get_recent_policies(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Fetch the most recent policies with standard basic information.
+
+        Args:
+            limit: Maximum number of policies to return (default 20).
+
+        Returns:
+            List of dicts containing the 6 basic fields plus metadata.
+        """
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_RECENT_POLICIES_QUERY, (limit,))
+                    rows = cur.fetchall()
+                    results: list[dict[str, Any]] = []
+                    for row in rows:
+                        record = {
+                            "policy_id": row[0],
+                            "file_name": row[1],
+                            "company_sigla": row[2],
+                            "created_at": row[3],
+                            "data": row[4] if isinstance(row[4], dict) else {},
+                        }
+                        results.append(extract_basic_info(record))
+                    return results
+        except Exception as exc:
+            logger.error("Failed to fetch recent policies", error=str(exc))
+            return []
+
+    def find_basic_by_policy_number_or_id(self, query_str: str) -> dict[str, Any] | None:
+        """Find basic policy information by policy number, ID, or filename.
+
+        Args:
+            query_str: Policy number, UUID, or search term.
+
+        Returns:
+            Dict containing the 6 basic fields plus metadata, or None if not found.
+        """
+        if not query_str or not query_str.strip():
+            return None
+
+        raw_q = query_str.strip()
+        norm_q = re.sub(r"[^a-zA-Z0-9]", "", raw_q).lower()
+        like_q = f"%{raw_q}%"
+
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        _FIND_BASIC_QUERY,
+                        (raw_q, norm_q, like_q, like_q, like_q),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        return None
+                    record = {
+                        "policy_id": row[0],
+                        "file_name": row[1],
+                        "company_sigla": row[2],
+                        "created_at": row[3],
+                        "data": row[4] if isinstance(row[4], dict) else {},
+                    }
+                    return extract_basic_info(record)
+        except Exception as exc:
+            logger.error("Failed to find basic policy info", query=query_str, error=str(exc))
+            return None

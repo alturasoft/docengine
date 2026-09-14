@@ -94,6 +94,50 @@
       border-color: #cbd5e1;
     }
 
+    body.light-theme .policy-field-card {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+
+    body.light-theme .policy-field-card:hover {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .field-label {
+      color: #64748b;
+    }
+
+    body.light-theme .field-val {
+      color: #0f172a;
+    }
+
+    body.light-theme .field-val.highlight {
+      color: #4338ca;
+    }
+
+    body.light-theme .field-val.highlight-green {
+      color: #047857;
+    }
+
+    body.light-theme .policy-empty-state {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .empty-title {
+      color: #475569;
+    }
+
+    body.light-theme .empty-desc {
+      color: #64748b;
+    }
+
+    body.light-theme .context-data-header {
+      border-bottom-color: #cbd5e1;
+      color: #475569;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -104,9 +148,10 @@
         radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
       background-attachment: fixed;
       color: var(--text-main);
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
       transition: background-color 0.3s, color 0.3s;
     }
 
@@ -119,6 +164,7 @@
       top: 0;
       z-index: 100;
       padding: 1rem 2rem;
+      flex-shrink: 0;
     }
 
     .header-container {
@@ -259,22 +305,16 @@
     /* Main Grid Layout */
     main {
       max-width: 1400px;
-      margin: 1.5rem auto;
+      margin: 0.75rem auto 1rem auto;
       padding: 0 1.5rem;
       flex: 1;
       width: 100%;
       display: grid;
-      grid-template-columns: 340px 1fr;
+      grid-template-columns: 370px 1fr;
       gap: 1.5rem;
       align-items: stretch;
-      height: calc(100vh - 120px);
-    }
-
-    @media (max-width: 1024px) {
-      main {
-        grid-template-columns: 1fr;
-        height: auto;
-      }
+      min-height: 0;
+      overflow: hidden;
     }
 
     /* Panels */
@@ -288,6 +328,51 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .panel-context {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-chat {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    @media (max-width: 992px) {
+      body {
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+      }
+      main {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+        margin: 1rem auto;
+      }
+      .panel {
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+      }
+      .panel-context {
+        max-height: 520px;
+        overflow: hidden;
+      }
+      .chat-container {
+        height: 600px;
+      }
     }
 
     .panel-header {
@@ -310,7 +395,7 @@
 
     /* Form controls */
     .form-group {
-      margin-bottom: 1rem;
+      margin-bottom: 0.85rem;
     }
 
     .form-group label {
@@ -339,40 +424,171 @@
       border-color: var(--accent-primary);
     }
 
-    .range-slider {
-      width: 100%;
-      accent-color: var(--accent-primary);
-      cursor: pointer;
+    /* Search & Policy Context Controls */
+    .search-input-wrapper {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
     }
 
-    /* Suggested Prompts List */
-    .prompt-suggestions {
-      margin-top: 1rem;
+    .btn-search-icon {
+      background: linear-gradient(135deg, var(--accent-primary), #4f46e5);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .btn-search-icon:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-search-icon:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .badge-pill {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      padding: 0.15rem 0.45rem;
+      border-radius: 12px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .context-data-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 0.4rem;
+      margin-bottom: 0.6rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px dashed var(--bg-card-border);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-chip-sm {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 0.15rem 0.5rem;
+      border-radius: 10px;
+      font-size: 0.68rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: all 0.2s;
+    }
+
+    .btn-chip-sm:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: white;
+    }
+
+    .policy-details-wrapper {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 0.2rem;
+    }
+
+    .policy-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.8rem 1rem;
+      text-align: center;
+      border: 1px dashed var(--bg-card-border);
+      border-radius: var(--radius-md);
+      background: rgba(15, 23, 42, 0.3);
+    }
+
+    .empty-icon {
+      font-size: 2rem;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+    }
+
+    .empty-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .empty-desc {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .policy-fields-list {
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
     }
 
-    .prompt-chip {
-      background: rgba(255, 255, 255, 0.04);
+    .policy-field-card {
+      background: rgba(15, 23, 42, 0.5);
       border: 1px solid var(--bg-card-border);
-      padding: 0.6rem 0.8rem;
       border-radius: var(--radius-sm);
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.2s;
+      padding: 0.5rem 0.75rem;
       display: flex;
-      align-items: center;
-      gap: 0.5rem;
+      flex-direction: column;
+      gap: 0.2rem;
+      transition: all 0.2s;
     }
 
-    .prompt-chip:hover {
-      background: rgba(99, 102, 241, 0.15);
-      border-color: rgba(99, 102, 241, 0.4);
+    .policy-field-card:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .field-label {
+      font-size: 0.69rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .field-val {
+      font-size: 0.84rem;
       color: var(--text-main);
-      transform: translateX(3px);
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .field-val.highlight {
+      font-family: var(--font-mono);
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+
+    .field-val.highlight-green {
+      font-family: var(--font-mono);
+      color: var(--accent-success);
+      font-weight: 700;
     }
 
     /* Chat Stream & Bubbles */
@@ -380,11 +596,13 @@
       display: flex;
       flex-direction: column;
       height: 100%;
+      min-height: 0;
       overflow: hidden;
     }
 
     .chat-stream {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 1rem;
       display: flex;
@@ -573,6 +791,7 @@
     .chat-input-area {
       padding: 1rem 0 0 0;
       border-top: 1px solid var(--bg-card-border);
+      flex-shrink: 0;
     }
 
     .chat-input-wrapper {
@@ -670,87 +889,92 @@
 
   <!-- Main Grid -->
   <main>
-    <!-- Left Sidebar: Filters & Settings -->
-    <div class="panel">
+    <!-- Left Sidebar: Información de contexto -->
+    <div class="panel panel-context">
       <div class="panel-header">
-        <div class="panel-title"><i class="fa-solid fa-sliders"></i> Ajustes de Consulta</div>
+        <div class="panel-title"><i class="fa-solid fa-file-invoice" style="color: var(--accent-primary);"></i> Información de contexto</div>
         <button class="btn-chip" onclick="clearChatHistory()" title="Reiniciar Conversación">
           <i class="fa-solid fa-rotate-left"></i> Limpiar
         </button>
       </div>
 
-      <!-- Company Filter -->
+      <!-- Cuadro de Búsqueda por Número de Póliza -->
       <div class="form-group">
-        <label for="companySelect">
-          <span><i class="fa-solid fa-building" style="color: var(--accent-primary);"></i> Empresa Aseguradora</span>
+        <label for="policySearchInput">
+          <span><i class="fa-solid fa-magnifying-glass" style="color: var(--accent-primary);"></i> Buscar Póliza por Número</span>
         </label>
-        <select id="companySelect" class="form-control">
-          <option value="">-- Todas las Empresas --</option>
-          <option value="ALI">ALI — ALIANZA CIA DE SEGUROS</option>
-          <option value="ALV">ALV — ALIANZA VIDA SEGUROS</option>
-          <option value="BIS">BIS — BISA SEGUROS Y REASEGUROS</option>
-          <option value="FOV">FOV — COMPAÑIA DE SEGUROS FORTALEZA VIDA</option>
-          <option value="CRI">CRI — CREDINFORM INTERNATIONAL</option>
-          <option value="CRG">CRG — CREDISEGURO GENERALES</option>
-          <option value="CRP">CRP — CREDISEGURO PERSONALES</option>
-          <option value="FOR">FOR — FORTALEZA SEGUROS GENERALES</option>
-          <option value="LBC">LBC — LA BOLIVIANA CIACRUZ GENERALES</option>
-          <option value="LBP">LBP — LA BOLIVIANA CIACRUZ PERSONALES</option>
-          <option value="VIT">VIT — LA VITALICIA DE SEGUROS</option>
-          <option value="MSC">MSC — MERCANTIL SANTA CRUZ SEGUROS</option>
-          <option value="NPF">NPF — NACIONAL SEGUROS PATRIMONIALES</option>
-          <option value="NVS">NVS — NACIONAL SEGUROS VIDA Y SALUD</option>
-          <option value="UNI">UNI — UNIVIDA S.A.</option>
-          <option value="UBI">UBI — UNIBIENES SEGUROS</option>
+        <div class="search-input-wrapper">
+          <input type="text" id="policySearchInput" class="form-control" placeholder="Ej. SCR0667473..." onkeydown="handleSearchKeyDown(event)">
+          <button class="btn-search-icon" id="btnSearchPolicy" onclick="searchPolicyFromInput()" title="Buscar y cargar contexto">
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Selector Desplegable de las Últimas 20 Pólizas Digitalizadas -->
+      <div class="form-group">
+        <label for="recentPoliciesSelect">
+          <span><i class="fa-solid fa-clock-rotate-left" style="color: #38bdf8;"></i> Últimas 20 Pólizas en BD</span>
+          <span id="recentPoliciesCount" class="badge-pill">Cargando...</span>
+        </label>
+        <select id="recentPoliciesSelect" class="form-control" onchange="onRecentPolicySelected(this.value)">
+          <option value="">-- Seleccionar póliza digitalizada --</option>
         </select>
       </div>
 
-      <!-- Top K Slider -->
-      <div class="form-group">
-        <label for="topKInput">
-          <span><i class="fa-solid fa-layer-group" style="color: #38bdf8;"></i> Top K Chunks</span>
-          <span id="topKVal" style="font-family: var(--font-mono); color: var(--accent-primary); font-weight: 700;">5</span>
-        </label>
-        <input type="range" id="topKInput" class="range-slider" min="1" max="20" value="5" oninput="document.getElementById('topKVal').innerText = this.value">
+      <!-- Sección de Datos Básicos de la Póliza (6 campos requeridos) -->
+      <div class="context-data-header">
+        <span><i class="fa-solid fa-id-badge" style="color: var(--accent-success);"></i> Datos de la Póliza Activa</span>
+        <button id="btnUnlinkPolicy" class="btn-chip-sm" style="display: none;" onclick="clearActivePolicy(true)" title="Quitar póliza activa (modo general)">
+          <i class="fa-solid fa-xmark"></i> Quitar
+        </button>
       </div>
 
-      <!-- Similarity Threshold Slider -->
-      <div class="form-group">
-        <label for="similarityThresholdInput">
-          <span><i class="fa-solid fa-bullseye" style="color: var(--accent-success);"></i> Umbral Similitud</span>
-          <span id="threshVal" style="font-family: var(--font-mono); color: var(--accent-success); font-weight: 700;">0.30</span>
-        </label>
-        <input type="range" id="similarityThresholdInput" class="range-slider" min="0.0" max="0.9" step="0.05" value="0.30" oninput="document.getElementById('threshVal').innerText = parseFloat(this.value).toFixed(2)">
-      </div>
+      <div class="policy-details-wrapper">
+        <!-- Estado Vacío (Sin póliza activa) -->
+        <div id="policyEmptyState" class="policy-empty-state">
+          <div class="empty-icon"><i class="fa-solid fa-file-circle-question"></i></div>
+          <p class="empty-title">Ninguna póliza seleccionada</p>
+          <p class="empty-desc">Ingresa un número de póliza o elige una de las 20 más recientes para cargar sus datos y responder preguntas con ese contexto.</p>
+        </div>
 
-      <!-- Suggested Prompts -->
-      <div style="margin-top: 1rem; flex: 1; overflow-y: auto;">
-        <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
-          <i class="fa-solid fa-lightbulb" style="color: var(--accent-warning);"></i> Preguntas Frecuentes
-        </label>
-        <div class="prompt-suggestions">
-          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Qué coberturas principales ofrece la póliza de Alianza?')">
-            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
-            <span>¿Qué coberturas ofrece Alianza?</span>
-          </button>
-          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Cuáles son las exclusiones generales en seguros de accidentes?')">
-            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
-            <span>Exclusiones en accidentes personales</span>
-          </button>
-          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Cuál es el deducible estipulado para daños materiales en BISA?')">
-            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
-            <span>Deducibles por daños materiales</span>
-          </button>
-          <button class="prompt-chip" onclick="useSuggestedPrompt('¿Qué requisitos exige Credinform para la presentación de siniestros?')">
-            <i class="fa-solid fa-circle-question" style="color: var(--accent-primary);"></i>
-            <span>Requisitos para reclamo de siniestros</span>
-          </button>
+        <!-- Ficha de Datos Básicos en el orden exacto requerido -->
+        <div id="policyFieldsContainer" class="policy-fields-list" style="display: none;">
+          <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-hashtag"></i> Número de la póliza</span>
+            <span class="field-val highlight" id="fieldNumeroPoliza">-</span>
+          </div>
+
+          <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-shield-halved"></i> Ramo</span>
+            <span class="field-val" id="fieldRamo">-</span>
+          </div>
+
+          <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-user-tie"></i> Asegurado</span>
+            <span class="field-val" id="fieldAsegurado">-</span>
+          </div>
+
+          <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-id-card"></i> Número de documento</span>
+            <span class="field-val" id="fieldNumeroDocumento">-</span>
+          </div>
+
+          <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-calendar-days"></i> Vigencia</span>
+            <span class="field-val" id="fieldVigencia">-</span>
+          </div>
+
+          <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-money-bill-wave"></i> Prima total</span>
+            <span class="field-val highlight-green" id="fieldPrimaTotal">-</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Right Panel: Interactive Chat Stream -->
-    <div class="panel">
+    <div class="panel panel-chat">
       <div class="chat-container">
         <!-- Message Stream Container -->
         <div class="chat-stream" id="chatStream">
@@ -761,7 +985,7 @@
               <p><strong>¡Hola! Soy DocEngine Assistant.</strong></p>
               <p>Puedo responder tus preguntas sobre las pólizas de seguros bolivianas procesadas por el motor. Mis respuestas provienen exclusivamente de los documentos indexados en nuestra base vectorial RAG.</p>
               <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">
-                <i class="fa-solid fa-circle-info"></i> Puedes filtrar por empresa asegurable o ajustar los parámetros de recuperación en el panel izquierdo.
+                <i class="fa-solid fa-circle-info"></i> Selecciona una póliza reciente o busca por número de póliza en el panel izquierdo para cargar su contexto.
               </p>
             </div>
           </div>
@@ -774,7 +998,7 @@
               <i class="fa-solid fa-thumbtack" style="color: var(--accent-primary);"></i>
               <span>Contexto activo: <strong id="activePolicyLabel">Póliza</strong></span>
             </div>
-            <button type="button" onclick="clearActivePolicy()" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0 0.3rem;" title="Desvincular póliza (eliminar contexto)">
+            <button type="button" onclick="clearActivePolicy(true)" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0 0.3rem;" title="Desvincular póliza (eliminar contexto)">
               <i class="fa-solid fa-xmark"></i>
             </button>
           </div>
@@ -791,23 +1015,260 @@
 
   <script>
     // Context State
-    let activePolicyContext = null;
+    var activePolicyContext = null;
+    var cachedRecentPolicies = [];
 
-    function setActivePolicy(policyId, label) {
-      if (!policyId) return;
-      activePolicyContext = { policy_id: policyId, label: label };
+    function setActivePolicy(policyData) {
+      if (!policyData || !policyData.policy_id) return;
+      activePolicyContext = policyData;
+
+      // Update the 6 basic fields in "Información de contexto"
+      const numEl = document.getElementById('fieldNumeroPoliza');
+      const ramoEl = document.getElementById('fieldRamo');
+      const asegEl = document.getElementById('fieldAsegurado');
+      const docEl = document.getElementById('fieldNumeroDocumento');
+      const vigEl = document.getElementById('fieldVigencia');
+      const primaEl = document.getElementById('fieldPrimaTotal');
+
+      if (numEl) numEl.innerText = policyData.numero_poliza || 'Desconocido';
+      if (ramoEl) ramoEl.innerText = policyData.ramo || 'No especificado';
+      if (asegEl) asegEl.innerText = policyData.asegurado || 'No especificado';
+      if (docEl) docEl.innerText = policyData.numero_documento || 'No registrado';
+      if (vigEl) vigEl.innerText = policyData.vigencia || 'No especificada';
+      if (primaEl) primaEl.innerText = policyData.prima_total || 'No especificada';
+
+      // Toggle panels
+      const emptyState = document.getElementById('policyEmptyState');
+      const fieldsContainer = document.getElementById('policyFieldsContainer');
+      const unlinkBtn = document.getElementById('btnUnlinkPolicy');
+      if (emptyState) emptyState.style.display = 'none';
+      if (fieldsContainer) fieldsContainer.style.display = 'flex';
+      if (unlinkBtn) unlinkBtn.style.display = 'inline-flex';
+
+      // Update banner above chat input
       const banner = document.getElementById('activePolicyBanner');
       const lbl = document.getElementById('activePolicyLabel');
       if (banner && lbl) {
-        lbl.innerText = label || `Póliza ${policyId.substring(0, 8)}`;
+        const siglaText = policyData.company_sigla ? `[${policyData.company_sigla}] ` : '';
+        lbl.innerText = `${siglaText}N° ${policyData.numero_poliza} — ${policyData.asegurado}`;
         banner.style.display = 'flex';
+      }
+
+      // Sync dropdown value if available
+      const select = document.getElementById('recentPoliciesSelect');
+      if (select) {
+        let found = false;
+        for (let opt of select.options) {
+          if (opt.value === policyData.policy_id) {
+            select.value = policyData.policy_id;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          select.value = '';
+        }
       }
     }
 
-    function clearActivePolicy() {
+    function clearActivePolicy(resetChat = false) {
       activePolicyContext = null;
+      const emptyState = document.getElementById('policyEmptyState');
+      const fieldsContainer = document.getElementById('policyFieldsContainer');
+      const unlinkBtn = document.getElementById('btnUnlinkPolicy');
+      if (emptyState) emptyState.style.display = 'flex';
+      if (fieldsContainer) fieldsContainer.style.display = 'none';
+      if (unlinkBtn) unlinkBtn.style.display = 'none';
+
       const banner = document.getElementById('activePolicyBanner');
       if (banner) banner.style.display = 'none';
+
+      const select = document.getElementById('recentPoliciesSelect');
+      if (select) select.value = '';
+      const input = document.getElementById('policySearchInput');
+      if (input) input.value = '';
+
+      if (resetChat) {
+        const chatStream = document.getElementById('chatStream');
+        if (chatStream) {
+          chatStream.innerHTML = `
+            <div class="chat-message assistant">
+              <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+              <div class="chat-bubble">
+                <p><strong>Contexto desvinculado.</strong></p>
+                <p>Puedes seleccionar una póliza en el panel izquierdo o hacerme cualquier consulta general sobre las pólizas indexadas.</p>
+              </div>
+            </div>
+          `;
+        }
+      }
+    }
+
+    function notifyPolicyContextLoaded(policyData, origin) {
+      setActivePolicy(policyData);
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const chatStream = document.getElementById('chatStream');
+      if (!chatStream) return;
+
+      const originText = origin === 'search'
+        ? `Búsqueda exitosa: Se cargó la póliza <strong>${escapeHtml(policyData.numero_poliza)}</strong>`
+        : `Póliza seleccionada del listado: <strong>${escapeHtml(policyData.numero_poliza)}</strong>`;
+
+      const noticeHtml = `
+        <div class="chat-message assistant">
+          <div class="chat-avatar" style="background: linear-gradient(135deg, var(--accent-primary), #4f46e5);"><i class="fa-solid fa-file-shield"></i></div>
+          <div class="chat-bubble" style="border-color: rgba(99, 102, 241, 0.4);">
+            <p><strong>${originText}</strong></p>
+            <p style="font-size: 0.82rem; margin: 0.4rem 0 0.2rem 0; color: var(--text-muted);">
+              Esta póliza ha sido establecida como el <strong>contexto activo</strong> del chat. El motor responderá recuperando la totalidad de su contenido:
+            </p>
+            <ul style="font-size: 0.8rem; margin: 0.4rem 0 0.4rem 1.2rem; color: var(--text-main); line-height: 1.5;">
+              <li><strong>Número de póliza:</strong> ${escapeHtml(policyData.numero_poliza)}</li>
+              <li><strong>Ramo:</strong> ${escapeHtml(policyData.ramo)}</li>
+              <li><strong>Asegurado:</strong> ${escapeHtml(policyData.asegurado)}</li>
+              <li><strong>Número de documento:</strong> ${escapeHtml(policyData.numero_documento)}</li>
+              <li><strong>Vigencia:</strong> ${escapeHtml(policyData.vigencia)}</li>
+              <li><strong>Prima total:</strong> ${escapeHtml(policyData.prima_total)}</li>
+            </ul>
+            <p style="font-size: 0.8rem; color: #a5b4fc; margin-top: 0.4rem;">
+              <i class="fa-solid fa-circle-check"></i> Puedes realizar cualquier consulta sobre esta póliza.
+            </p>
+            <span class="chat-timestamp">${timeStr}</span>
+          </div>
+        </div>
+      `;
+
+      // Limpiar historial previo del chat de la ventana derecha
+      chatStream.innerHTML = noticeHtml;
+      scrollToBottom();
+    }
+
+    async function loadRecentPolicies() {
+      const select = document.getElementById('recentPoliciesSelect');
+      const badge = document.getElementById('recentPoliciesCount');
+      if (!select) return;
+
+      try {
+        const response = await fetch(`${getApiUrl()}/api/v1/policies/recent?limit=20`);
+        if (!response.ok) throw new Error('No se pudo cargar la lista');
+        const data = await response.json();
+        cachedRecentPolicies = data.policies || [];
+
+        select.innerHTML = '<option value="">-- Seleccionar póliza digitalizada --</option>';
+        cachedRecentPolicies.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.policy_id;
+          const sigla = p.company_sigla ? `[${p.company_sigla}] ` : '';
+          opt.textContent = `${sigla}N° ${p.numero_poliza} — ${p.asegurado}`;
+          select.appendChild(opt);
+        });
+
+        if (badge) badge.innerText = `${cachedRecentPolicies.length} disponibles`;
+      } catch (err) {
+        if (badge) badge.innerText = 'Error';
+        console.error('Error cargando pólizas recientes:', err);
+      }
+    }
+
+    function onRecentPolicySelected(policyId) {
+      if (!policyId) {
+        clearActivePolicy();
+        const chatStream = document.getElementById('chatStream');
+        if (chatStream) {
+          chatStream.innerHTML = `
+            <div class="chat-message assistant">
+              <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+              <div class="chat-bubble">
+                <p><strong>Contexto desvinculado.</strong></p>
+                <p>Puedes seleccionar una póliza en el panel izquierdo o hacerme cualquier consulta general sobre las pólizas indexadas.</p>
+              </div>
+            </div>
+          `;
+        }
+        return;
+      }
+      const found = cachedRecentPolicies.find(p => p.policy_id === policyId);
+      if (found) {
+        notifyPolicyContextLoaded(found, 'dropdown');
+      } else {
+        fetchPolicyById(policyId, false);
+      }
+    }
+
+    async function searchPolicyFromInput() {
+      const input = document.getElementById('policySearchInput');
+      const query = input ? input.value.trim() : '';
+      if (!query) return;
+
+      const btn = document.getElementById('btnSearchPolicy');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      }
+
+      try {
+        const response = await fetch(`${getApiUrl()}/api/v1/policies/search?q=${encodeURIComponent(query)}`);
+        if (!response.ok) throw new Error('Error al buscar la póliza');
+        const data = await response.json();
+        if (data.found && data.policy) {
+          notifyPolicyContextLoaded(data.policy, 'search');
+          if (input) input.value = '';
+        } else {
+          const chatStream = document.getElementById('chatStream');
+          if (chatStream) chatStream.innerHTML = '';
+          renderAssistantWarning(`No se encontró ninguna póliza en la base de datos con el número o identificador: "<strong>${escapeHtml(query)}</strong>". Verifica el número e intenta nuevamente.`);
+        }
+      } catch (err) {
+        const chatStream = document.getElementById('chatStream');
+        if (chatStream) chatStream.innerHTML = '';
+        renderAssistantError(`Error al consultar la póliza: ${err.message}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-arrow-right"></i>';
+        }
+      }
+    }
+
+    function handleSearchKeyDown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        searchPolicyFromInput();
+      }
+    }
+
+    async function fetchPolicyById(policyId, quiet = false) {
+      try {
+        const response = await fetch(`${getApiUrl()}/api/v1/policies/${policyId}`);
+        if (!response.ok) return;
+        const policy = await response.json();
+        if (quiet) {
+          setActivePolicy(policy);
+        } else {
+          notifyPolicyContextLoaded(policy, 'dropdown');
+        }
+      } catch (err) {
+        console.error('Error fetching policy by ID:', err);
+      }
+    }
+
+    function renderAssistantWarning(warningMsg) {
+      const chatStream = document.getElementById('chatStream');
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const html = `
+        <div class="chat-message assistant">
+          <div class="chat-avatar" style="background: var(--accent-warning);"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div class="chat-bubble" style="border-color: rgba(245, 158, 11, 0.4);">
+            <p style="color: #fbbf24; font-weight: 600;"><i class="fa-solid fa-circle-info"></i> Búsqueda de Póliza:</p>
+            <p style="font-size: 0.85rem; margin-top: 0.3rem;">${warningMsg}</p>
+            <span class="chat-timestamp">${timeStr}</span>
+          </div>
+        </div>
+      `;
+      chatStream.insertAdjacentHTML('beforeend', html);
+      scrollToBottom();
     }
 
     // Config Server Base URL
@@ -826,6 +1287,9 @@
       // Check RAG Health
       checkHealth();
       setInterval(checkHealth, 15000);
+
+      // Load Recent Policies
+      loadRecentPolicies();
     });
 
     // Theme Management
@@ -864,14 +1328,14 @@
         const response = await fetch(`${getApiUrl()}/api/v1/query/health`, { method: 'GET' });
         if (response.ok) {
           const data = await response.json();
-          if (data.status === 'ready') {
+          if (data.status === 'ready' || data.status === 'ok') {
             badge.className = 'status-badge';
             text.innerText = 'RAG Online';
             return;
           }
         }
         // Fallback to basic health
-        const resHealth = await fetch(`${getApiUrl()}/health`);
+        const resHealth = await fetch(`${getApiUrl()}/api/v1/health`);
         if (resHealth.ok) {
           badge.className = 'status-badge';
           text.innerText = 'Server OK';
@@ -899,11 +1363,6 @@
       }
     }
 
-    function useSuggestedPrompt(text) {
-      document.getElementById('questionInput').value = text;
-      submitQuestion();
-    }
-
     function clearChatHistory() {
       clearActivePolicy();
       const stream = document.getElementById('chatStream');
@@ -912,7 +1371,7 @@
           <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
           <div class="chat-bubble">
             <p><strong>Conversación reiniciada.</strong></p>
-            <p>Puedes hacerme cualquier pregunta sobre las pólizas indexadas.</p>
+            <p>Puedes seleccionar una póliza en el panel izquierdo o hacerme cualquier consulta general sobre las pólizas indexadas.</p>
           </div>
         </div>
       `;
@@ -963,20 +1422,16 @@
       chatStream.insertAdjacentHTML('beforeend', loadingHtml);
       scrollToBottom();
 
-      // Gather Payload Params
-      const companySigla = document.getElementById('companySelect').value;
-      const topK = parseInt(document.getElementById('topKInput').value, 10) || 5;
-      const similarityThreshold = parseFloat(document.getElementById('similarityThresholdInput').value) || 0.3;
-
+      // Umbral fijado en 0.3 por defecto
+      const similarityThreshold = 0.3;
       const filters = {};
-      if (companySigla) filters.company_sigla = companySigla;
       if (activePolicyContext && activePolicyContext.policy_id) {
         filters.policy_id = activePolicyContext.policy_id;
       }
 
       const payload = {
         question: question,
-        top_k: topK,
+        top_k: 15,
         similarity_threshold: similarityThreshold,
         filters: Object.keys(filters).length > 0 ? filters : null
       };
@@ -1018,12 +1473,11 @@
       // Render answer using marked
       let parsedAnswer = marked.parse(data.answer || '');
 
-      // Auto-update active policy context if sources available
-      if (data.sources && data.sources.length > 0) {
+      // Auto-update active policy context if sources available and none was active
+      if (!activePolicyContext && data.sources && data.sources.length > 0) {
         const topSource = data.sources[0];
         if (topSource.policy_id) {
-          const label = topSource.document_label || `Póliza ${topSource.policy_id.substring(0, 8)}`;
-          setActivePolicy(topSource.policy_id, label);
+          fetchPolicyById(topSource.policy_id, true);
         }
       }
 
