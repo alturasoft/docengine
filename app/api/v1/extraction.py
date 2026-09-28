@@ -42,17 +42,20 @@ _MAX_FILENAME_LEN = 255
     "/extract",
     response_model=ExtractionResultSchema,
     status_code=status.HTTP_200_OK,
-    summary="Extract PDF (file upload)",
+    summary="Extraer documento PDF (subida de archivo)",
     description=(
-        "Upload a PDF file and extract its content as Markdown and JSON. "
-        "The file is saved temporarily, processed, and the output is stored on disk."
+        "Carga un archivo PDF de póliza y extrae su contenido transformándolo en Markdown estructurado y JSON. "
+        "El archivo se procesa de forma segura aplicando las reglas especializadas de la aseguradora si se especifica su sigla."
     ),
 )
 async def extract_file(
     file: UploadFile,
     extraction_service: ExtractionServiceDep,
     rag_service: RagPipelineServiceDep = None,
-    company_sigla: str | None = Form(default=None, description="Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"),
+    company_sigla: str | None = Form(default=None, description="Sigla identificadora de la compañía aseguradora (ej. CRI, LBC, ALI) para aplicar reglas especializadas"),
+    numero_poliza: str | None = Form(default=None, description="Número de póliza para vincular el documento a un sobre de póliza (envelope)"),
+    ramo: str | None = Form(default=None, description="Ramo del seguro (ej. AUTOMOTOR, INCENDIO, SALUD)"),
+    tipo_documento: str | None = Form(default=None, description="Clasificación o tipo de documento (ej. CONDICIONADO_GENERAL, CONDICIONADO_PARTICULAR, LIQUIDACION_PAGOS)"),
 ) -> ExtractionResultSchema:
     """Extract content from an uploaded PDF file.
 
@@ -61,6 +64,9 @@ async def extract_file(
         extraction_service: Injected ExtractionService.
         rag_service: Injected RagPipelineService (optional).
         company_sigla: Optional 3-letter company code.
+        numero_poliza: Optional policy number to bind this file to a policy envelope.
+        ramo: Optional insurance branch.
+        tipo_documento: Optional document classification.
 
     Returns:
         ExtractionResultSchema with Markdown preview and metadata.
@@ -80,12 +86,17 @@ async def extract_file(
         temp_path.write_bytes(content)
 
         sigla_clean = company_sigla.strip().upper() if company_sigla else None
+        num_poliza_clean = numero_poliza.strip() if numero_poliza else None
+        ramo_clean = ramo.strip() if ramo else None
+        tipo_doc_clean = tipo_documento.strip() if tipo_documento else None
 
         logger.info(
             "[Upload] Archivo PDF recibido para extracción",
             filename=file.filename,
             size_bytes=len(content),
             company_sigla=sigla_clean or "NO_ESPECIFICADA",
+            numero_poliza=num_poliza_clean,
+            tipo_documento=tipo_doc_clean,
         )
 
         request = ExtractionRequest(
@@ -93,6 +104,9 @@ async def extract_file(
             output_formats=["all"],
             request_id=str(uuid.uuid4()),
             company_sigla=sigla_clean,
+            numero_poliza=num_poliza_clean,
+            ramo=ramo_clean,
+            tipo_documento=tipo_doc_clean,
         )
 
         result = extraction_service.extract_document(request)
@@ -100,7 +114,13 @@ async def extract_file(
             result.metadata.filename = file.filename
         _record_and_log(result)
 
-        rag_report_schema = _process_rag_safe(rag_service, result)
+        rag_report_schema = _process_rag_safe(
+            rag_service,
+            result,
+            numero_poliza=num_poliza_clean,
+            ramo=ramo_clean,
+            tipo_documento=tipo_doc_clean,
+        )
         return _to_schema(result, rag_report=rag_report_schema)
 
     except Exception as exc:
@@ -122,8 +142,8 @@ async def extract_file(
     "/extract/url",
     response_model=ExtractionResultSchema,
     status_code=status.HTTP_200_OK,
-    summary="Extract PDF from URL",
-    description="Download and extract a PDF from a given URL.",
+    summary="Extraer documento PDF desde URL",
+    description="Descarga y procesa un documento PDF accesible a través de una URL pública proporcionada.",
 )
 def extract_url(
     body: UrlExtractionRequest,
@@ -166,10 +186,10 @@ def extract_url(
     "/extract/folder",
     response_model=BatchExtractionResultSchema,
     status_code=status.HTTP_200_OK,
-    summary="Extract all PDFs in a folder",
+    summary="Extraer todos los PDFs de una carpeta",
     description=(
-        "Extract all PDF files found recursively in a server-side folder. "
-        "Returns a batch result with individual status per file."
+        "Procesa de forma recursiva todos los archivos PDF encontrados en un directorio del servidor. "
+        "Retorna un reporte consolidado por lote con el estado individual de cada documento procesado."
     ),
 )
 def extract_folder(
@@ -236,13 +256,13 @@ def extract_folder(
 
 @router.get(
     "/extract/{document_id}/markdown",
-    summary="Get full Markdown for an extraction",
-    description="Retrieve full Markdown content of a processed document by document_id or file path.",
+    summary="Obtener contenido Markdown de una extracción",
+    description="Recupera el contenido completo en texto Markdown generado a partir de una extracción previa, identificado por document_id o ruta de archivo.",
 )
 def get_extraction_markdown(
     document_id: str,
-    path: str | None = Query(default=None, description="Optional relative or absolute file path to .md"),
-    download: bool = Query(default=False, description="Set Content-Disposition for file download"),
+    path: str | None = Query(default=None, description="Ruta de archivo relativa o absoluta opcional hacia el archivo .md"),
+    download: bool = Query(default=False, description="Si es True, incluye cabeceras para forzar la descarga del archivo (Content-Disposition: attachment)"),
 ) -> Response:
     """Retrieve full Markdown content for an extracted document.
 
@@ -328,12 +348,23 @@ def _validate_upload(file: UploadFile) -> None:
         )
 
 
-def _process_rag_safe(rag_service: Any, result: ExtractionResult) -> RagReportSchema | None:
+def _process_rag_safe(
+    rag_service: Any,
+    result: ExtractionResult,
+    numero_poliza: str | None = None,
+    ramo: str | None = None,
+    tipo_documento: str | None = None,
+) -> RagReportSchema | None:
     """Helper to safely execute RAG pipeline without failing primary extraction."""
     if not rag_service or not result.is_successful:
         return None
     try:
-        report = rag_service.process_extraction_result(result)
+        report = rag_service.process_extraction_result(
+            result,
+            numero_poliza=numero_poliza,
+            ramo=ramo,
+            tipo_documento=tipo_documento,
+        )
         if report:
             return RagReportSchema(
                 policy_id=report.policy_id,
@@ -341,6 +372,8 @@ def _process_rag_safe(rag_service: Any, result: ExtractionResult) -> RagReportSc
                 skipped_duplicate=report.skipped_duplicate,
                 chunks_created=report.chunks_created,
                 errors=report.errors,
+                envelope_id=report.envelope_id,
+                tipo_documento=report.tipo_documento,
             )
     except Exception as exc:
         logger.error("RAG pipeline execution error", error=str(exc))
@@ -383,6 +416,11 @@ def _to_schema(
             warnings=meta.warnings,
             extracted_at=meta.extracted_at,
             company_sigla=meta.company_sigla,
+            pdf_type=getattr(meta, "pdf_type", None),
+            scanned_page_ratio=getattr(meta, "scanned_page_ratio", None),
+            pdf_detection_time_seconds=getattr(meta, "pdf_detection_time_seconds", None),
+            envelope_id=getattr(meta, "envelope_id", None),
+            tipo_documento=getattr(meta, "tipo_documento", None),
         ),
         output_paths={k: str(v) for k, v in result.output_paths.items()},
         rag_report=rag_report,
@@ -407,11 +445,10 @@ def _record_and_log(result: ExtractionResult) -> None:
 
 @router.get(
     "/companies",
-    summary="List insurance companies",
-    description="Returns the registry of supported insurance companies and their siglas.",
+    summary="Listar compañías aseguradoras registradas",
+    description="Retorna el catálogo completo de compañías aseguradoras soportadas con sus siglas oficiales y nombres completos.",
 )
 def get_companies() -> dict[str, str]:
     """Return dictionary of supported insurance company siglas to full names."""
     from app.application.company_skill_loader import COMPANY_REGISTRY  # noqa: PLC0415
     return COMPANY_REGISTRY
-

@@ -60,6 +60,9 @@ class ExtractionRequest:
     config_override: dict | None = None
     request_id: str | None = None
     company_sigla: str | None = None
+    numero_poliza: str | None = None
+    ramo: str | None = None
+    tipo_documento: str | None = None
 
     @property
     def is_url(self) -> bool:

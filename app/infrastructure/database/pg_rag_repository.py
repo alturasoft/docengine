@@ -124,6 +124,8 @@ class PgRagRepository:
         structured_data: dict[str, Any],
         chunks: list[PolicyChunk],
         stats: PolicyProcessingStats | None = None,
+        envelope_id: str | None = None,
+        tipo_documento: str | None = None,
     ) -> str:
         """Persist all RAG data into PostgreSQL within a single atomic transaction.
 
@@ -144,6 +146,8 @@ class PgRagRepository:
             structured_data: JSON dictionary atomized by gpt-4.1-mini.
             chunks: List of PolicyChunk objects with 1024d embeddings.
             stats: Optional PolicyProcessingStats object with performance metrics.
+            envelope_id: Optional UUID string of the policy envelope.
+            tipo_documento: Optional document classification (e.g. CONDICIONADO_GENERAL).
 
         Returns:
             Newly created policy_id (UUID string).
@@ -162,10 +166,10 @@ class PgRagRepository:
                     # 1. Insert into policies
                     cur.execute(
                         """
-                        INSERT INTO policies (id, file_name, file_hash, company_sigla, total_pages, file_size_bytes)
-                        VALUES (%s, %s, %s, %s, %s, %s);
+                        INSERT INTO policies (id, file_name, file_hash, company_sigla, total_pages, file_size_bytes, envelope_id, tipo_documento)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
                         """,
-                        (policy_id, file_name, file_hash, sigla, total_pages, file_size_bytes),
+                        (policy_id, file_name, file_hash, sigla, total_pages, file_size_bytes, envelope_id, tipo_documento),
                     )
 
                     # 2. Insert into policy_raw_md
@@ -397,4 +401,29 @@ class PgRagRepository:
                     ),
                 )
             conn.commit()
+
+    def link_policy_to_envelope(
+        self,
+        policy_id: str,
+        envelope_id: str,
+        tipo_documento: str | None = None,
+    ) -> None:
+        """Link an existing policy document to an envelope and update its document type.
+
+        Args:
+            policy_id: UUID string of the document.
+            envelope_id: UUID string of the envelope.
+            tipo_documento: Optional document classification string.
+        """
+        query = """
+            UPDATE policies
+            SET envelope_id = %s,
+                tipo_documento = %s
+            WHERE id = %s;
+        """
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (envelope_id, tipo_documento, policy_id))
+            conn.commit()
+
 

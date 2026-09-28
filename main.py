@@ -40,7 +40,7 @@ def serve(host: str, port: int, reload: bool, workers: int) -> None:
 
     settings = get_settings()
     click.echo(
-        f"🚀 Starting DocEngine API on {host}:{port} "
+        f"[DocEngine] Starting DocEngine API on {host}:{port} "
         f"[OS: {settings.os_type.upper()} | Threads: {settings.pipeline.num_threads} | Env: {settings.environment}]"
     )
     uvicorn.run(

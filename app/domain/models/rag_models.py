@@ -37,6 +37,8 @@ class RagProcessingReport:
     processing_time_seconds: float = 0.0
     job_id: str | None = None
     errors: list[str] = field(default_factory=list)
+    envelope_id: str | None = None
+    tipo_documento: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
     )
@@ -53,6 +55,8 @@ class RagProcessingReport:
             "skipped_duplicate": self.skipped_duplicate,
             "processing_time_seconds": round(self.processing_time_seconds, 3),
             "job_id": self.job_id,
+            "envelope_id": self.envelope_id,
+            "tipo_documento": self.tipo_documento,
             "errors": self.errors,
             "created_at": self.created_at.isoformat(),
         }

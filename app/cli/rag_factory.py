@@ -11,6 +11,7 @@ from app.application.openai_structured_extractor import OpenAIStructuredExtracto
 from app.application.rag_pipeline_service import RagPipelineService
 from app.config.settings import get_settings
 from app.infrastructure.database.db_connection import DatabaseManager
+from app.infrastructure.database.pg_envelope_repository import PgEnvelopeRepository
 from app.infrastructure.database.pg_rag_repository import PgRagRepository
 
 
@@ -25,6 +26,7 @@ def create_rag_pipeline_service() -> RagPipelineService:
     # Database setup
     db_manager = DatabaseManager(settings.database)
     repository = PgRagRepository(db_manager)
+    envelope_repository = PgEnvelopeRepository(db_manager)
 
     # RAG Services
     chunking_service = ChunkingService(settings.embedding)
@@ -36,4 +38,6 @@ def create_rag_pipeline_service() -> RagPipelineService:
         embedding_service=embedding_service,
         structured_extractor=structured_extractor,
         repository=repository,
+        envelope_repository=envelope_repository,
     )
+

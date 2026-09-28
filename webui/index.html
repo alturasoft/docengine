@@ -341,7 +341,7 @@
     /* Action & Workspace Grid */
     .workspace-grid {
       display: grid;
-      grid-template-columns: 380px 1fr;
+      grid-template-columns: 400px 1fr;
       gap: 1.5rem;
       align-items: start;
     }
@@ -584,7 +584,7 @@
 
     .progress-bar-wrapper {
       width: 100%;
-      max-width: 440px;
+      max-width: 580px;
       margin: 0.75rem auto 0.5rem;
       background: rgba(15, 23, 42, 0.4);
       padding: 0.85rem 1rem;
@@ -625,7 +625,8 @@
       font-size: 0.84rem;
       color: #a5b4fc;
       font-weight: 500;
-      margin-top: 0.6rem;
+      margin: 0.6rem auto 0;
+      max-width: 580px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -964,6 +965,7 @@
     <div class="workspace-grid">
 
       <!-- Left Panel: Execution Controls -->
+      <div class="panel">
         <!-- Company Selector (Mandatory) -->
         <div class="form-group" style="margin-bottom: 1.25rem;">
           <label style="font-weight: 600; color: var(--text-main); display: flex; align-items: center; justify-content: space-between;">
@@ -989,6 +991,70 @@
             <option value="UNI">UNI — SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A</option>
             <option value="UBI">UBI — UNIBIENES SEGUROS Y REASEGUROS</option>
           </select>
+        </div>
+
+        <!-- Policy Envelope Linking Card (Optional) -->
+        <div id="envelopeSection" style="margin-bottom: 1.25rem; padding: 0.95rem; background: rgba(15, 23, 42, 0.45); border: 1px solid var(--bg-card-border); border-radius: var(--radius-sm);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 0.45rem;">
+              <i class="fa-solid fa-folder-tree" style="color: var(--accent-primary);"></i> Vinculación a Póliza <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal;">(Opcional)</span>
+            </span>
+            <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 4px;">SOBRE DIGITAL</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem;">
+            <div>
+              <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+                <i class="fa-solid fa-hashtag" style="font-size: 0.68rem;"></i> N° de Póliza
+              </label>
+              <input type="text" id="envelopeNumeroPoliza" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Ej. P2000111588" autocomplete="off">
+            </div>
+            <div>
+              <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+                <i class="fa-solid fa-layer-group" style="font-size: 0.68rem;"></i> Ramo
+              </label>
+              <select id="envelopeRamo" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;">
+                <option value="">-- No especificado --</option>
+                <option value="ACCIDENTES PERSONALES">ACCIDENTES PERSONALES</option>
+                <option value="AERONAVEGACIÓN">AERONAVEGACIÓN</option>
+                <option value="ASISTENCIA MÉDICA Y SALUD">ASISTENCIA MÉDICA Y SALUD</option>
+                <option value="AUTOMOTORES">AUTOMOTORES</option>
+                <option value="CAUCIÓN Y GARANTÍAS">CAUCIÓN Y GARANTÍAS</option>
+                <option value="CIBERNÉTICO Y PROTECCIÓN DIGITAL">CIBERNÉTICO Y PROTECCIÓN DIGITAL</option>
+                <option value="DESGRAVAMEN">DESGRAVAMEN</option>
+                <option value="FIDELIDAD Y RIESGOS FINANCIEROS (3D / BANKERS BLANKET)">FIDELIDAD Y RIESGOS FINANCIEROS (3D / BANKERS BLANKET)</option>
+                <option value="INCENDIO Y MULTIRRIESGO">INCENDIO Y MULTIRRIESGO</option>
+                <option value="MARÍTIMO Y EMBARCACIONES">MARÍTIMO Y EMBARCACIONES</option>
+                <option value="RAMOS TÉCNICOS Y DE INGENIERÍA">RAMOS TÉCNICOS Y DE INGENIERÍA</option>
+                <option value="RESPONSABILIDAD CIVIL">RESPONSABILIDAD CIVIL</option>
+                <option value="SEPELIO">SEPELIO</option>
+                <option value="TRANSPORTE DE MERCANCÍAS">TRANSPORTE DE MERCANCÍAS</option>
+                <option value="VIDA">VIDA</option>
+                <option value="OTROS Y MISCELÁNEOS">OTROS Y MISCELÁNEOS</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+              <i class="fa-solid fa-file-contract" style="font-size: 0.68rem;"></i> Tipo de Documento
+            </label>
+            <select id="envelopeTipoDocumento" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;">
+              <option value="">-- No especificado (Auto-detectar) --</option>
+              <option value="CONDICIONADO_GENERAL">Condicionado General</option>
+              <option value="CONDICIONADO_PARTICULAR">Condicionado Particular</option>
+              <option value="LIQUIDACION_PAGOS">Liquidación / Plan de Pagos</option>
+              <option value="ANEXO">Anexo</option>
+              <option value="POLIZA_PRINCIPAL">Póliza Principal / Carátula</option>
+              <option value="ENDOSO">Endoso</option>
+              <option value="CERTIFICADO">Certificado de Cobertura</option>
+              <option value="DECLARACION_INDIVIDUAL">Declaración Individual</option>
+              <option value="OTRO">Otro documento</option>
+            </select>
+          </div>
+          <div style="margin-top: 0.45rem; font-size: 0.7rem; color: var(--text-dim); line-height: 1.35;">
+            <i class="fa-solid fa-circle-info" style="color: var(--accent-primary);"></i> Permite agrupar varios archivos (condicionado general, particular, liquidación) bajo una misma póliza.
+          </div>
         </div>
 
         <!-- Navigation Tabs -->
@@ -1047,8 +1113,13 @@
           </button>
         </div>
 
-        <!-- Loader -->
-        <div id="loader" class="loader-container">
+      </div>
+
+      <!-- Right Column: Process Loader & Results -->
+      <div class="right-column" style="display: flex; flex-direction: column; gap: 1.5rem; min-width: 0;">
+
+        <!-- Loader / Indicador de Progreso del Proceso -->
+        <div id="loader" class="loader-container panel" style="display: none;">
           <div class="spinner"></div>
           
           <!-- Línea 1: Mensaje de archivo / acción actual -->
@@ -1072,7 +1143,7 @@
           </div>
 
           <!-- Inline Realtime Log Box -->
-          <div id="loaderLiveLogBox" style="margin-top: 0.75rem; width: 100%; max-height: 100px; background: rgba(5, 8, 17, 0.9); border: 1px solid var(--bg-card-border); border-radius: 6px; padding: 0.5rem 0.75rem; font-family: var(--font-mono); font-size: 0.73rem; color: #94a3b8; overflow-y: auto; text-align: left; line-height: 1.45;">
+          <div id="loaderLiveLogBox" style="margin-top: 0.75rem; width: 100%; max-width: 580px; margin-left: auto; margin-right: auto; max-height: 100px; background: rgba(5, 8, 17, 0.9); border: 1px solid var(--bg-card-border); border-radius: 6px; padding: 0.5rem 0.75rem; font-family: var(--font-mono); font-size: 0.73rem; color: #94a3b8; overflow-y: auto; text-align: left; line-height: 1.45;">
             <div id="loaderLiveLogText"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-primary);"></i> Esperando eventos del servidor...</div>
           </div>
 
@@ -1083,65 +1154,65 @@
           </div>
         </div>
 
-      </div>
-
-      <!-- Right Panel: Results & Markdown Viewer -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title"><i class="fa-solid fa-square-poll-vertical"></i> Resultado & Visualización</div>
-          <div id="resultActions" style="display: none; gap: 0.5rem;">
-            <button class="btn-secondary" onclick="toggleRawView()"><i class="fa-solid fa-code"></i> <span id="rawBtnText">Ver Raw</span></button>
-            <button class="btn-secondary" onclick="copyMarkdown()"><i class="fa-solid fa-copy"></i> Copiar</button>
-            <button class="btn-secondary" style="background: var(--accent-primary); border-color: var(--accent-primary);" onclick="downloadMarkdownFile()">
-              <i class="fa-solid fa-download"></i> Descargar .MD
-            </button>
-          </div>
-        </div>
-
-        <!-- Empty State -->
-        <div id="emptyResult" class="result-empty">
-          <i class="fa-solid fa-file-circle-question"></i>
-          <h3>Esperando ejecución</h3>
-          <p>Selecciona un archivo PDF o proporciona una URL/carpeta para ver el resultado extraído.</p>
-        </div>
-
-        <!-- Single Document Result Container -->
-        <div id="singleResultContainer" style="display: none;">
-          <!-- Metadata Bar -->
-          <div class="metadata-grid" id="metaGrid"></div>
-
-          <!-- Markdown Output Header -->
-          <div class="view-actions">
-            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">
-              <i class="fa-markdown fab"></i> CONTENIDO MARKDOWN EXTRAÍDO
-            </span>
-            <span id="mdCharCount" style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono);"></span>
+        <!-- Right Panel: Results & Markdown Viewer -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><i class="fa-solid fa-square-poll-vertical"></i> Resultado & Visualización</div>
+            <div id="resultActions" style="display: none; gap: 0.5rem;">
+              <button class="btn-secondary" onclick="toggleRawView()"><i class="fa-solid fa-code"></i> <span id="rawBtnText">Ver Raw</span></button>
+              <button class="btn-secondary" onclick="copyMarkdown()"><i class="fa-solid fa-copy"></i> Copiar</button>
+              <button class="btn-secondary" style="background: var(--accent-primary); border-color: var(--accent-primary);" onclick="downloadMarkdownFile()">
+                <i class="fa-solid fa-download"></i> Descargar .MD
+              </button>
+            </div>
           </div>
 
-          <!-- Rendered Markdown Box -->
-          <div id="markdownRendered" class="markdown-container"></div>
-          <!-- Raw Textarea Box -->
-          <textarea id="markdownRaw" class="markdown-container" style="display: none; width: 100%; font-family: var(--font-mono); resize: vertical;" readonly></textarea>
-        </div>
-
-        <!-- Batch Result Container -->
-        <div id="batchResultContainer" style="display: none;">
-          <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;" id="batchSummaryTitle">Resumen de Procesamiento Batch</h4>
-          <div style="overflow-x: auto;">
-            <table class="batch-table">
-              <thead>
-                <tr>
-                  <th>Estado</th>
-                  <th>Archivo</th>
-                  <th>Páginas</th>
-                  <th>Tablas</th>
-                  <th>Tiempo</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody id="batchTableBody"></tbody>
-            </table>
+          <!-- Empty State -->
+          <div id="emptyResult" class="result-empty">
+            <i class="fa-solid fa-file-circle-question"></i>
+            <h3>Esperando ejecución</h3>
+            <p>Selecciona un archivo PDF o proporciona una URL/carpeta para ver el resultado extraído.</p>
           </div>
+
+          <!-- Single Document Result Container -->
+          <div id="singleResultContainer" style="display: none;">
+            <!-- Metadata Bar -->
+            <div class="metadata-grid" id="metaGrid"></div>
+
+            <!-- Markdown Output Header -->
+            <div class="view-actions">
+              <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">
+                <i class="fa-markdown fab"></i> CONTENIDO MARKDOWN EXTRAÍDO
+              </span>
+              <span id="mdCharCount" style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono);"></span>
+            </div>
+
+            <!-- Rendered Markdown Box -->
+            <div id="markdownRendered" class="markdown-container"></div>
+            <!-- Raw Textarea Box -->
+            <textarea id="markdownRaw" class="markdown-container" style="display: none; width: 100%; font-family: var(--font-mono); resize: vertical;" readonly></textarea>
+          </div>
+
+          <!-- Batch Result Container -->
+          <div id="batchResultContainer" style="display: none;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;" id="batchSummaryTitle">Resumen de Procesamiento Batch</h4>
+            <div style="overflow-x: auto;">
+              <table class="batch-table">
+                <thead>
+                  <tr>
+                    <th>Estado</th>
+                    <th>Archivo</th>
+                    <th>Páginas</th>
+                    <th>Tablas</th>
+                    <th>Tiempo</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="batchTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -1544,7 +1615,16 @@
       formData.append('file', selectedFile);
       formData.append('company_sigla', sigla);
 
-      showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]...`);
+      const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
+      const ramo = document.getElementById('envelopeRamo')?.value?.trim();
+      const tipoDoc = document.getElementById('envelopeTipoDocumento')?.value?.trim();
+
+      if (numPoliza) formData.append('numero_poliza', numPoliza);
+      if (ramo) formData.append('ramo', ramo);
+      if (tipoDoc) formData.append('tipo_documento', tipoDoc);
+
+      const extraInfo = numPoliza ? ` [Póliza: ${numPoliza}]` : '';
+      showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]${extraInfo}...`);
       startProgressSimulation();
       startExtractionLogPolling();
 
@@ -1678,11 +1758,22 @@
         }
       }
 
+      // Envelope indicators
+      const envelopeBadge = meta.envelope_id
+        ? `<span style="color: #38bdf8; font-weight: 600;"><i class="fa-solid fa-folder-tree"></i> Vinculado</span>`
+        : `<span style="color: var(--text-dim);">Sin sobre</span>`;
+
+      const tipoDocBadge = meta.tipo_documento
+        ? `<span style="color: #34d399; font-weight: 600;"><i class="fa-solid fa-tag"></i> ${escapeHtml(meta.tipo_documento)}</span>`
+        : `<span style="color: var(--text-dim);">No asignado</span>`;
+
       // Fill Metadata Grid
       document.getElementById('metaGrid').innerHTML = `
         <div class="meta-item"><div class="label">Estado PDF</div><div class="val">${statusBadge}</div></div>
         <div class="meta-item"><div class="label">Base de Datos PG</div><div class="val">${dbBadge}</div></div>
         <div class="meta-item"><div class="label">Empresa / Skill</div><div class="val" style="color: #a5b4fc;"><i class="fa-solid fa-building"></i> ${meta.company_sigla || 'General'}</div></div>
+        <div class="meta-item"><div class="label">Sobre / Póliza</div><div class="val">${envelopeBadge}</div></div>
+        <div class="meta-item"><div class="label">Tipo Documento</div><div class="val">${tipoDocBadge}</div></div>
         <div class="meta-item"><div class="label">Archivo</div><div class="val" title="${meta.filename}">${meta.filename}</div></div>
         <div class="meta-item"><div class="label">Páginas</div><div class="val">${meta.page_count}</div></div>
         <div class="meta-item"><div class="label">Tiempo</div><div class="val">${meta.extraction_time_seconds.toFixed(2)}s</div></div>

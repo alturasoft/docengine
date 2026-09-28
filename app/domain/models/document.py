@@ -68,6 +68,10 @@ class DocumentMetadata:
     scanned_page_ratio: float | None = None       # e.g. 0.85 for 85% scanned pages
     pdf_detection_time_seconds: float | None = None  # Time spent on pre-classification
 
+    # Policy envelope binding (optional — populated when bound to a policy envelope)
+    envelope_id: str | None = None
+    tipo_documento: str | None = None
+
     def to_dict(self) -> dict:
         """Serialize metadata to a JSON-compatible dictionary.
 
@@ -96,6 +100,9 @@ class DocumentMetadata:
             "pdf_type": self.pdf_type,
             "scanned_page_ratio": self.scanned_page_ratio,
             "pdf_detection_time_seconds": self.pdf_detection_time_seconds,
+            # Policy envelope binding
+            "envelope_id": self.envelope_id,
+            "tipo_documento": self.tipo_documento,
         }
 
 

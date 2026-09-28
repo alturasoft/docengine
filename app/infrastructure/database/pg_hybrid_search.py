@@ -169,11 +169,12 @@ LIMIT %(top_k)s;
 
 # Query to fetch Parent Chunks by their chunk_id values
 _PARENT_FETCH_QUERY = """
-SELECT id, chunk_id, chunk_content, policy_id::text, chunk_index,
-       metadata_json, chunk_type
-FROM policy_chunks
-WHERE chunk_id = ANY(%(parent_ids)s::uuid[])
-  AND chunk_type = 'parent';
+SELECT pc.id, pc.chunk_id, pc.chunk_content, pc.policy_id::text, pc.chunk_index,
+       pc.metadata_json, pc.chunk_type, p.file_name, p.tipo_documento
+FROM policy_chunks pc
+LEFT JOIN policies p ON pc.policy_id = p.id
+WHERE pc.chunk_id = ANY(%(parent_ids)s::uuid[])
+  AND pc.chunk_type = 'parent';
 """
 
 
@@ -319,9 +320,15 @@ class PgHybridSearchRepository:
         if filters:
             if filters.get("policy_id"):
                 filter_parts.append("AND pc.policy_id = %(policy_id)s::uuid")
+            if filters.get("envelope_id"):
+                needs_policy_join = True
+                filter_parts.append("AND p.envelope_id = %(envelope_id)s::uuid")
             if filters.get("company_sigla"):
                 needs_policy_join = True
                 filter_parts.append("AND p.company_sigla = UPPER(%(company_sigla)s)")
+            if filters.get("tipo_documento"):
+                needs_policy_join = True
+                filter_parts.append("AND p.tipo_documento = UPPER(%(tipo_documento)s)")
 
         filter_clause = " ".join(filter_parts)
         join_clause = "JOIN policies p ON pc.policy_id = p.id" if needs_policy_join else ""
@@ -342,8 +349,12 @@ class PgHybridSearchRepository:
         if filters:
             if filters.get("policy_id"):
                 params["policy_id"] = filters["policy_id"]
+            if filters.get("envelope_id"):
+                params["envelope_id"] = filters["envelope_id"]
             if filters.get("company_sigla"):
                 params["company_sigla"] = filters["company_sigla"]
+            if filters.get("tipo_documento"):
+                params["tipo_documento"] = filters["tipo_documento"]
 
         logger.debug(
             "Executing hybrid RRF search",
@@ -378,15 +389,21 @@ class PgHybridSearchRepository:
 
         parents: list[RetrievedChunk] = []
         for row in rows:
-            db_id, chunk_id, chunk_content, policy_id, chunk_index, metadata_json, chunk_type = row
+            db_id, chunk_id, chunk_content, policy_id, chunk_index, metadata_json, chunk_type, file_name, tipo_documento = row
             cid = str(chunk_id) if chunk_id else str(db_id)
+            meta = dict(metadata_json) if isinstance(metadata_json, dict) else {}
+            if file_name and "source_file" not in meta:
+                meta["source_file"] = file_name
+            if tipo_documento and "tipo_documento" not in meta:
+                meta["tipo_documento"] = tipo_documento
+
             parents.append(
                 RetrievedChunk(
                     chunk_id=cid,
                     policy_id=str(policy_id),
                     chunk_index=chunk_index,
                     chunk_content=chunk_content,
-                    metadata_json=metadata_json if isinstance(metadata_json, dict) else {},
+                    metadata_json=meta,
                     similarity_score=parent_scores.get(cid, 0.0),
                 )
             )
