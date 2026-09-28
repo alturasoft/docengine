@@ -21,6 +21,7 @@ from app.application.embedding_service import EmbeddingService
 from app.application.openai_structured_extractor import OpenAIStructuredExtractor
 from app.domain.models.document import ExtractionResult
 from app.domain.models.rag_models import PolicyProcessingStats, RagProcessingReport
+from app.infrastructure.database.pg_envelope_repository import PgEnvelopeRepository
 from app.infrastructure.database.pg_rag_repository import PgRagRepository
 from app.infrastructure.logging.logger import get_logger
 
@@ -36,19 +37,33 @@ class RagPipelineService:
         embedding_service: EmbeddingService,
         structured_extractor: OpenAIStructuredExtractor,
         repository: PgRagRepository,
+        envelope_repository: PgEnvelopeRepository | None = None,
     ) -> None:
         self._chunker = chunking_service
         self._embedder = embedding_service
         self._extractor = structured_extractor
         self._repo = repository
+        if envelope_repository is not None:
+            self._envelope_repo = envelope_repository
+        elif hasattr(repository, "_db") and repository._db is not None:
+            self._envelope_repo = PgEnvelopeRepository(repository._db)
+        else:
+            self._envelope_repo = None
 
     def process_extraction_result(
-        self, result: ExtractionResult
+        self,
+        result: ExtractionResult,
+        numero_poliza: str | None = None,
+        ramo: str | None = None,
+        tipo_documento: str | None = None,
     ) -> RagProcessingReport:
         """Process an ExtractionResult through the RAG pipeline and persist to PostgreSQL.
 
         Args:
             result: The ExtractionResult produced by Docling/ExtractionService.
+            numero_poliza: Optional policy number hint for envelope binding.
+            ramo: Optional insurance branch/line name.
+            tipo_documento: Optional document classification (e.g. CONDICIONADO_GENERAL).
 
         Returns:
             RagProcessingReport with execution stats and status.
@@ -70,11 +85,18 @@ class RagPipelineService:
 
         company_sigla = result.metadata.company_sigla
 
+        # Resolve policy envelope parameters (explicit arguments override metadata)
+        pol_num = numero_poliza or getattr(result.metadata, "numero_poliza", None)
+        pol_ramo = ramo or getattr(result.metadata, "ramo", None)
+        doc_type = tipo_documento or getattr(result.metadata, "tipo_documento", None)
+
         logger.info(
             "[RAG] Iniciando pipeline RAG y almacenamiento vectorial...",
             file_name=file_name,
             file_hash=file_hash,
             company_sigla=company_sigla,
+            numero_poliza=pol_num,
+            tipo_documento=doc_type,
         )
 
         job_id = None
@@ -92,6 +114,24 @@ class RagPipelineService:
                     file_hash=file_hash,
                     policy_id=existing_policy_id,
                 )
+                envelope_id = None
+                if pol_num and self._envelope_repo:
+                    try:
+                        envelope_id = self._envelope_repo.get_or_create_envelope(
+                            numero_poliza=pol_num,
+                            company_sigla=company_sigla,
+                            ramo=pol_ramo,
+                        )
+                        self._envelope_repo.link_policy_to_envelope(
+                            policy_id=existing_policy_id,
+                            envelope_id=envelope_id,
+                            tipo_documento=doc_type,
+                        )
+                        result.metadata.envelope_id = envelope_id
+                        result.metadata.tipo_documento = doc_type
+                    except Exception as env_exc:
+                        logger.warning("Error vinculando póliza duplicada a envelope", error=str(env_exc))
+
                 job_id = self._repo.create_job(file_name)
                 self._repo.update_job(
                     job_id=job_id,
@@ -106,6 +146,8 @@ class RagPipelineService:
                     skipped_duplicate=True,
                     job_id=job_id,
                     processing_time_seconds=time.perf_counter() - start_time,
+                    envelope_id=envelope_id,
+                    tipo_documento=doc_type,
                 )
 
             # Create processing job record
@@ -271,11 +313,30 @@ class RagPipelineService:
                 memory_peak_mb=mem_peak,
             )
 
-            # 5. Transactional PostgreSQL Persistence
+            # 5. Policy Envelope & Transactional PostgreSQL Persistence
+            effective_pol_num = pol_num or extracted_policy_num
+            effective_doc_type = doc_type
+            if not effective_doc_type and file_name:
+                from app.domain.models.envelope import normalize_document_type  # noqa: PLC0415
+                effective_doc_type = normalize_document_type(file_name)
+
+            envelope_id = None
+            if effective_pol_num and self._envelope_repo:
+                try:
+                    envelope_id = self._envelope_repo.get_or_create_envelope(
+                        numero_poliza=effective_pol_num,
+                        company_sigla=company_sigla,
+                        ramo=pol_ramo,
+                    )
+                except Exception as env_exc:
+                    logger.warning("Error creando o buscando envelope", error=str(env_exc))
+
             logger.info(
                 "[Persistencia BD] Guardando póliza, chunks, vectores y estadísticas en PostgreSQL (pgvector)...",
                 chunks_count=len(chunks_with_embeddings),
                 file_name=file_name,
+                envelope_id=envelope_id,
+                tipo_documento=effective_doc_type,
             )
             policy_id = self._repo.save_rag_policy_transactional(
                 file_name=file_name,
@@ -287,10 +348,16 @@ class RagPipelineService:
                 structured_data=structured_json,
                 chunks=chunks_with_embeddings,
                 stats=stats,
+                envelope_id=envelope_id,
+                tipo_documento=effective_doc_type,
             )
+            result.metadata.envelope_id = envelope_id
+            result.metadata.tipo_documento = effective_doc_type
+
             logger.info(
                 "[Persistencia BD] Registro transaccional completado en PostgreSQL",
                 policy_id=policy_id,
+                envelope_id=envelope_id,
             )
 
             # 6. Update Job Status to COMPLETED
@@ -319,6 +386,8 @@ class RagPipelineService:
                 skipped_duplicate=False,
                 processing_time_seconds=elapsed,
                 job_id=job_id,
+                envelope_id=envelope_id,
+                tipo_documento=doc_type,
             )
 
         except Exception as e:

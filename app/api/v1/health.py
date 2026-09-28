@@ -93,8 +93,8 @@ def record_extraction(
 @router.get(
     "/health",
     response_model=HealthResponse,
-    summary="Health check",
-    description="Returns service health status.",
+    summary="Verificación de estado del servicio",
+    description="Retorna el estado de operatividad del servicio, entorno de ejecución y tiempo de actividad acumulado (uptime).",
 )
 def health_check() -> HealthResponse:
     """Return service health status."""
@@ -109,8 +109,8 @@ def health_check() -> HealthResponse:
 @router.get(
     "/version",
     response_model=VersionResponse,
-    summary="Version information",
-    description="Returns versions of the service and Docling.",
+    summary="Información de versiones",
+    description="Retorna las versiones instaladas de la aplicación DocEngine, del motor Docling y de Python.",
 )
 def get_version() -> VersionResponse:
     """Return version information."""
@@ -125,8 +125,8 @@ def get_version() -> VersionResponse:
 @router.get(
     "/metrics",
     response_model=MetricsResponse,
-    summary="Service metrics",
-    description="Returns aggregate extraction statistics.",
+    summary="Métricas de extracción",
+    description="Retorna estadísticas agregadas de extracción (documentos procesados, exitosos, fallidos, páginas, tablas y tiempos), sincronizadas con la base de datos.",
 )
 def get_metrics(request: Request) -> MetricsResponse:
     """Return aggregate extraction metrics, querying PostgreSQL if available."""
@@ -193,12 +193,12 @@ def get_metrics(request: Request) -> MetricsResponse:
 
 @router.get(
     "/logs",
-    summary="Get process logs",
-    description="Returns recent server log entries from in-memory circular buffer.",
+    summary="Consultar registros del proceso",
+    description="Retorna las entradas recientes de log desde el búfer circular en memoria del servidor.",
 )
 def get_logs(
-    lines: int = Query(default=200, ge=1, le=1000, description="Number of log lines to retrieve"),
-    level: str | None = Query(default=None, description="Optional level filter (INFO, WARNING, ERROR)"),
+    lines: int = Query(default=200, ge=1, le=1000, description="Cantidad de líneas de log a recuperar (1 a 1000)"),
+    level: str | None = Query(default=None, description="Filtro opcional por nivel de severidad (INFO, WARNING, ERROR)"),
 ) -> dict:
     """Return recent log entries from the server process."""
     from app.infrastructure.logging.logger import get_recent_logs  # noqa: PLC0415
@@ -212,8 +212,8 @@ def get_logs(
 
 @router.post(
     "/logs/clear",
-    summary="Clear process logs",
-    description="Clears all recent server log entries from in-memory circular buffer.",
+    summary="Limpiar registros del proceso",
+    description="Limpia todas las entradas de log almacenadas en el búfer circular en memoria del servidor.",
 )
 def clear_logs() -> dict:
     """Clear server log buffer."""
@@ -225,8 +225,8 @@ def clear_logs() -> dict:
 
 @router.post(
     "/metrics/reset",
-    summary="Reset service metrics",
-    description="Resets aggregate extraction statistics in memory and on disk.",
+    summary="Restablecer métricas del servicio",
+    description="Restablece a cero los contadores de métricas de extracción tanto en memoria como en disco.",
 )
 def reset_metrics() -> dict:
     """Reset aggregate extraction metrics in memory and on disk."""

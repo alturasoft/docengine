@@ -911,14 +911,14 @@
         </div>
       </div>
 
-      <!-- Selector Desplegable de las Últimas 20 Pólizas Digitalizadas -->
+      <!-- Selector Desplegable de Pólizas (Sobres Digitales) -->
       <div class="form-group">
         <label for="recentPoliciesSelect">
-          <span><i class="fa-solid fa-clock-rotate-left" style="color: #38bdf8;"></i> Últimas 20 Pólizas en BD</span>
+          <span><i class="fa-solid fa-folder-tree" style="color: #38bdf8;"></i> Pólizas Registradas en BD</span>
           <span id="recentPoliciesCount" class="badge-pill">Cargando...</span>
         </label>
         <select id="recentPoliciesSelect" class="form-control" onchange="onRecentPolicySelected(this.value)">
-          <option value="">-- Seleccionar póliza digitalizada --</option>
+          <option value="">-- Seleccionar póliza --</option>
         </select>
       </div>
 
@@ -935,7 +935,7 @@
         <div id="policyEmptyState" class="policy-empty-state">
           <div class="empty-icon"><i class="fa-solid fa-file-circle-question"></i></div>
           <p class="empty-title">Ninguna póliza seleccionada</p>
-          <p class="empty-desc">Ingresa un número de póliza o elige una de las 20 más recientes para cargar sus datos y responder preguntas con ese contexto.</p>
+          <p class="empty-desc">Ingresa un número de póliza o elige una de las pólizas registradas para cargar sus documentos y responder preguntas con ese contexto.</p>
         </div>
 
         <!-- Ficha de Datos Básicos en el orden exacto requerido -->
@@ -951,23 +951,23 @@
           </div>
 
           <div class="policy-field-card">
+            <span class="field-label"><i class="fa-solid fa-building"></i> Aseguradora</span>
+            <span class="field-val" id="fieldCompany">-</span>
+          </div>
+
+          <div class="policy-field-card" id="cardDocList">
+            <span class="field-label"><i class="fa-solid fa-folder-open"></i> Documentos vinculados a esta póliza</span>
+            <div id="fieldDocumentsList" style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem;"></div>
+          </div>
+
+          <div class="policy-field-card">
             <span class="field-label"><i class="fa-solid fa-user-tie"></i> Asegurado</span>
             <span class="field-val" id="fieldAsegurado">-</span>
           </div>
 
           <div class="policy-field-card">
-            <span class="field-label"><i class="fa-solid fa-id-card"></i> Número de documento</span>
-            <span class="field-val" id="fieldNumeroDocumento">-</span>
-          </div>
-
-          <div class="policy-field-card">
-            <span class="field-label"><i class="fa-solid fa-calendar-days"></i> Vigencia</span>
+            <span class="field-label"><i class="fa-solid fa-calendar-days"></i> Fecha / Vigencia</span>
             <span class="field-val" id="fieldVigencia">-</span>
-          </div>
-
-          <div class="policy-field-card">
-            <span class="field-label"><i class="fa-solid fa-money-bill-wave"></i> Prima total</span>
-            <span class="field-val highlight-green" id="fieldPrimaTotal">-</span>
           </div>
         </div>
       </div>
@@ -1019,23 +1019,56 @@
     var cachedRecentPolicies = [];
 
     function setActivePolicy(policyData) {
-      if (!policyData || !policyData.policy_id) return;
-      activePolicyContext = policyData;
+      if (!policyData) return;
+      const isEnvelope = Boolean(policyData.numero_poliza && (policyData.id !== undefined || policyData.envelope_id !== undefined));
+      const envelopeId = policyData.envelope_id || (isEnvelope ? policyData.id : null);
+      const policyId = policyData.policy_id || (policyData.documents && policyData.documents[0] ? policyData.documents[0].policy_id : null);
 
-      // Update the 6 basic fields in "Información de contexto"
+      activePolicyContext = {
+        ...policyData,
+        envelope_id: envelopeId,
+        policy_id: policyId,
+      };
+
+      // Update fields in "Información de contexto"
       const numEl = document.getElementById('fieldNumeroPoliza');
       const ramoEl = document.getElementById('fieldRamo');
+      const compEl = document.getElementById('fieldCompany');
       const asegEl = document.getElementById('fieldAsegurado');
-      const docEl = document.getElementById('fieldNumeroDocumento');
       const vigEl = document.getElementById('fieldVigencia');
-      const primaEl = document.getElementById('fieldPrimaTotal');
 
       if (numEl) numEl.innerText = policyData.numero_poliza || 'Desconocido';
       if (ramoEl) ramoEl.innerText = policyData.ramo || 'No especificado';
-      if (asegEl) asegEl.innerText = policyData.asegurado || 'No especificado';
-      if (docEl) docEl.innerText = policyData.numero_documento || 'No registrado';
-      if (vigEl) vigEl.innerText = policyData.vigencia || 'No especificada';
-      if (primaEl) primaEl.innerText = policyData.prima_total || 'No especificada';
+      if (compEl) compEl.innerText = policyData.company_sigla || 'No especificada';
+      if (asegEl) asegEl.innerText = policyData.asegurado || '-';
+      if (vigEl) vigEl.innerText = policyData.vigencia || (policyData.created_at ? new Date(policyData.created_at).toLocaleDateString() : '-');
+
+      // Populate linked documents list
+      const docsContainer = document.getElementById('fieldDocumentsList');
+      if (docsContainer) {
+        docsContainer.innerHTML = '';
+        const docs = policyData.documents || [];
+        if (docs.length > 0) {
+          docs.forEach(doc => {
+            const typeLabel = doc.tipo_documento ? doc.tipo_documento.replace(/_/g, ' ') : 'Documento';
+            const pagesText = doc.total_pages ? ` • ${doc.total_pages} pág.` : '';
+            const div = document.createElement('div');
+            div.style.cssText = "display: flex; align-items: center; justify-content: space-between; font-size: 0.74rem; background: rgba(15, 23, 42, 0.65); padding: 0.35rem 0.6rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06); gap: 0.5rem;";
+            div.innerHTML = `
+              <span style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-main); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <i class="fa-solid fa-file-pdf" style="color: #ef4444; font-size: 0.82rem; flex-shrink: 0;"></i>
+                <span title="${escapeHtml(doc.file_name)}">${escapeHtml(doc.file_name)}</span>
+              </span>
+              <span style="font-size: 0.65rem; color: #a5b4fc; background: rgba(99, 102, 241, 0.18); padding: 0.12rem 0.45rem; border-radius: 3px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">
+                ${escapeHtml(typeLabel)}${pagesText}
+              </span>
+            `;
+            docsContainer.appendChild(div);
+          });
+        } else {
+          docsContainer.innerHTML = '<span style="font-size: 0.73rem; color: var(--text-dim);"><i class="fa-solid fa-file-circle-check"></i> 1 documento indexado</span>';
+        }
+      }
 
       // Toggle panels
       const emptyState = document.getElementById('policyEmptyState');
@@ -1050,7 +1083,8 @@
       const lbl = document.getElementById('activePolicyLabel');
       if (banner && lbl) {
         const siglaText = policyData.company_sigla ? `[${policyData.company_sigla}] ` : '';
-        lbl.innerText = `${siglaText}N° ${policyData.numero_poliza} — ${policyData.asegurado}`;
+        const ramoText = policyData.ramo ? ` — ${policyData.ramo}` : '';
+        lbl.innerText = `${siglaText}Póliza N° ${policyData.numero_poliza}${ramoText}`;
         banner.style.display = 'flex';
       }
 
@@ -1058,9 +1092,10 @@
       const select = document.getElementById('recentPoliciesSelect');
       if (select) {
         let found = false;
+        const targetVal = envelopeId || policyId;
         for (let opt of select.options) {
-          if (opt.value === policyData.policy_id) {
-            select.value = policyData.policy_id;
+          if (opt.value === targetVal || opt.value === envelopeId || opt.value === policyId) {
+            select.value = opt.value;
             found = true;
             break;
           }
@@ -1111,35 +1146,31 @@
       const chatStream = document.getElementById('chatStream');
       if (!chatStream) return;
 
-      const originText = origin === 'search'
-        ? `Búsqueda exitosa: Se cargó la póliza <strong>${escapeHtml(policyData.numero_poliza)}</strong>`
-        : `Póliza seleccionada del listado: <strong>${escapeHtml(policyData.numero_poliza)}</strong>`;
+      const sigla = policyData.company_sigla ? `[${escapeHtml(policyData.company_sigla)}] ` : '';
+      const docs = policyData.documents || [];
+      const docsSummary = docs.length > 0
+        ? docs.map(d => `<li>📄 <strong>${escapeHtml(d.file_name)}</strong> <span style="color: #a5b4fc;">(${escapeHtml((d.tipo_documento || 'Documento').replace(/_/g, ' '))}${d.total_pages ? ' - ' + d.total_pages + ' págs' : ''})</span></li>`).join('')
+        : '<li>📄 <em>Documento individual indexado</em></li>';
 
       const noticeHtml = `
         <div class="chat-message assistant">
-          <div class="chat-avatar" style="background: linear-gradient(135deg, var(--accent-primary), #4f46e5);"><i class="fa-solid fa-file-shield"></i></div>
+          <div class="chat-avatar" style="background: linear-gradient(135deg, var(--accent-primary), #4f46e5);"><i class="fa-solid fa-folder-tree"></i></div>
           <div class="chat-bubble" style="border-color: rgba(99, 102, 241, 0.4);">
-            <p><strong>${originText}</strong></p>
+            <p><strong>Póliza establecida como contexto activo: ${sigla}N° ${escapeHtml(policyData.numero_poliza)}</strong></p>
             <p style="font-size: 0.82rem; margin: 0.4rem 0 0.2rem 0; color: var(--text-muted);">
-              Esta póliza ha sido establecida como el <strong>contexto activo</strong> del chat. El motor responderá recuperando la totalidad de su contenido:
+              Ramo: <strong>${escapeHtml(policyData.ramo || 'No especificado')}</strong>. El motor responderá recuperando la totalidad de documentos vinculados a esta póliza:
             </p>
             <ul style="font-size: 0.8rem; margin: 0.4rem 0 0.4rem 1.2rem; color: var(--text-main); line-height: 1.5;">
-              <li><strong>Número de póliza:</strong> ${escapeHtml(policyData.numero_poliza)}</li>
-              <li><strong>Ramo:</strong> ${escapeHtml(policyData.ramo)}</li>
-              <li><strong>Asegurado:</strong> ${escapeHtml(policyData.asegurado)}</li>
-              <li><strong>Número de documento:</strong> ${escapeHtml(policyData.numero_documento)}</li>
-              <li><strong>Vigencia:</strong> ${escapeHtml(policyData.vigencia)}</li>
-              <li><strong>Prima total:</strong> ${escapeHtml(policyData.prima_total)}</li>
+              ${docsSummary}
             </ul>
             <p style="font-size: 0.8rem; color: #a5b4fc; margin-top: 0.4rem;">
-              <i class="fa-solid fa-circle-check"></i> Puedes realizar cualquier consulta sobre esta póliza.
+              <i class="fa-solid fa-circle-check"></i> Puedes realizar cualquier consulta sobre condiciones generales, particulares, deducibles, vigencias o anexos de esta póliza.
             </p>
             <span class="chat-timestamp">${timeStr}</span>
           </div>
         </div>
       `;
 
-      // Limpiar historial previo del chat de la ventana derecha
       chatStream.innerHTML = noticeHtml;
       scrollToBottom();
     }
@@ -1150,29 +1181,51 @@
       if (!select) return;
 
       try {
-        const response = await fetch(`${getApiUrl()}/api/v1/policies/recent?limit=20`);
-        if (!response.ok) throw new Error('No se pudo cargar la lista');
-        const data = await response.json();
-        cachedRecentPolicies = data.policies || [];
+        // Try fetching envelopes first
+        const response = await fetch(`${getApiUrl()}/api/v1/policies/envelopes?limit=50`);
+        if (response.ok) {
+          const data = await response.json();
+          cachedRecentPolicies = data.envelopes || [];
 
-        select.innerHTML = '<option value="">-- Seleccionar póliza digitalizada --</option>';
-        cachedRecentPolicies.forEach((p) => {
-          const opt = document.createElement('option');
-          opt.value = p.policy_id;
-          const sigla = p.company_sigla ? `[${p.company_sigla}] ` : '';
-          opt.textContent = `${sigla}N° ${p.numero_poliza} — ${p.asegurado}`;
-          select.appendChild(opt);
-        });
+          select.innerHTML = '<option value="">-- Seleccionar póliza --</option>';
+          cachedRecentPolicies.forEach((env) => {
+            const opt = document.createElement('option');
+            opt.value = env.id;
+            const sigla = env.company_sigla ? `[${env.company_sigla}] ` : '';
+            const ramo = env.ramo ? ` — ${env.ramo}` : '';
+            const docCount = env.documents_count !== undefined ? env.documents_count : (env.documents ? env.documents.length : 0);
+            const docText = docCount === 1 ? '1 doc' : `${docCount} docs`;
+            opt.textContent = `${sigla}Póliza N° ${env.numero_poliza}${ramo} (${docText})`;
+            select.appendChild(opt);
+          });
 
-        if (badge) badge.innerText = `${cachedRecentPolicies.length} disponibles`;
+          if (badge) badge.innerText = `${cachedRecentPolicies.length} pólizas`;
+          return;
+        }
+
+        // Fallback to legacy recent documents endpoint
+        const legacyRes = await fetch(`${getApiUrl()}/api/v1/policies/recent?limit=20`);
+        if (legacyRes.ok) {
+          const data = await legacyRes.json();
+          cachedRecentPolicies = data.policies || [];
+          select.innerHTML = '<option value="">-- Seleccionar póliza --</option>';
+          cachedRecentPolicies.forEach((p) => {
+            const opt = document.createElement('option');
+            opt.value = p.policy_id;
+            const sigla = p.company_sigla ? `[${p.company_sigla}] ` : '';
+            opt.textContent = `${sigla}N° ${p.numero_poliza} — ${p.asegurado}`;
+            select.appendChild(opt);
+          });
+          if (badge) badge.innerText = `${cachedRecentPolicies.length} disponibles`;
+        }
       } catch (err) {
         if (badge) badge.innerText = 'Error';
-        console.error('Error cargando pólizas recientes:', err);
+        console.error('Error cargando pólizas:', err);
       }
     }
 
-    function onRecentPolicySelected(policyId) {
-      if (!policyId) {
+    function onRecentPolicySelected(selectedId) {
+      if (!selectedId) {
         clearActivePolicy();
         const chatStream = document.getElementById('chatStream');
         if (chatStream) {
@@ -1188,11 +1241,26 @@
         }
         return;
       }
-      const found = cachedRecentPolicies.find(p => p.policy_id === policyId);
+
+      const found = cachedRecentPolicies.find(p => p.id === selectedId || p.policy_id === selectedId);
       if (found) {
         notifyPolicyContextLoaded(found, 'dropdown');
       } else {
-        fetchPolicyById(policyId, false);
+        fetchEnvelopeById(selectedId);
+      }
+    }
+
+    async function fetchEnvelopeById(envelopeId) {
+      try {
+        const response = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/${envelopeId}`);
+        if (response.ok) {
+          const env = await response.json();
+          notifyPolicyContextLoaded(env, 'dropdown');
+        } else {
+          fetchPolicyById(envelopeId, false);
+        }
+      } catch (err) {
+        console.error('Error fetching envelope by ID:', err);
       }
     }
 
@@ -1208,11 +1276,32 @@
       }
 
       try {
-        const response = await fetch(`${getApiUrl()}/api/v1/policies/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error('Error al buscar la póliza');
-        const data = await response.json();
-        if (data.found && data.policy) {
-          notifyPolicyContextLoaded(data.policy, 'search');
+        let foundData = null;
+
+        // 1. Try envelope search first
+        try {
+          const envRes = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/by-number/${encodeURIComponent(query)}`);
+          if (envRes.ok) {
+            const envJson = await envRes.json();
+            if (envJson.total > 0 && envJson.envelopes && envJson.envelopes.length > 0) {
+              foundData = envJson.envelopes[0];
+            }
+          }
+        } catch(e) {}
+
+        // 2. Fallback to legacy policy search if envelope not found
+        if (!foundData) {
+          const response = await fetch(`${getApiUrl()}/api/v1/policies/search?q=${encodeURIComponent(query)}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.found && data.policy) {
+              foundData = data.policy;
+            }
+          }
+        }
+
+        if (foundData) {
+          notifyPolicyContextLoaded(foundData, 'search');
           if (input) input.value = '';
         } else {
           const chatStream = document.getElementById('chatStream');
@@ -1425,8 +1514,12 @@
       // Umbral fijado en 0.3 por defecto
       const similarityThreshold = 0.3;
       const filters = {};
-      if (activePolicyContext && activePolicyContext.policy_id) {
-        filters.policy_id = activePolicyContext.policy_id;
+      if (activePolicyContext) {
+        if (activePolicyContext.envelope_id) {
+          filters.envelope_id = activePolicyContext.envelope_id;
+        } else if (activePolicyContext.policy_id) {
+          filters.policy_id = activePolicyContext.policy_id;
+        }
       }
 
       const payload = {

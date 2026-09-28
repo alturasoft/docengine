@@ -24,12 +24,11 @@ router = APIRouter(prefix="/query", tags=["RAG Query"])
     "",
     response_model=QueryResponseSchema,
     status_code=status.HTTP_200_OK,
-    summary="Query documents with natural language",
+    summary="Consultar documentos con lenguaje natural (RAG)",
     description=(
-        "Submit a natural language question. DocEngine retrieves the most relevant "
-        "document chunks from the vector store and generates a precise, "
-        "source-grounded answer using OpenAI. "
-        "The answer is based exclusively on indexed documents — no hallucination."
+        "Envía una consulta en lenguaje natural sobre las pólizas de seguro indexadas. "
+        "DocEngine recupera los fragmentos semánticos más relevantes mediante similitud vectorial "
+        "y sintetiza una respuesta precisa, veraz y fundamentada con citas textuales a través de OpenAI, evitando alucinaciones."
     ),
 )
 def query_documents(
@@ -91,8 +90,8 @@ def query_documents(
 @router.get(
     "/health",
     status_code=status.HTTP_200_OK,
-    summary="RAG Query Service health check",
-    description="Returns the operational status of the RAG Query Service.",
+    summary="Verificación de estado del servicio RAG Query",
+    description="Retorna el estado de disponibilidad y operatividad del servicio de consultas semánticas RAG y su conexión con el almacén vectorial.",
 )
 def query_health(rag_query_service: RagQueryServiceDep) -> dict[str, Any]:
     """Check if the RAGQueryService is initialized and ready.

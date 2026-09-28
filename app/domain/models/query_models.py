@@ -50,6 +50,10 @@ class RetrievedChunk:
         if file_name:
             parts.append(f"Documento: {file_name}")
 
+        tipo_doc = self.metadata_json.get("tipo_documento")
+        if tipo_doc:
+            parts.append(f"Tipo: {tipo_doc}")
+
         section = (
             self.metadata_json.get("section")
             or self.metadata_json.get("header")

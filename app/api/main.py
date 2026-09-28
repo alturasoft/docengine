@@ -137,13 +137,57 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     """
     resolved_settings = settings or get_settings()
 
+    tags_metadata = [
+        {
+            "name": "Extraction",
+            "description": (
+                "Operaciones de ingesta y extracción documental de pólizas de seguro en formato PDF. "
+                "Permite procesar archivos mediante carga directa (`multipart/form-data`), descarga desde URL "
+                "o escaneo recursivo por lotes en carpetas del servidor. Genera representaciones estructuradas en Markdown y JSON."
+            ),
+        },
+        {
+            "name": "RAG Query",
+            "description": (
+                "Búsqueda semántica y generación aumentada por recuperación (RAG). "
+                "Permite realizar consultas en lenguaje natural sobre las pólizas digitalizadas, "
+                "recuperando fragmentos vectoriales relevantes y generando respuestas fundamentadas con citas textuales."
+            ),
+        },
+        {
+            "name": "Policies",
+            "description": (
+                "Búsqueda y consulta de pólizas indexadas en la base de datos PostgreSQL. "
+                "Permite consultar pólizas digitalizadas recientes, buscar por número o palabra clave, "
+                "y obtener información detallada por identificador único."
+            ),
+        },
+        {
+            "name": "System",
+            "description": (
+                "Endpoints de monitoreo operativo y diagnóstico del sistema. "
+                "Incluye verificación de salud (`health check`), información de versiones de componentes, "
+                "métricas estadísticas acumuladas y visualización del búfer de registros (`logs`)."
+            ),
+        },
+    ]
+
     app = FastAPI(
         title="DocEngine — Motor de Extracción Documental",
         description=(
-            "Motor de extracción de alta fidelidad para PDFs de pólizas de seguros. "
-            "Basado en Docling (IBM Research). Produce Markdown optimizado para RAG."
+            "### Motor de Extracción Documental y Pipeline RAG para Pólizas de Seguros\n\n"
+            "DocEngine procesa documentos de pólizas de seguro en formato PDF para extraer texto estructurado, "
+            "tablas complejas y metadatos clave con alta fidelidad utilizando el motor Docling (IBM Research). "
+            "El contenido resultante es indexado en un almacén vectorial para permitir consultas en lenguaje natural "
+            "mediante arquitecturas RAG (*Retrieval-Augmented Generation*).\n\n"
+            "**Módulos de la API:**\n"
+            "- **Extraction:** Ingesta y extracción documental (archivo, URL o carpeta) a formatos Markdown y JSON.\n"
+            "- **RAG Query:** Consultas en lenguaje natural con citas de fuentes verificadas.\n"
+            "- **Policies:** Consulta estructurada y búsqueda de pólizas registradas.\n"
+            "- **System:** Monitoreo de estado operativo, métricas y registros del proceso."
         ),
         version=resolved_settings.app_version,
+        openapi_tags=tags_metadata,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",

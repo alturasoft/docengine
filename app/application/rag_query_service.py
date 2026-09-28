@@ -183,9 +183,28 @@ class RAGQueryService:
         # Step 1: Embed the query using the shared bge-m3 model
         query_vector = self._embed_query(question)
 
-        # Step 2: Retrieve policy chunks (recuperación de la póliza completa)
+        # Step 2: Retrieve policy chunks (recuperación de la póliza completa o acotada por sobre)
+        target_envelope_id = effective_filters.get("envelope_id")
         target_policy_id = effective_filters.get("policy_id")
-        if target_policy_id and hasattr(self._vector_search, "get_all_chunks_for_policy"):
+
+        if target_envelope_id:
+            logger.info("Búsqueda RAG acotada a sobre de póliza", envelope_id=target_envelope_id)
+            search_filters = effective_filters
+            if self._hybrid_search is not None:
+                retrieved_chunks = self._retrieve_and_rerank(
+                    query_vector=query_vector,
+                    query_text=question,
+                    top_k=resolved_top_k,
+                    filters=search_filters,
+                )
+            else:
+                retrieved_chunks = self._retrieve_chunks(
+                    query_vector=query_vector,
+                    top_k=resolved_top_k,
+                    threshold=resolved_threshold,
+                    filters=search_filters,
+                )
+        elif target_policy_id and hasattr(self._vector_search, "get_all_chunks_for_policy"):
             logger.info("Recuperando toda la póliza completa para contexto", policy_id=target_policy_id)
             retrieved_chunks = self._vector_search.get_all_chunks_for_policy(target_policy_id)
         else:

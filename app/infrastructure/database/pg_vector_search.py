@@ -98,11 +98,21 @@ class PgVectorSearchRepository:
                 where_clauses.append("pc.policy_id = %s::uuid")
                 params.append(filters["policy_id"])
 
+            if "envelope_id" in filters and filters["envelope_id"]:
+                needs_policy_join = True
+                where_clauses.append("p.envelope_id = %s::uuid")
+                params.append(filters["envelope_id"])
+
             if "company_sigla" in filters and filters["company_sigla"]:
                 # Requires a join to the policies table for sigla filtering
                 needs_policy_join = True
                 where_clauses.append("p.company_sigla = UPPER(%s)")
                 params.append(filters["company_sigla"])
+
+            if "tipo_documento" in filters and filters["tipo_documento"]:
+                needs_policy_join = True
+                where_clauses.append("p.tipo_documento = UPPER(%s)")
+                params.append(filters["tipo_documento"])
 
         # Build the final query
         if needs_policy_join:
@@ -212,6 +222,62 @@ class PgVectorSearchRepository:
                     chunk_index=chunk_index,
                     chunk_content=chunk_content,
                     metadata_json=metadata_json if isinstance(metadata_json, dict) else {},
+                    similarity_score=float(similarity_score),
+                )
+            )
+        return results
+
+    def get_all_chunks_for_envelope(
+        self,
+        envelope_id: str,
+    ) -> list[RetrievedChunk]:
+        """Fetch ALL parent chunks for all documents bound to a given policy envelope.
+
+        Used when full policy envelope retrieval is required.
+
+        Args:
+            envelope_id: UUID of the policy envelope.
+
+        Returns:
+            List of all parent RetrievedChunk instances for the envelope.
+        """
+        sql = """
+            SELECT
+                pc.id                                          AS chunk_id,
+                pc.policy_id::text                             AS policy_id,
+                pc.chunk_index                                 AS chunk_index,
+                pc.chunk_content                               AS chunk_content,
+                pc.metadata_json                               AS metadata_json,
+                1.0                                            AS similarity_score,
+                p.file_name                                    AS file_name,
+                p.tipo_documento                               AS tipo_documento
+            FROM policy_chunks pc
+            JOIN policies p ON pc.policy_id = p.id
+            WHERE p.envelope_id = %s::uuid
+              AND (pc.chunk_type = 'parent' OR pc.parent_id IS NULL)
+            ORDER BY p.created_at ASC, pc.chunk_index ASC;
+        """
+        results: list[RetrievedChunk] = []
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (envelope_id,))
+                rows = cur.fetchall()
+
+        for row in rows:
+            chunk_id, pid, chunk_index, chunk_content, metadata_json, similarity_score, file_name, tipo_doc = row
+            meta = dict(metadata_json) if isinstance(metadata_json, dict) else {}
+            if file_name and "source_file" not in meta:
+                meta["source_file"] = file_name
+            if tipo_doc and "tipo_documento" not in meta:
+                meta["tipo_documento"] = tipo_doc
+
+            results.append(
+                RetrievedChunk(
+                    chunk_id=str(chunk_id),
+                    policy_id=str(pid),
+                    chunk_index=chunk_index,
+                    chunk_content=chunk_content,
+                    metadata_json=meta,
                     similarity_score=float(similarity_score),
                 )
             )

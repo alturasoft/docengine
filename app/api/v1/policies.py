@@ -13,10 +13,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.v1.schemas import (
     PolicyBasicInfoSchema,
+    PolicyEnvelopeSchema,
+    PolicyEnvelopeSearchResponse,
     PolicySearchResponseSchema,
     RecentPoliciesResponseSchema,
 )
 from app.infrastructure.database.db_connection import DatabaseManager
+from app.infrastructure.database.pg_envelope_repository import PgEnvelopeRepository
 from app.infrastructure.database.pg_structured_search import (
     PgStructuredSearchRepository,
 )
@@ -44,16 +47,31 @@ def get_structured_search_repo(request: Request) -> PgStructuredSearchRepository
 StructuredSearchDep = Annotated[PgStructuredSearchRepository, Depends(get_structured_search_repo)]
 
 
+def get_envelope_repo(request: Request) -> PgEnvelopeRepository:
+    """Dependency to retrieve or instantiate PgEnvelopeRepository."""
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        from app.config.settings import get_settings
+        settings = get_settings()
+
+    db_manager = DatabaseManager(settings.database)
+    return PgEnvelopeRepository(db_manager)
+
+
+EnvelopeRepoDep = Annotated[PgEnvelopeRepository, Depends(get_envelope_repo)]
+
+
+
 @router.get(
     "/recent",
     response_model=RecentPoliciesResponseSchema,
     status_code=status.HTTP_200_OK,
-    summary="List recent digitized policies",
-    description="Returns the most recent digitized policies stored in the database with their basic information.",
+    summary="Listar pólizas digitalizadas recientes",
+    description="Retorna las pólizas digitalizadas más recientes almacenadas e indexadas en la base de datos con su información básica.",
 )
 def get_recent_policies(
     repo: StructuredSearchDep,
-    limit: int = Query(default=20, ge=1, le=50, description="Max policies to return (default 20)"),
+    limit: int = Query(default=20, ge=1, le=50, description="Cantidad máxima de pólizas a retornar (por defecto 20, máximo 50)"),
 ) -> RecentPoliciesResponseSchema:
     """Retrieve the most recent policies from the database."""
     try:
@@ -75,12 +93,12 @@ def get_recent_policies(
     "/search",
     response_model=PolicySearchResponseSchema,
     status_code=status.HTTP_200_OK,
-    summary="Search policy by number or keyword",
-    description="Searches for a policy by its policy number, UUID, or keyword, and returns its basic information.",
+    summary="Buscar póliza por número o palabra clave",
+    description="Busca una póliza en la base de datos por su número de póliza, identificador UUID o palabra clave, y retorna su información básica.",
 )
 def search_policy(
     repo: StructuredSearchDep,
-    q: str = Query(..., min_length=1, description="Policy number, ID or keyword to search"),
+    q: str = Query(..., min_length=1, description="Número de póliza, identificador UUID o palabra clave a buscar"),
 ) -> PolicySearchResponseSchema:
     """Search policy by number, ID, or text."""
     try:
@@ -103,11 +121,103 @@ def search_policy(
 
 
 @router.get(
+    "/envelopes",
+    response_model=PolicyEnvelopeSearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Listar sobres de póliza digitalizados",
+    description="Retorna el listado de pólizas (sobres) indexadas, incluyendo la cantidad y detalles de documentos vinculados.",
+)
+def list_envelopes(
+    repo: EnvelopeRepoDep,
+    limit: int = Query(default=50, ge=1, le=100, description="Cantidad máxima de pólizas a retornar"),
+    offset: int = Query(default=0, ge=0, description="Offset para paginación"),
+    company_sigla: str | None = Query(default=None, description="Filtro opcional por sigla de compañía"),
+) -> PolicyEnvelopeSearchResponse:
+    """List policy envelopes with bound documents."""
+    try:
+        envelopes = repo.list_envelopes(
+            limit=limit,
+            offset=offset,
+            company_sigla=company_sigla,
+        )
+        return PolicyEnvelopeSearchResponse(
+            total=len(envelopes),
+            envelopes=[PolicyEnvelopeSchema(**e) for e in envelopes],
+        )
+    except Exception as exc:
+        logger.error("Error listing policy envelopes", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing envelopes: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/envelopes/by-number/{numero_poliza}",
+    response_model=PolicyEnvelopeSearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Buscar sobres de póliza por número de póliza",
+    description="Busca y retorna los contenedores de póliza que coincidan con el número proporcionado, junto con todos los documentos asociados a cada uno.",
+)
+def get_envelopes_by_number(
+    numero_poliza: str,
+    repo: EnvelopeRepoDep,
+    company_sigla: str | None = Query(default=None, description="Filtro opcional por sigla de compañía aseguradora"),
+) -> PolicyEnvelopeSearchResponse:
+    """Find policy envelopes and bound documents by policy number."""
+    try:
+        envelopes = repo.get_envelope_by_policy_number(
+            numero_poliza=numero_poliza,
+            company_sigla=company_sigla,
+        )
+        return PolicyEnvelopeSearchResponse(
+            total=len(envelopes),
+            envelopes=[PolicyEnvelopeSchema(**e) for e in envelopes],
+        )
+    except Exception as exc:
+        logger.error("Error searching envelopes by number", numero_poliza=numero_poliza, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error searching envelopes: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/envelopes/{envelope_id}",
+    response_model=PolicyEnvelopeSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Obtener sobre de póliza y sus documentos por ID",
+    description="Retorna el contenedor o sobre de póliza con todos los documentos vinculados.",
+)
+def get_envelope_by_id(
+    envelope_id: str,
+    repo: EnvelopeRepoDep,
+) -> PolicyEnvelopeSchema:
+    """Retrieve policy envelope by its UUID."""
+    try:
+        env = repo.get_envelope_by_id(envelope_id)
+        if not env:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Envelope with ID '{envelope_id}' not found.",
+            )
+        return PolicyEnvelopeSchema(**env)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to retrieve envelope by ID", envelope_id=envelope_id, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve envelope: {exc}",
+        ) from exc
+
+
+@router.get(
     "/{policy_id}",
     response_model=PolicyBasicInfoSchema,
     status_code=status.HTTP_200_OK,
-    summary="Get basic policy information by UUID",
-    description="Returns standard basic policy details for a given policy ID.",
+    summary="Obtener información básica de póliza por ID",
+    description="Retorna los detalles estándar básicos de una póliza registrada a partir de su identificador único UUID.",
 )
 def get_policy_by_id(
     policy_id: str,
