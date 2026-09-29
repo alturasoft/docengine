@@ -115,6 +115,13 @@ class RagPipelineService:
                     file_hash=file_hash,
                     policy_id=existing_policy_id,
                 )
+                envelope_id = None
+                effective_doc_type = (
+                    normalize_document_type(doc_type)
+                    or normalize_document_type(file_name)
+                    or DocumentType.POLIZA_PRINCIPAL.value
+                )
+
                 if self._envelope_repo:
                     effective_pol_num = pol_num
                     effective_ramo = pol_ramo
@@ -137,11 +144,6 @@ class RagPipelineService:
                         except Exception as e:
                             logger.debug("No se pudo obtener structured_data para idempotencia", error=str(e))
 
-                    effective_doc_type = (
-                        normalize_document_type(doc_type)
-                        or normalize_document_type(file_name)
-                        or DocumentType.POLIZA_PRINCIPAL.value
-                    )
 
                     if effective_pol_num:
                         try:
