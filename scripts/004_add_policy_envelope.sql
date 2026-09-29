@@ -22,3 +22,33 @@ ALTER TABLE policies
 CREATE INDEX IF NOT EXISTS idx_policies_envelope_id ON policies(envelope_id);
 CREATE INDEX IF NOT EXISTS idx_envelopes_numero_poliza ON policy_envelopes(numero_poliza);
 CREATE INDEX IF NOT EXISTS idx_envelopes_company_sigla ON policy_envelopes(company_sigla);
+
+-- 4. Retrocompatibilidad: Poblado retroactivo de sobres para pólizas existentes sin sobre
+INSERT INTO policy_envelopes (id, numero_poliza, company_sigla, ramo)
+SELECT 
+    gen_random_uuid(),
+    COALESCE(
+        psd.data->'datos_cabecera'->>'numero_poliza',
+        psd.data->>'numero_poliza'
+    ) AS numero_poliza,
+    p.company_sigla,
+    COALESCE(
+        psd.data->'datos_cabecera'->>'ramo',
+        psd.data->>'ramo'
+    ) AS ramo
+FROM policies p
+JOIN policy_structured_data psd ON p.id = psd.policy_id
+WHERE p.envelope_id IS NULL
+  AND COALESCE(psd.data->'datos_cabecera'->>'numero_poliza', psd.data->>'numero_poliza') IS NOT NULL
+ON CONFLICT (numero_poliza, company_sigla) DO NOTHING;
+
+UPDATE policies p
+SET 
+    envelope_id = pe.id,
+    tipo_documento = COALESCE(p.tipo_documento, 'POLIZA_PRINCIPAL')
+FROM policy_structured_data psd, policy_envelopes pe
+WHERE p.id = psd.policy_id
+  AND p.envelope_id IS NULL
+  AND COALESCE(psd.data->'datos_cabecera'->>'numero_poliza', psd.data->>'numero_poliza') = pe.numero_poliza
+  AND (p.company_sigla = pe.company_sigla OR (p.company_sigla IS NULL AND pe.company_sigla IS NULL));
+
