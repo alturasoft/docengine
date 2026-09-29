@@ -349,3 +349,79 @@ class TestPolicyEnvelopeEndpoints:
         assert res["results"][0]["rag_report"]["tipo_documento"] == "ANEXO"
 
 
+class TestRagPipelineEnvelopeIntegration:
+    """Test suite verifying RagPipelineService automatic envelope linking."""
+
+    def test_auto_creates_envelope_from_extracted_json(self):
+        from app.application.rag_pipeline_service import RagPipelineService
+
+        mock_chunker = MagicMock()
+        mock_chunker.chunk_markdown.return_value = []
+
+        mock_embedder = MagicMock()
+        mock_embedder.generate_embeddings_batch.return_value = []
+
+        mock_extractor = MagicMock()
+        mock_extractor.extract_structured_json.return_value = {
+            "datos_cabecera": {
+                "numero_poliza": "POL-AUTO-777",
+                "sigla_empresa": "CRI",
+                "ramo": "AUTOMOTOR",
+            },
+            "coberturas": [],
+        }
+
+        mock_repo = MagicMock()
+        mock_repo.policy_exists_by_hash.return_value = None
+        mock_repo.create_job.return_value = "job-123"
+        mock_repo.save_rag_policy_transactional.return_value = "pol-new-id"
+
+        mock_env_repo = MagicMock(spec=PgEnvelopeRepository)
+        mock_env_repo.get_or_create_envelope.return_value = "env-auto-uuid"
+
+        service = RagPipelineService(
+            chunking_service=mock_chunker,
+            embedding_service=mock_embedder,
+            structured_extractor=mock_extractor,
+            repository=mock_repo,
+            envelope_repository=mock_env_repo,
+        )
+
+        from pathlib import Path
+        result = ExtractionResult(
+            document_id="doc-auto-1",
+            status=ExtractionStatus.SUCCESS,
+            markdown="# Poliza 777",
+            json_data={},
+            metadata=DocumentMetadata(
+                filename="poliza_caratula.pdf",
+                source_path=Path("poliza_caratula.pdf"),
+                sha256="sha-auto-777",
+                page_count=2,
+                extraction_time_seconds=1.0,
+                docling_version="2.0",
+                tables_detected=0,
+                figures_detected=0,
+                headers_removed=0,
+                footers_removed=0,
+                ocr_used=False,
+                has_multi_column=False,
+                markdown_size_bytes=50,
+            ),
+        )
+
+        # Call WITHOUT numero_poliza (simulating user upload without manual input)
+        report = service.process_extraction_result(result)
+
+        assert report.envelope_id == "env-auto-uuid"
+        mock_env_repo.get_or_create_envelope.assert_called_once_with(
+            numero_poliza="POL-AUTO-777",
+            company_sigla="CRI",
+            ramo="AUTOMOTOR",
+        )
+        _, kwargs = mock_repo.save_rag_policy_transactional.call_args
+        assert kwargs["envelope_id"] == "env-auto-uuid"
+        assert kwargs["tipo_documento"] == DocumentType.POLIZA_PRINCIPAL.value
+
+
+

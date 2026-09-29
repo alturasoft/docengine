@@ -20,6 +20,7 @@ from app.application.chunking_service import ChunkingService
 from app.application.embedding_service import EmbeddingService
 from app.application.openai_structured_extractor import OpenAIStructuredExtractor
 from app.domain.models.document import ExtractionResult
+from app.domain.models.envelope import DocumentType, normalize_document_type
 from app.domain.models.rag_models import PolicyProcessingStats, RagProcessingReport
 from app.infrastructure.database.pg_envelope_repository import PgEnvelopeRepository
 from app.infrastructure.database.pg_rag_repository import PgRagRepository
@@ -114,23 +115,50 @@ class RagPipelineService:
                     file_hash=file_hash,
                     policy_id=existing_policy_id,
                 )
-                envelope_id = None
-                if pol_num and self._envelope_repo:
-                    try:
-                        envelope_id = self._envelope_repo.get_or_create_envelope(
-                            numero_poliza=pol_num,
-                            company_sigla=company_sigla,
-                            ramo=pol_ramo,
-                        )
-                        self._envelope_repo.link_policy_to_envelope(
-                            policy_id=existing_policy_id,
-                            envelope_id=envelope_id,
-                            tipo_documento=doc_type,
-                        )
-                        result.metadata.envelope_id = envelope_id
-                        result.metadata.tipo_documento = doc_type
-                    except Exception as env_exc:
-                        logger.warning("Error vinculando póliza duplicada a envelope", error=str(env_exc))
+                if self._envelope_repo:
+                    effective_pol_num = pol_num
+                    effective_ramo = pol_ramo
+                    effective_sigla = company_sigla
+                    if not effective_pol_num and hasattr(self._repo, "_db") and self._repo._db is not None:
+                        try:
+                            with self._repo._db.get_connection() as conn:
+                                with conn.cursor() as cur:
+                                    cur.execute(
+                                        "SELECT data FROM policy_structured_data WHERE policy_id = %s;",
+                                        (existing_policy_id,),
+                                    )
+                                    row = cur.fetchone()
+                                    if row and row[0]:
+                                        data_dict = row[0]
+                                        cabecera = data_dict.get("datos_cabecera", {}) if isinstance(data_dict, dict) else {}
+                                        effective_pol_num = cabecera.get("numero_poliza") or data_dict.get("numero_poliza")
+                                        effective_ramo = effective_ramo or cabecera.get("ramo") or data_dict.get("ramo")
+                                        effective_sigla = effective_sigla or cabecera.get("sigla_empresa") or data_dict.get("sigla_empresa")
+                        except Exception as e:
+                            logger.debug("No se pudo obtener structured_data para idempotencia", error=str(e))
+
+                    effective_doc_type = (
+                        normalize_document_type(doc_type)
+                        or normalize_document_type(file_name)
+                        or DocumentType.POLIZA_PRINCIPAL.value
+                    )
+
+                    if effective_pol_num:
+                        try:
+                            envelope_id = self._envelope_repo.get_or_create_envelope(
+                                numero_poliza=effective_pol_num,
+                                company_sigla=effective_sigla,
+                                ramo=effective_ramo,
+                            )
+                            self._envelope_repo.link_policy_to_envelope(
+                                policy_id=existing_policy_id,
+                                envelope_id=envelope_id,
+                                tipo_documento=effective_doc_type,
+                            )
+                            result.metadata.envelope_id = envelope_id
+                            result.metadata.tipo_documento = effective_doc_type
+                        except Exception as env_exc:
+                            logger.warning("Error vinculando póliza duplicada a envelope", error=str(env_exc))
 
                 job_id = self._repo.create_job(file_name)
                 self._repo.update_job(
@@ -147,7 +175,7 @@ class RagPipelineService:
                     job_id=job_id,
                     processing_time_seconds=time.perf_counter() - start_time,
                     envelope_id=envelope_id,
-                    tipo_documento=doc_type,
+                    tipo_documento=effective_doc_type,
                 )
 
             # Create processing job record
@@ -313,20 +341,38 @@ class RagPipelineService:
                 memory_peak_mb=mem_peak,
             )
 
-            # 5. Policy Envelope & Transactional PostgreSQL Persistence
+            extracted_policy_num = (
+                structured_json.get("datos_cabecera", {}).get("numero_poliza")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("numero_poliza")
+            )
+            extracted_sigla = (
+                structured_json.get("datos_cabecera", {}).get("sigla_empresa")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("sigla_empresa")
+            )
+            extracted_ramo = (
+                structured_json.get("datos_cabecera", {}).get("ramo")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("ramo")
+            )
+
             effective_pol_num = pol_num or extracted_policy_num
-            effective_doc_type = doc_type
-            if not effective_doc_type and file_name:
-                from app.domain.models.envelope import normalize_document_type  # noqa: PLC0415
-                effective_doc_type = normalize_document_type(file_name)
+            effective_sigla = company_sigla or extracted_sigla or getattr(result.metadata, "company_sigla", None)
+            effective_ramo = pol_ramo or extracted_ramo or getattr(result.metadata, "ramo", None)
+            effective_doc_type = (
+                normalize_document_type(doc_type)
+                or normalize_document_type(file_name)
+                or DocumentType.POLIZA_PRINCIPAL.value
+            )
 
             envelope_id = None
             if effective_pol_num and self._envelope_repo:
                 try:
                     envelope_id = self._envelope_repo.get_or_create_envelope(
                         numero_poliza=effective_pol_num,
-                        company_sigla=company_sigla,
-                        ramo=pol_ramo,
+                        company_sigla=effective_sigla,
+                        ramo=effective_ramo,
                     )
                 except Exception as env_exc:
                     logger.warning("Error creando o buscando envelope", error=str(env_exc))
@@ -341,7 +387,7 @@ class RagPipelineService:
             policy_id = self._repo.save_rag_policy_transactional(
                 file_name=file_name,
                 file_hash=file_hash,
-                company_sigla=company_sigla,
+                company_sigla=effective_sigla,
                 total_pages=result.metadata.page_count,
                 file_size_bytes=result.metadata.markdown_size_bytes,
                 markdown_content=result.markdown,
@@ -380,14 +426,14 @@ class RagPipelineService:
                 policy_id=policy_id,
                 file_name=file_name,
                 file_hash=file_hash,
-                company_sigla=company_sigla,
+                company_sigla=effective_sigla,
                 chunks_created=len(chunks_with_embeddings),
                 embedding_dim=1024,
                 skipped_duplicate=False,
                 processing_time_seconds=elapsed,
                 job_id=job_id,
                 envelope_id=envelope_id,
-                tipo_documento=doc_type,
+                tipo_documento=effective_doc_type,
             )
 
         except Exception as e:
