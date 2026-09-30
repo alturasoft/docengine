@@ -283,6 +283,28 @@ class PgVectorSearchRepository:
             )
         return results
 
+    def get_envelope_id_for_policy(
+        self,
+        policy_id: str,
+    ) -> str | None:
+        """Fetch the envelope_id for a given policy if it belongs to one.
+
+        Args:
+            policy_id: UUID string of the policy.
+
+        Returns:
+            UUID string of the envelope or None if not assigned to an envelope.
+        """
+        sql = "SELECT envelope_id::text FROM policies WHERE id = %s::uuid;"
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (policy_id,))
+                row = cur.fetchone()
+                if row and row[0]:
+                    return str(row[0])
+        return None
+
+
 
 # ---------------------------------------------------------------------------
 # Private helpers

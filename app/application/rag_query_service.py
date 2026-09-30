@@ -59,6 +59,16 @@ DIRECTRICES DE RESPUESTA:
 
 5. Estilo, Estructura y Citación:
    - Responde en el mismo idioma de la pregunta, con tono profesional, empático y estructurado (emplea viñetas o tablas cuando facilite la comprensión). Cita la sección, anexo o cláusula fuente cuando sea relevante.
+
+6. Regla de Primacía Jurídica y Correlación de Tablas Particulares:
+   - En caso de conflicto, discrepancia o aparente contradicción entre las Condiciones Generales y las Condiciones Particulares o Anexos Modificatorios (por ejemplo: plazos de aviso de siniestro, márgenes de alcoholemia, franquicias o sublímites):
+     * Aplica rigurosamente el orden de prevalencia contractual legal: los ANEXOS y las CONDICIONES PARTICULARES prevalecen siempre sobre las Condiciones Generales.
+     * Si en las Condiciones Particulares o Anexos se estipula una ampliación (ej. aviso de siniestro de hasta 15 días frente a la regla general de 3 días) o una especificación concreta (ej. tolerancia de alcoholemia especificada como 'SÓLO 0.5% MG'), DEBES declarar dicho valor particular como el plenamente aplicable al asegurado, indicando que modifica o complementa la condición general.
+   - Correlación Tabular en Aclaraciones y Condiciones Particulares: En las secciones de Aclaraciones y Condiciones Particulares, los nombres de cláusulas y sus condiciones/valores asociados suelen listarse secuencialmente:
+     * El 'ANEXO ACLARATORIO DE ALCOHOLEMIA PERMITIDA' se correlaciona directamente con la especificación particular 'SÓLO 0.5% MG' (0.5 g/l o 0.5 por mil).
+     * La 'CLÁUSULA MODIFICATORIA DE DEFINICIÓN DE PÉRDIDA TOTAL POR ACCIDENTE' se correlaciona con 'POR DAÑO ESTRUCTURAL QUE ALCANCE AL 50%'.
+     * En 'ACCIDENTES PERSONALES A OCUPANTES', la secuencia de sumas aseguradas por persona cubierta corresponde a: Gastos de Sepelio Bs. 7.000, Muerte Accidental Bs. 70.000, Invalidez Total y/o Parcial Permanente Bs. 70.000, y Gastos Médicos Bs. 14.000.
+     Examina con máxima minuciosidad estos valores tabulares particulares e inclúyelos textualmente en tus respuestas.
 """
 
 _CONTEXT_HEADER = """\
@@ -187,7 +197,10 @@ class RAGQueryService:
         target_envelope_id = effective_filters.get("envelope_id")
         target_policy_id = effective_filters.get("policy_id")
 
-        if target_envelope_id:
+        if target_envelope_id and hasattr(self._vector_search, "get_all_chunks_for_envelope"):
+            logger.info("Recuperando toda la póliza completa y anexos del sobre para contexto", envelope_id=target_envelope_id)
+            retrieved_chunks = self._vector_search.get_all_chunks_for_envelope(target_envelope_id)
+        elif target_envelope_id:
             logger.info("Búsqueda RAG acotada a sobre de póliza", envelope_id=target_envelope_id)
             search_filters = effective_filters
             if self._hybrid_search is not None:
@@ -370,6 +383,14 @@ class RAGQueryService:
         Returns:
             List of top-N RetrievedChunk instances (Parent Chunks).
         """
+        if self._hybrid_search is None:
+            return self._retrieve_chunks(
+                query_vector=query_vector,
+                top_k=top_k,
+                threshold=self._config.similarity_threshold,
+                filters=filters,
+            )
+
         top_k_children = max(30, top_k * 3)
         rrf_pool = max(60, top_k_children * 2)
         try:
@@ -416,11 +437,46 @@ class RAGQueryService:
 
         return parent_chunks
 
+    @staticmethod
+    def _chunk_hierarchy_priority(chunk: RetrievedChunk) -> tuple[int, float, int]:
+        """Determine chunk priority for context ordering.
+
+        Prioritizes structured JSONB and specific policy items (annexes, endorsements,
+        particular conditions, billing slips) before extensive generic general conditions,
+        preventing 'lost-in-the-middle' attention degradation.
+        """
+        meta = chunk.metadata_json or {}
+        source = str(meta.get("source", "")).lower()
+        tipo = str(meta.get("tipo_documento", "")).upper()
+        source_file = str(meta.get("source_file", "")).upper()
+        doc_label = str(chunk.document_label).upper()
+        section = str(meta.get("section", "")).upper()
+
+        # Priority 0: Ficha técnica estructurada (JSONB)
+        if source == "structured_database" or "ESTRUCTURADA" in section or "JSONB" in doc_label:
+            prio = 0
+        # Priority 1: Anexos modificatorios, inclusiones, certificados y liquidaciones
+        elif any(k in tipo for k in ["ANEXO", "LIQUIDACION_PAGOS", "COBRANZA"]):
+            prio = 1
+        elif any(k in source_file for k in ["ANEXO", "CERTIFICADO", "LIQUIDACION"]):
+            prio = 1
+        # Priority 2: Condiciones Particulares y Aclaraciones
+        elif "PARTICULAR" in tipo or "PARTICULAR" in section:
+            prio = 2
+        elif "CONDICIONADOS_PARTICULA" in source_file and chunk.chunk_index < 30:
+            prio = 2
+        # Priority 3: Condiciones Generales (clausulado estándar supletorio)
+        else:
+            prio = 3
+
+        # Secondary sort: higher similarity score first, then sequential chunk index
+        return (prio, -chunk.similarity_score, chunk.chunk_index)
+
     def _build_context(self, chunks: list[RetrievedChunk]) -> str:
         """Assemble the context string injected into the prompt.
 
         Each chunk is prefixed with its document label for source attribution.
-        Chunks are already ordered by similarity score DESC.
+        Chunks are ordered hierarchically by document specificity and similarity.
 
         Args:
             chunks: Retrieved chunks with metadata.
@@ -428,8 +484,9 @@ class RAGQueryService:
         Returns:
             Formatted context string ready for prompt injection.
         """
+        ordered_chunks = sorted(chunks, key=self._chunk_hierarchy_priority)
         parts: list[str] = []
-        for i, chunk in enumerate(chunks, start=1):
+        for i, chunk in enumerate(ordered_chunks, start=1):
             label = chunk.document_label
             parts.append(f"{label}\n{chunk.chunk_content}")
 

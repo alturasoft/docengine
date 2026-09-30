@@ -121,3 +121,43 @@ class TestRAGQueryServicePipeline:
         assert len(response.sources) == 10
         assert response.chunks_used == 10
         assert response.answer == "Respuesta de prueba"
+
+    def test_query_retrieves_entire_envelope_when_envelope_id_filtered(self):
+        """When envelope_id is in filters, RAGQueryService fetches ALL chunks of the envelope."""
+        mock_embedder = MagicMock()
+        mock_embedder.generate_embeddings_for_chunks.return_value = [
+            MagicMock(embedding=[0.1] * 1024)
+        ]
+        mock_config = RAGQueryConfig()
+        mock_vector = MagicMock()
+
+        all_envelope_chunks = [
+            RetrievedChunk(
+                chunk_id=f"chunk-{i}",
+                policy_id=f"pol-{i % 2}",
+                chunk_index=i,
+                chunk_content=f"Anexo o Cláusula {i}",
+                metadata_json={},
+                similarity_score=1.0,
+            )
+            for i in range(12)
+        ]
+        mock_vector.get_all_chunks_for_envelope.return_value = all_envelope_chunks
+
+        service = RAGQueryService(
+            embedding_service=mock_embedder,
+            vector_search=mock_vector,
+            config=mock_config,
+        )
+
+        with patch.object(service, "_generate_answer", return_value="Respuesta sobre sobre completo"):
+            response = service.query(
+                question="¿Cuáles son los bienes asegurados?",
+                filters={"envelope_id": "test-env-uuid"},
+            )
+
+        mock_vector.get_all_chunks_for_envelope.assert_called_once_with("test-env-uuid")
+        assert len(response.sources) == 12
+        assert response.chunks_used == 12
+        assert response.answer == "Respuesta sobre sobre completo"
+
