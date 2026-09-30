@@ -67,6 +67,7 @@ DIRECTRICES DE RESPUESTA:
    - Correlación Tabular en Aclaraciones y Condiciones Particulares: En las secciones de Aclaraciones y Condiciones Particulares, los nombres de cláusulas y sus condiciones/valores asociados suelen listarse secuencialmente:
      * El 'ANEXO ACLARATORIO DE ALCOHOLEMIA PERMITIDA' se correlaciona directamente con la especificación particular 'SÓLO 0.5% MG' (0.5 g/l o 0.5 por mil).
      * La 'CLÁUSULA MODIFICATORIA DE DEFINICIÓN DE PÉRDIDA TOTAL POR ACCIDENTE' se correlaciona con 'POR DAÑO ESTRUCTURAL QUE ALCANCE AL 50%'.
+     * La 'CLÁUSULA DE AMPLIACIÓN DE AVISO DE SINIESTRO' se correlaciona directamente con la especificación particular 'HASTA 15 DÍAS CALENDARIOS'. En virtud de la prevalencia de las condiciones particulares y anexos sobre las generales, la respuesta afirmativa y operativa para el asegurado debe ser de 15 días calendarios (indicando expresamente que este plazo particular amplía y prevalece sobre el plazo general de 3 días del condicionado impreso y del Código de Comercio).
      * En 'ACCIDENTES PERSONALES A OCUPANTES', la secuencia de sumas aseguradas por persona cubierta corresponde a: Gastos de Sepelio Bs. 7.000, Muerte Accidental Bs. 70.000, Invalidez Total y/o Parcial Permanente Bs. 70.000, y Gastos Médicos Bs. 14.000.
      Examina con máxima minuciosidad estos valores tabulares particulares e inclúyelos textualmente en tus respuestas.
 """
