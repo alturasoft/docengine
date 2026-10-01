@@ -223,6 +223,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         async def root_to_chat() -> FileResponse:
             return FileResponse(webui_dir / "chat.html")
 
+        @app.get("/ingesta", include_in_schema=False)
+        @app.get("/ingesta.html", include_in_schema=False)
+        async def root_to_ingesta() -> FileResponse:
+            return FileResponse(webui_dir / "ingesta.html")
+
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:

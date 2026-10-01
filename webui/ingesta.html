@@ -1,0 +1,2181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocEngine — Console & Test Studio</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Marked Library for rendering Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --bg-card-border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #6366f1;
+      --accent-primary-hover: #4f46e5;
+      --accent-success: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    body.light-theme {
+      --bg-dark: #f8fafc;
+      --bg-card: rgba(255, 255, 255, 0.88);
+      --bg-card-border: rgba(0, 0, 0, 0.1);
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
+    }
+
+    body.light-theme header {
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom-color: rgba(0, 0, 0, 0.08);
+    }
+
+    body.light-theme .logo-text h1 {
+      background: linear-gradient(to right, #0f172a, #334155);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    body.light-theme .server-config {
+      background: rgba(241, 245, 249, 0.9);
+      border-color: rgba(0, 0, 0, 0.08);
+    }
+
+    body.light-theme .server-input-group input {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .form-control {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .drop-zone {
+      background: rgba(241, 245, 249, 0.8);
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+
+    body.light-theme .markdown-container {
+      background: #f1f5f9;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .markdown-container h1,
+    body.light-theme .markdown-container h2,
+    body.light-theme .markdown-container h3 {
+      color: #0f172a;
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+
+    body.light-theme .markdown-container pre {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    body.light-theme .nav-tabs {
+      background: rgba(241, 245, 249, 0.8);
+      border-color: rgba(0, 0, 0, 0.08);
+    }
+
+    body.light-theme .modal-content {
+      background: #ffffff;
+      color: #0f172a;
+    }
+
+    body.light-theme .modal-header {
+      background: #f8fafc;
+    }
+
+    body.light-theme .modal-toolbar {
+      background: #f1f5f9;
+    }
+
+    body.light-theme .modal-toolbar input[type="text"] {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+
+    body.light-theme .log-console {
+      background: #0f172a;
+      color: #cbd5e1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* Header */
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--bg-card-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+    }
+
+    .header-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #6366f1, #10b981);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      color: white;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .logo-text h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo-text span {
+      font-size: 0.75rem;
+      color: var(--accent-primary);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Server Config Area */
+    .server-config {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 0.4rem 0.6rem 0.4rem 0.8rem;
+      border-radius: 30px;
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .server-config label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .server-input-group {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .server-input-group input {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      width: 210px;
+    }
+
+    .server-input-group input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .btn-chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-muted);
+      padding: 0.3rem 0.6rem;
+      border-radius: 15px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-chip:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--accent-primary);
+      color: white;
+    }
+
+    /* Health Status Indicator */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--accent-success);
+    }
+
+    .status-badge.offline {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+      color: var(--accent-danger);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* Main Content Container */
+    main {
+      max-width: 1400px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      flex: 1;
+      width: 100%;
+    }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      padding: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      backdrop-filter: blur(8px);
+    }
+
+    .metric-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(99, 102, 241, 0.12);
+      color: var(--accent-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .metric-data h4 {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric-data .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 0.2rem;
+    }
+
+    /* Action & Workspace Grid */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Card Panels */
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--bg-card-border);
+    }
+
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-main);
+    }
+
+    /* Tabs Component */
+    .nav-tabs {
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(15, 23, 42, 0.5);
+      padding: 0.3rem;
+      border-radius: var(--radius-sm);
+      margin-bottom: 1.25rem;
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Upload Drag & Drop Zone */
+    .drop-zone {
+      border: 2px dashed rgba(99, 102, 241, 0.4);
+      border-radius: var(--radius-md);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.3);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent-primary);
+      background: rgba(99, 102, 241, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      color: var(--accent-primary);
+      margin-bottom: 1rem;
+    }
+
+    .drop-zone p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .drop-zone span {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .file-input { display: none; }
+
+    .selected-file-info {
+      margin-top: 1rem;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--bg-card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+    }
+
+    .file-details {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      overflow: hidden;
+    }
+
+    .file-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+
+    /* Inputs & Buttons */
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+    }
+
+    .form-control {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.65rem 0.85rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: 0.88rem;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent-primary), #4f46e5);
+      color: white;
+      border: none;
+      padding: 0.8rem 1.2rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Loader / Progress */
+    .loader-container {
+      display: none;
+      text-align: center;
+      padding: 2rem 1rem;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(99, 102, 241, 0.2);
+      border-top-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1.25rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .progress-bar-wrapper {
+      width: 100%;
+      max-width: 580px;
+      margin: 0.75rem auto 0.5rem;
+      background: rgba(15, 23, 42, 0.4);
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6366f1, #818cf8, #10b981);
+      border-radius: 999px;
+      transition: width 0.35s ease-out;
+      box-shadow: 0 0 14px rgba(99, 102, 241, 0.5);
+    }
+
+    .progress-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      font-family: var(--font-mono);
+    }
+
+    .progress-stage-text {
+      font-size: 0.84rem;
+      color: #a5b4fc;
+      font-weight: 500;
+      margin: 0.6rem auto 0;
+      max-width: 580px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.4rem 0.8rem;
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+
+    /* Results Area */
+    .result-empty {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-dim);
+    }
+
+    .result-empty i {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.8rem;
+      margin-bottom: 1.5rem;
+      background: rgba(15, 23, 42, 0.5);
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--bg-card-border);
+    }
+
+    .meta-item {
+      font-size: 0.8rem;
+    }
+
+    .meta-item .label {
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .meta-item .val {
+      font-weight: 600;
+      color: var(--text-main);
+      margin-top: 0.15rem;
+      font-family: var(--font-mono);
+    }
+
+    /* Output View / Markdown Container */
+    .view-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .markdown-container {
+      background: #090d16;
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      max-height: 600px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .markdown-container pre {
+      background: rgba(15, 23, 42, 0.8);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      margin: 1rem 0;
+    }
+
+    .markdown-container code {
+      font-family: var(--font-mono);
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+
+    .markdown-container table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+    }
+
+    .markdown-container th, .markdown-container td {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.6rem 0.8rem;
+      text-align: left;
+    }
+
+    .markdown-container th {
+      background: rgba(30, 41, 59, 0.8);
+      color: var(--accent-primary);
+    }
+
+    .markdown-container h1, .markdown-container h2, .markdown-container h3 {
+      color: #f1f5f9;
+      margin: 1.2rem 0 0.6rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Batch Table */
+    .batch-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+      margin-top: 1rem;
+    }
+
+    .batch-table th, .batch-table td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--bg-card-border);
+      text-align: left;
+    }
+
+    .batch-table th {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .badge-status {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-success { background: rgba(16, 185, 129, 0.2); color: var(--accent-success); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--accent-warning); }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: var(--accent-danger); }
+
+    /* Log Console Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .modal-content {
+      background: #0f172a;
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 1100px;
+      height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      background: rgba(30, 41, 59, 0.5);
+      border-bottom: 1px solid var(--bg-card-border);
+    }
+
+    .modal-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.75rem 1.5rem;
+      background: rgba(15, 23, 42, 0.8);
+      border-bottom: 1px solid var(--bg-card-border);
+      flex-wrap: wrap;
+    }
+
+    .modal-toolbar input[type="text"] {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .log-console {
+      flex: 1;
+      background: #050811;
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.55;
+    }
+
+    .log-line { display: block; margin-bottom: 0.3rem; font-family: var(--font-mono); font-size: 0.81rem; }
+    .log-line.info { color: #94a3b8; }
+    .log-line.warn { color: #facc15; }
+    .log-line.error { color: #f87171; background: rgba(239, 68, 68, 0.08); padding: 0.2rem 0.4rem; border-radius: 4px; border-left: 3px solid #ef4444; }
+    .log-line.success { color: #34d399; }
+    
+    .log-tag { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 4px; font-weight: 600; font-size: 0.72rem; margin-right: 0.35rem; font-family: var(--font-sans); }
+    .log-tag-docling { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+    .log-tag-skill { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .log-tag-chunking { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .log-tag-embeddings { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .log-tag-json { background: rgba(236, 72, 153, 0.2); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.35); }
+    .log-tag-bd { background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); }
+    .log-tag-rag { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.35); }
+    .log-tag-upload { background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.35); }
+    .log-tag-pipeline { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.35); }
+    .log-tag-error { background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: bold; }
+    .log-tag-default { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.35); }
+
+    .log-timestamp { color: var(--text-dim); font-size: 0.74rem; margin-right: 0.4rem; }
+    .log-key-val { color: #94a3b8; font-size: 0.78rem; }
+    .log-key { color: #64748b; }
+    .log-val { color: #e2e8f0; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="logo-area">
+        <div class="logo-icon"><i class="fa-solid fa-file-contract"></i></div>
+        <div class="logo-text">
+          <h1>DocEngine Studio</h1>
+          <span>Bolivian Insurance Extraction Engine</span>
+        </div>
+      </div>
+
+      <!-- Log Console Button, Theme Toggle & Health Status -->
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <button class="btn-chip" id="themeToggleBtn" style="padding: 0.4rem 0.65rem;" onclick="toggleTheme()" title="Cambiar Tema (Oscuro / Claro)">
+          <i class="fa-solid fa-sun" id="themeIcon" style="color: #f59e0b; font-size: 0.95rem;"></i>
+        </button>
+        <a href="/" class="btn-chip" style="background: rgba(16, 185, 129, 0.25); border-color: var(--accent-success); color: white; font-weight: 600; padding: 0.4rem 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.45rem;" title="Ir al Asistente / Chat RAG">
+          <i class="fa-solid fa-comments" style="color: #34d399;"></i> Chat RAG
+        </a>
+        <button class="btn-chip" style="background: rgba(99, 102, 241, 0.25); border-color: var(--accent-primary); color: white; font-weight: 600; padding: 0.4rem 0.8rem;" onclick="openLogModal()">
+          <i class="fa-solid fa-terminal" style="color: #a5b4fc;"></i> Logs del Servidor
+        </button>
+        <div id="healthBadge" class="status-badge">
+          <div class="status-dot"></div>
+          <span id="healthText">Conectando...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+
+  <!-- Main Content -->
+  <main>
+
+    <!-- Metrics Dashboard -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+      <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+        <i class="fa-solid fa-chart-simple" style="color: var(--accent-primary);"></i> Estadísticas de Extracción
+      </span>
+      <button class="btn-chip" style="font-size: 0.72rem; padding: 0.2rem 0.55rem;" onclick="resetServerMetrics()" title="Reiniciar contadores de estadísticas a 0">
+        <i class="fa-solid fa-rotate-left"></i> Reiniciar Métricas
+      </button>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-icon"><i class="fa-solid fa-file-lines"></i></div>
+        <div class="metric-data">
+          <h4>Total Extraídos</h4>
+          <div class="value" id="mTotal">0</div>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon" style="color: var(--accent-success); background: rgba(16, 185, 129, 0.12);"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="metric-data">
+          <h4>Tasa de Éxito</h4>
+          <div class="value" id="mSuccessRate">100%</div>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon" style="color: #3b82f6; background: rgba(59, 130, 246, 0.12);"><i class="fa-solid fa-table"></i></div>
+        <div class="metric-data">
+          <h4>Tablas Detectadas</h4>
+          <div class="value" id="mTables">0</div>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon" style="color: #a855f7; background: rgba(168, 85, 247, 0.12);"><i class="fa-solid fa-stopwatch"></i></div>
+        <div class="metric-data">
+          <h4>Tiempo Promedio</h4>
+          <div class="value" id="mAvgTime">0.0s</div>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon" style="color: var(--accent-warning); background: rgba(245, 158, 11, 0.12);"><i class="fa-solid fa-microchip"></i></div>
+        <div class="metric-data">
+          <h4>Memoria RAM</h4>
+          <div class="value" id="mMemory">0 MB</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workspace Grid -->
+    <div class="workspace-grid">
+
+      <!-- Left Panel: Execution Controls -->
+      <div class="panel">
+        <!-- Company Selector (Mandatory) -->
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label style="font-weight: 600; color: var(--text-main); display: flex; align-items: center; justify-content: space-between;">
+            <span><i class="fa-solid fa-building" style="color: var(--accent-primary);"></i> Empresa Aseguradora <span style="color: var(--accent-danger);">*</span></span>
+            <span style="font-size: 0.7rem; color: var(--accent-warning); font-weight: 500;">Obligatorio</span>
+          </label>
+          <select id="companySelect" class="form-control" style="border-color: rgba(99, 102, 241, 0.4); font-weight: 500;" required>
+            <option value="" disabled selected>-- Selecciona una Empresa --</option>
+            <option value="ALI">ALI — ALIANZA CIA DE SEGUROS Y REASEGUROS SA</option>
+            <option value="ALV">ALV — ALIANZA VIDA SEGUROS Y REASEGUROS S.A</option>
+            <option value="BIS">BIS — BISA SEGUROS Y REASEGUROS</option>
+            <option value="FOV">FOV — COMPAÑIA DE SEGUROS DE VIDA FORTALEZA S.A</option>
+            <option value="CRI">CRI — CREDINFORM INTERNATIONAL S.A</option>
+            <option value="CRG">CRG — CREDISEGURO S.A. SEGUROS GENERALES</option>
+            <option value="CRP">CRP — CREDISEGURO S.A. SEGUROS PERSONALES</option>
+            <option value="FOR">FOR — FORTALEZA COMPAÑIA DE SEGUROS Y REASEGUROS</option>
+            <option value="LBC">LBC — LA BOLIVIANA CIACRUZ DE SEGUROS Y REASEGUROS</option>
+            <option value="LBP">LBP — LA BOLIVIANA CIACRUZ SEGUROS PERSONALES</option>
+            <option value="VIT">VIT — LA VITALICIA DE SEGUROS Y REASEGUROS</option>
+            <option value="MSC">MSC — MERCANTIL SANTA CRUZ SEGUROS Y REASEGUROS GENERALES S.A</option>
+            <option value="NPF">NPF — NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A</option>
+            <option value="NVS">NVS — NACIONAL SEGUROS VIDA Y SALUD S.A</option>
+            <option value="UNI">UNI — SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A</option>
+            <option value="UBI">UBI — UNIBIENES SEGUROS Y REASEGUROS</option>
+          </select>
+        </div>
+
+        <!-- Policy Envelope Linking Card (Optional) -->
+        <div id="envelopeSection" style="margin-bottom: 1.25rem; padding: 0.95rem; background: rgba(15, 23, 42, 0.45); border: 1px solid var(--bg-card-border); border-radius: var(--radius-sm);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 0.45rem;">
+              <i class="fa-solid fa-folder-tree" style="color: var(--accent-primary);"></i> Vinculación a Póliza <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal;">(Opcional)</span>
+            </span>
+            <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 4px;">SOBRE DIGITAL</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem;">
+            <div>
+              <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+                <i class="fa-solid fa-hashtag" style="font-size: 0.68rem;"></i> N° de Póliza
+              </label>
+              <input type="text" id="envelopeNumeroPoliza" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Ej. P2000111588" autocomplete="off">
+            </div>
+            <div>
+              <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+                <i class="fa-solid fa-layer-group" style="font-size: 0.68rem;"></i> Ramo
+              </label>
+              <select id="envelopeRamo" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;">
+                <option value="">-- No especificado --</option>
+                <option value="ACCIDENTES PERSONALES">ACCIDENTES PERSONALES</option>
+                <option value="AERONAVEGACIÓN">AERONAVEGACIÓN</option>
+                <option value="ASISTENCIA MÉDICA Y SALUD">ASISTENCIA MÉDICA Y SALUD</option>
+                <option value="AUTOMOTORES">AUTOMOTORES</option>
+                <option value="CAUCIÓN Y GARANTÍAS">CAUCIÓN Y GARANTÍAS</option>
+                <option value="CIBERNÉTICO Y PROTECCIÓN DIGITAL">CIBERNÉTICO Y PROTECCIÓN DIGITAL</option>
+                <option value="DESGRAVAMEN">DESGRAVAMEN</option>
+                <option value="FIDELIDAD Y RIESGOS FINANCIEROS (3D / BANKERS BLANKET)">FIDELIDAD Y RIESGOS FINANCIEROS (3D / BANKERS BLANKET)</option>
+                <option value="INCENDIO Y MULTIRRIESGO">INCENDIO Y MULTIRRIESGO</option>
+                <option value="MARÍTIMO Y EMBARCACIONES">MARÍTIMO Y EMBARCACIONES</option>
+                <option value="RAMOS TÉCNICOS Y DE INGENIERÍA">RAMOS TÉCNICOS Y DE INGENIERÍA</option>
+                <option value="RESPONSABILIDAD CIVIL">RESPONSABILIDAD CIVIL</option>
+                <option value="SEPELIO">SEPELIO</option>
+                <option value="TRANSPORTE DE MERCANCÍAS">TRANSPORTE DE MERCANCÍAS</option>
+                <option value="VIDA">VIDA</option>
+                <option value="OTROS Y MISCELÁNEOS">OTROS Y MISCELÁNEOS</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+              <i class="fa-solid fa-file-contract" style="font-size: 0.68rem;"></i> Tipo de Documento
+            </label>
+            <select id="envelopeTipoDocumento" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;">
+              <option value="">-- No especificado (Auto-detectar) --</option>
+              <option value="CONDICIONADO_GENERAL">Condicionado General</option>
+              <option value="CONDICIONADO_PARTICULAR">Condicionado Particular</option>
+              <option value="LIQUIDACION_PAGOS">Liquidación / Plan de Pagos</option>
+              <option value="ANEXO">Anexo</option>
+              <option value="POLIZA_PRINCIPAL">Póliza Principal / Carátula</option>
+              <option value="ENDOSO">Endoso</option>
+              <option value="CERTIFICADO">Certificado de Cobertura</option>
+              <option value="DECLARACION_INDIVIDUAL">Declaración Individual</option>
+              <option value="OTRO">Otro documento</option>
+            </select>
+          </div>
+          <div style="margin-top: 0.45rem; font-size: 0.7rem; color: var(--text-dim); line-height: 1.35;">
+            <i class="fa-solid fa-circle-info" style="color: var(--accent-primary);"></i> Permite agrupar varios archivos (condicionado general, particular, liquidación) bajo una misma póliza.
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+          <button class="tab-btn active" onclick="switchTab('upload')"><i class="fa-solid fa-upload"></i> Subir PDF</button>
+          <button class="tab-btn" onclick="switchTab('url')"><i class="fa-solid fa-link"></i> URL</button>
+          <button class="tab-btn" onclick="switchTab('folder')"><i class="fa-solid fa-folder-open"></i> Carpeta</button>
+        </div>
+
+        <!-- Tab 1: File Upload -->
+        <div id="tabUpload" class="tab-content active">
+          <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+            <p>Arrastra tu póliza PDF aquí o haz clic para seleccionar</p>
+            <span>Archivos soportados: .pdf (Máx 200MB)</span>
+            <input type="file" id="fileInput" class="file-input" accept=".pdf">
+          </div>
+
+          <div id="selectedFileInfo" class="selected-file-info" style="display: none;">
+            <div class="file-details">
+              <i class="fa-solid fa-file-pdf" style="color: #ef4444; font-size: 1.2rem;"></i>
+              <div>
+                <div class="file-name" id="selectedFileName">documento.pdf</div>
+                <div style="font-size: 0.72rem; color: var(--text-dim);" id="selectedFileSize">0 KB</div>
+              </div>
+            </div>
+            <button class="btn-chip" onclick="clearSelectedFile()"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+
+          <div style="margin-top: 1.25rem;">
+            <button class="btn-primary" id="btnExtractFile" onclick="processFileUpload()" disabled>
+              <i class="fa-solid fa-bolt"></i> Extraer PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Extract URL -->
+        <div id="tabUrl" class="tab-content">
+          <div class="form-group">
+            <label><i class="fa-solid fa-globe"></i> URL del Documento PDF</label>
+            <input type="url" id="urlInput" class="form-control" placeholder="https://ejemplo.com/poliza.pdf">
+          </div>
+          <button class="btn-primary" id="btnExtractUrl" onclick="processUrlExtract()">
+            <i class="fa-solid fa-bolt"></i> Procesar URL
+          </button>
+        </div>
+
+        <!-- Tab 3: Extract Folder -->
+        <div id="tabFolder" class="tab-content">
+          <div class="form-group">
+            <label><i class="fa-solid fa-folder-tree"></i> Ruta de Carpeta en Servidor</label>
+            <input type="text" id="folderInput" class="form-control" placeholder="samples" value="samples">
+          </div>
+          <button class="btn-primary" id="btnExtractFolder" onclick="processFolderExtract()">
+            <i class="fa-solid fa-folder-bolt"></i> Procesar Carpeta Batch
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Process Loader & Results -->
+      <div class="right-column" style="display: flex; flex-direction: column; gap: 1.5rem; min-width: 0;">
+
+        <!-- Loader / Indicador de Progreso del Proceso -->
+        <div id="loader" class="loader-container panel" style="display: none;">
+          <div class="spinner"></div>
+          
+          <!-- Línea 1: Mensaje de archivo / acción actual -->
+          <h4 style="font-size: 0.98rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.75rem;" id="loaderTitle">Procesando documento...</h4>
+          
+          <!-- Línea 2: Barra de progreso con porcentaje -->
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar-container">
+              <div id="loaderProgressBar" class="progress-bar-fill"></div>
+            </div>
+            <div class="progress-bar-header">
+              <span id="loaderStageStep" style="color: var(--accent-primary); font-weight: 600;">Paso 1 de 4</span>
+              <span id="loaderPercentText" style="color: var(--text-main); font-weight: 600;">0%</span>
+            </div>
+          </div>
+
+          <!-- Línea 3: Mensaje detallado del estado/fase actual del proceso -->
+          <div id="loaderStageMessage" class="progress-stage-text">
+            <i class="fa-solid fa-gear fa-spin" style="font-size: 0.85rem; color: var(--accent-primary);"></i>
+            <span id="loaderStageDetail">Inicializando motor de extracción...</span>
+          </div>
+
+          <!-- Inline Realtime Log Box -->
+          <div id="loaderLiveLogBox" style="margin-top: 0.75rem; width: 100%; max-width: 580px; margin-left: auto; margin-right: auto; max-height: 100px; background: rgba(5, 8, 17, 0.9); border: 1px solid var(--bg-card-border); border-radius: 6px; padding: 0.5rem 0.75rem; font-family: var(--font-mono); font-size: 0.73rem; color: #94a3b8; overflow-y: auto; text-align: left; line-height: 1.45;">
+            <div id="loaderLiveLogText"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-primary);"></i> Esperando eventos del servidor...</div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.75rem;">
+            <button type="button" class="btn-chip" style="background: rgba(99, 102, 241, 0.2); border-color: var(--accent-primary); color: #c7d2fe; cursor: pointer; padding: 0.35rem 0.75rem; display: inline-flex; align-items: center; gap: 0.4rem;" onclick="openLogModal()">
+              <i class="fa-solid fa-terminal" style="color: #a5b4fc;"></i> Ver Consola de Logs Completa
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Panel: Results & Markdown Viewer -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><i class="fa-solid fa-square-poll-vertical"></i> Resultado & Visualización</div>
+            <div id="resultActions" style="display: none; gap: 0.5rem;">
+              <button class="btn-secondary" onclick="toggleRawView()"><i class="fa-solid fa-code"></i> <span id="rawBtnText">Ver Raw</span></button>
+              <button class="btn-secondary" onclick="copyMarkdown()"><i class="fa-solid fa-copy"></i> Copiar</button>
+              <button class="btn-secondary" style="background: var(--accent-primary); border-color: var(--accent-primary);" onclick="downloadMarkdownFile()">
+                <i class="fa-solid fa-download"></i> Descargar .MD
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div id="emptyResult" class="result-empty">
+            <i class="fa-solid fa-file-circle-question"></i>
+            <h3>Esperando ejecución</h3>
+            <p>Selecciona un archivo PDF o proporciona una URL/carpeta para ver el resultado extraído.</p>
+          </div>
+
+          <!-- Single Document Result Container -->
+          <div id="singleResultContainer" style="display: none;">
+            <!-- Metadata Bar -->
+            <div class="metadata-grid" id="metaGrid"></div>
+
+            <!-- Markdown Output Header -->
+            <div class="view-actions">
+              <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">
+                <i class="fa-markdown fab"></i> CONTENIDO MARKDOWN EXTRAÍDO
+              </span>
+              <span id="mdCharCount" style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono);"></span>
+            </div>
+
+            <!-- Rendered Markdown Box -->
+            <div id="markdownRendered" class="markdown-container"></div>
+            <!-- Raw Textarea Box -->
+            <textarea id="markdownRaw" class="markdown-container" style="display: none; width: 100%; font-family: var(--font-mono); resize: vertical;" readonly></textarea>
+          </div>
+
+          <!-- Batch Result Container -->
+          <div id="batchResultContainer" style="display: none;">
+            <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;" id="batchSummaryTitle">Resumen de Procesamiento Batch</h4>
+            <div style="overflow-x: auto;">
+              <table class="batch-table">
+                <thead>
+                  <tr>
+                    <th>Estado</th>
+                    <th>Archivo</th>
+                    <th>Páginas</th>
+                    <th>Tablas</th>
+                    <th>Tiempo</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="batchTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Log Viewer Modal -->
+  <div id="logModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content" style="max-width: 1050px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <h3 style="font-size: 1.05rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            <i class="fa-solid fa-terminal" style="color: var(--accent-primary);"></i> Consola de Logs del Servidor
+          </h3>
+          <span id="logLiveBadge" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: #34d399; background: rgba(16, 185, 129, 0.12); padding: 0.2rem 0.55rem; border-radius: 9999px; border: 1px solid rgba(16, 185, 129, 0.25);">
+            <i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981;"></i> En vivo (1s)
+          </span>
+          <span id="logCountBadge" style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono); font-weight: 500;">0 eventos</span>
+        </div>
+        <button class="btn-chip" onclick="closeLogModal()"><i class="fa-solid fa-xmark"></i> Cerrar</button>
+      </div>
+
+      <!-- Stage & Level Filter Toolbar -->
+      <div class="modal-toolbar" style="gap: 0.5rem;">
+        <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 0.74rem; color: var(--text-dim); margin-right: 0.2rem; font-weight: 600;">Etapas:</span>
+          <button class="btn-chip active" id="btnLogStageAll" onclick="filterLogsByStage('ALL')">Todas</button>
+          <button class="btn-chip" id="btnLogStageDocling" onclick="filterLogsByStage('DOCLING')">Docling (MD)</button>
+          <button class="btn-chip" id="btnLogStageSkill" onclick="filterLogsByStage('SKILL')">Skill</button>
+          <button class="btn-chip" id="btnLogStageChunking" onclick="filterLogsByStage('CHUNKING')">Chunking</button>
+          <button class="btn-chip" id="btnLogStageEmbeddings" onclick="filterLogsByStage('EMBEDDINGS')">Embeddings</button>
+          <button class="btn-chip" id="btnLogStageJson" onclick="filterLogsByStage('JSON')">JSON (LLM)</button>
+          <button class="btn-chip" id="btnLogStageBd" onclick="filterLogsByStage('BD')">BD / RAG</button>
+          <button class="btn-chip" id="btnLogStageError" style="color: #f87171; border-color: rgba(239, 68, 68, 0.4);" onclick="filterLogsByStage('ERROR')">Errores</button>
+        </div>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="modal-toolbar" style="border-top: none; padding-top: 0.25rem;">
+        <input type="text" id="logSearchInput" placeholder="Filtrar por texto o palabra clave..." oninput="renderLogs()">
+        <label style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+          <input type="checkbox" id="chkAutoRefreshLogs" checked onchange="toggleAutoRefreshLogs()"> Auto-refresco
+        </label>
+        <label style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+          <input type="checkbox" id="chkAutoScrollLogs" checked> Auto-scroll
+        </label>
+        <button class="btn-secondary" onclick="fetchServerLogs()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
+        <button class="btn-secondary" onclick="clearServerLogBuffer()"><i class="fa-solid fa-trash-can"></i> Limpiar</button>
+        <button class="btn-secondary" onclick="copyServerLogs()"><i class="fa-solid fa-copy"></i> Copiar</button>
+        <button class="btn-secondary" onclick="downloadServerLogs()"><i class="fa-solid fa-download"></i> Descargar</button>
+      </div>
+
+      <!-- Console Container -->
+      <pre id="logConsoleContainer" class="log-console"></pre>
+      
+      <!-- Stage Legend Footer -->
+      <div style="display: flex; gap: 0.75rem; padding: 0.5rem 1.25rem; background: rgba(15, 23, 42, 0.9); border-top: 1px solid var(--bg-card-border); font-size: 0.72rem; color: var(--text-dim); flex-wrap: wrap; align-items: center;">
+        <span style="font-weight: 600; color: var(--text-muted);">Guía de etapas:</span>
+        <span class="log-tag log-tag-upload">[Upload]</span> Subida
+        <span class="log-tag log-tag-docling">[Docling]</span> Extracción MD
+        <span class="log-tag log-tag-skill">[Skill]</span> Reglas Empresa
+        <span class="log-tag log-tag-chunking">[Chunking]</span> Parent-Child
+        <span class="log-tag log-tag-embeddings">[Embeddings]</span> BGE-M3 (1024-d)
+        <span class="log-tag log-tag-json">[JSON]</span> gpt-4.1-mini
+        <span class="log-tag log-tag-bd">[BD / RAG]</span> PostgreSQL pgvector
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global State
+    let currentResult = null;
+    let selectedFile = null;
+    let isRawView = false;
+    let healthInterval = null;
+
+    // DOM Elements
+    const healthBadge = document.getElementById('healthBadge');
+    const healthText = document.getElementById('healthText');
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const selectedFileInfo = document.getElementById('selectedFileInfo');
+    const selectedFileName = document.getElementById('selectedFileName');
+    const selectedFileSize = document.getElementById('selectedFileSize');
+    const btnExtractFile = document.getElementById('btnExtractFile');
+    const loader = document.getElementById('loader');
+
+    // Theme Toggle (Dark/Light)
+    function toggleTheme() {
+      const isLight = document.body.classList.toggle('light-theme');
+      const icon = document.getElementById('themeIcon');
+      if (isLight) {
+        if (icon) { icon.className = 'fa-solid fa-moon'; icon.style.color = '#6366f1'; }
+        localStorage.setItem('docengine_theme', 'light');
+      } else {
+        if (icon) { icon.className = 'fa-solid fa-sun'; icon.style.color = '#f59e0b'; }
+        localStorage.setItem('docengine_theme', 'dark');
+      }
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      // Load saved theme
+      const savedTheme = localStorage.getItem('docengine_theme');
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        const icon = document.getElementById('themeIcon');
+        if (icon) { icon.className = 'fa-solid fa-moon'; icon.style.color = '#6366f1'; }
+      }
+
+      setupDragAndDrop();
+      checkHealth();
+      fetchMetrics();
+
+      // Refresh server health status every 15s (metrics are persistent and updated on process execution)
+      healthInterval = setInterval(checkHealth, 15000);
+    });
+
+    function getApiUrl() {
+      if (window.location.origin && window.location.origin.startsWith('http')) {
+        return window.location.origin.replace(/\/+$/, '');
+      }
+      return 'http://localhost:8000';
+    }
+
+    // Health & Metrics Polling
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/health`);
+        if (res.ok) {
+          const data = await res.json();
+          healthBadge.className = 'status-badge';
+          healthText.innerText = `Online (${data.environment})`;
+        } else {
+          throw new Error('Non-200 status');
+        }
+      } catch (err) {
+        healthBadge.className = 'status-badge offline';
+        healthText.innerText = 'Servidor Offline';
+      }
+    }
+
+    async function fetchMetrics() {
+      // Load cached values first to prevent initial 0 flickering
+      const cached = localStorage.getItem('docengine_cached_metrics');
+      if (cached && !window._metricsLoadedOnce) {
+        try {
+          updateMetricsUI(JSON.parse(cached));
+        } catch(e) {}
+      }
+
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/metrics`);
+        if (res.ok) {
+          const m = await res.json();
+          updateMetricsUI(m);
+          localStorage.setItem('docengine_cached_metrics', JSON.stringify(m));
+          window._metricsLoadedOnce = true;
+        }
+      } catch (e) {
+        // Silent fail for metrics
+      }
+    }
+
+    function updateMetricsUI(m) {
+      if (!m) return;
+      document.getElementById('mTotal').innerText = m.total_extractions || 0;
+      
+      const rate = (m.total_extractions && m.total_extractions > 0) 
+        ? Math.round((m.successful_extractions / m.total_extractions) * 100) 
+        : 100;
+      document.getElementById('mSuccessRate').innerText = `${rate}%`;
+      
+      document.getElementById('mTables').innerText = m.total_tables_detected || 0;
+      document.getElementById('mAvgTime').innerText = `${(m.avg_extraction_time_seconds || 0).toFixed(1)}s`;
+      document.getElementById('mMemory').innerText = `${(m.memory_usage_mb || 0).toFixed(0)} MB`;
+    }
+
+    async function resetServerMetrics() {
+      if (!confirm('¿Deseas reiniciar los contadores de estadísticas a 0?')) return;
+      try {
+        await fetch(`${getApiUrl()}/api/v1/metrics/reset`, { method: 'POST' });
+        localStorage.removeItem('docengine_cached_metrics');
+        updateMetricsUI({
+          total_extractions: 0,
+          successful_extractions: 0,
+          failed_extractions: 0,
+          total_tables_detected: 0,
+          avg_extraction_time_seconds: 0,
+          memory_usage_mb: 0
+        });
+      } catch(e) {
+        console.warn('Error resetting metrics:', e);
+      }
+    }
+
+    // Tab Switching
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+      if (tabName === 'upload') {
+        document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+        document.getElementById('tabUpload').classList.add('active');
+      } else if (tabName === 'url') {
+        document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+        document.getElementById('tabUrl').classList.add('active');
+      } else if (tabName === 'folder') {
+        document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
+        document.getElementById('tabFolder').classList.add('active');
+      }
+    }
+
+    // Drag & Drop Setup
+    function setupDragAndDrop() {
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          dropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('dragover');
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
+          handleFileSelected(files[0]);
+        } else {
+          alert('Por favor selecciona un archivo en formato PDF.');
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (fileInput.files.length > 0) {
+          handleFileSelected(fileInput.files[0]);
+        }
+      });
+    }
+
+    function handleFileSelected(file) {
+      selectedFile = file;
+      selectedFileName.innerText = file.name;
+      selectedFileSize.innerText = formatBytes(file.size);
+      selectedFileInfo.style.display = 'flex';
+      btnExtractFile.disabled = false;
+    }
+
+    function clearSelectedFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      selectedFileInfo.style.display = 'none';
+      btnExtractFile.disabled = true;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Process Operations & Progress Management
+    let progressTimer = null;
+    let currentProgressPercent = 0;
+
+    const EXTRACTION_STAGES = [
+      { pct: 15, step: "Paso 1 de 4", text: "Inicializando motor y preparando documento PDF..." },
+      { pct: 45, step: "Paso 2 de 4", text: "Análisis de maquetación, lectura OCR y detección de tablas (Docling)..." },
+      { pct: 75, step: "Paso 3 de 4", text: "Aplicando Skill y reglas de extracción para la empresa..." },
+      { pct: 92, step: "Paso 4 de 4", text: "Generando contenido Markdown/JSON y guardando en BD (RAG)..." }
+    ];
+
+    function setLoaderProgress(percent, stepText, detailText) {
+      currentProgressPercent = Math.min(100, Math.max(0, percent));
+      const fillEl = document.getElementById('loaderProgressBar');
+      const percentEl = document.getElementById('loaderPercentText');
+      const stepEl = document.getElementById('loaderStageStep');
+      const detailEl = document.getElementById('loaderStageDetail');
+
+      if (fillEl) fillEl.style.width = `${currentProgressPercent}%`;
+      if (percentEl) percentEl.innerText = `${Math.round(currentProgressPercent)}%`;
+      if (stepEl && stepText) stepEl.innerText = stepText;
+      if (detailEl && detailText) detailEl.innerText = detailText;
+    }
+
+    function startProgressSimulation() {
+      stopProgressSimulation();
+      setLoaderProgress(5, "Paso 1 de 4", EXTRACTION_STAGES[0].text);
+      
+      let stageIndex = 0;
+
+      progressTimer = setInterval(() => {
+        if (currentProgressPercent < 92) {
+          let nextVal = currentProgressPercent + (Math.random() * 2.2 + 0.6);
+          if (nextVal > 92) nextVal = 92;
+
+          if (stageIndex < EXTRACTION_STAGES.length - 1 && nextVal >= EXTRACTION_STAGES[stageIndex + 1].pct) {
+            stageIndex++;
+          }
+          
+          const stage = EXTRACTION_STAGES[stageIndex];
+          setLoaderProgress(nextVal, stage.step, stage.text);
+        }
+      }, 450);
+    }
+
+    async function completeProgressSimulation() {
+      stopProgressSimulation();
+      setLoaderProgress(100, "Completado", "¡Extracción finalizada exitosamente!");
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    function stopProgressSimulation() {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+    }
+
+    function showLoader(title = 'Procesando documento...') {
+      document.getElementById('loaderTitle').innerText = title;
+      setLoaderProgress(0, "Paso 1 de 4", "Inicializando motor de extracción...");
+      loader.style.display = 'block';
+    }
+
+    function hideLoader() {
+      stopProgressSimulation();
+      loader.style.display = 'none';
+    }
+
+    function getSelectedCompany() {
+      const companySelect = document.getElementById('companySelect');
+      const sigla = companySelect ? companySelect.value : '';
+      if (!sigla) {
+        alert('⚠️ DEBES SELECCIONAR OBLIGATORIAMENTE UNA EMPRESA ASEGURADORA ANTES DE CONTINUAR.');
+        if (companySelect) {
+          companySelect.focus();
+          companySelect.style.borderColor = '#ef4444';
+        }
+        return null;
+      }
+      if (companySelect) companySelect.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+      return sigla;
+    }
+
+    let extractionLogInterval = null;
+
+    function startExtractionLogPolling() {
+      stopExtractionLogPolling();
+      fetchServerLogs();
+      extractionLogInterval = setInterval(fetchServerLogs, 800);
+    }
+
+    function stopExtractionLogPolling() {
+      if (extractionLogInterval) {
+        clearInterval(extractionLogInterval);
+        extractionLogInterval = null;
+      }
+    }
+
+    function updateLoaderLiveLog(lastLogs) {
+      const box = document.getElementById('loaderLiveLogText');
+      if (!box || !lastLogs || lastLogs.length === 0) return;
+      
+      const recent = lastLogs.slice(-3);
+      box.innerHTML = recent.map(line => {
+        return `<div style="margin-bottom: 0.2rem;">${formatLogLine(line)}</div>`;
+      }).join('');
+      
+      const container = document.getElementById('loaderLiveLogBox');
+      if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    async function handleExtractionError(err) {
+      console.error('Extraction error:', err);
+      let msg = err.message || 'Error desconocido';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+        msg = `⚠️ No se pudo comunicar con el servidor DocEngine en "${getApiUrl()}".\n\nPosibles causas:\n1. El proceso del servidor ("python main.py serve") se cerró o se interrumpió.\n2. Revisa la ventana de PowerShell donde corriste el servidor para ver el error/traceback.\n3. Asegúrate de que el contenedor Docker (PostgreSQL) esté arriba con "docker compose ps".`;
+      }
+      alert(msg);
+    }
+
+    // 1. File Upload Processing
+    async function processFileUpload() {
+      if (!selectedFile) return;
+
+      const sigla = getSelectedCompany();
+      if (!sigla) return;
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('company_sigla', sigla);
+
+      const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
+      const ramo = document.getElementById('envelopeRamo')?.value?.trim();
+      const tipoDoc = document.getElementById('envelopeTipoDocumento')?.value?.trim();
+
+      if (numPoliza) formData.append('numero_poliza', numPoliza);
+      if (ramo) formData.append('ramo', ramo);
+      if (tipoDoc) formData.append('tipo_documento', tipoDoc);
+
+      const extraInfo = numPoliza ? ` [Póliza: ${numPoliza}]` : '';
+      showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]${extraInfo}...`);
+      startProgressSimulation();
+      startExtractionLogPolling();
+
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/extract`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Error en la extracción');
+        }
+
+        const data = await res.json();
+        await completeProgressSimulation();
+        await displaySingleResult(data);
+        fetchMetrics();
+      } catch (err) {
+        await handleExtractionError(err);
+      } finally {
+        stopExtractionLogPolling();
+        hideLoader();
+      }
+    }
+
+    // 2. URL Processing
+    async function processUrlExtract() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) {
+        alert('Por favor ingresa una URL válida.');
+        return;
+      }
+
+      const sigla = getSelectedCompany();
+      if (!sigla) return;
+
+      showLoader(`Descargando y extrayendo desde URL con Skill [${sigla}]...`);
+      startProgressSimulation();
+      startExtractionLogPolling();
+
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/extract/url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url, output_formats: ['all'], company_sigla: sigla })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Error en la extracción');
+        }
+
+        const data = await res.json();
+        await completeProgressSimulation();
+        await displaySingleResult(data);
+        fetchMetrics();
+      } catch (err) {
+        await handleExtractionError(err);
+      } finally {
+        stopExtractionLogPolling();
+        hideLoader();
+      }
+    }
+
+    // 3. Folder Processing
+    async function processFolderExtract() {
+      const folderPath = document.getElementById('folderInput').value.trim();
+      if (!folderPath) {
+        alert('Por favor ingresa una ruta de carpeta.');
+        return;
+      }
+
+      const sigla = getSelectedCompany();
+      if (!sigla) return;
+
+      showLoader(`Procesando carpeta "${folderPath}" en lote con Skill [${sigla}]...`);
+      startProgressSimulation();
+      startExtractionLogPolling();
+
+      const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
+      const ramo = document.getElementById('envelopeRamo')?.value?.trim();
+
+      const payload = {
+        folder_path: folderPath,
+        output_formats: ['all'],
+        company_sigla: sigla
+      };
+      if (numPoliza) payload.numero_poliza = numPoliza;
+      if (ramo) payload.ramo = ramo;
+
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/extract/folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Error en lote');
+        }
+
+        const data = await res.json();
+        await completeProgressSimulation();
+        displayBatchResult(data);
+        fetchMetrics();
+      } catch (err) {
+        await handleExtractionError(err);
+      } finally {
+        stopExtractionLogPolling();
+        hideLoader();
+      }
+    }
+
+    // Display Single Result & Fetch Full Markdown
+    async function displaySingleResult(resultData) {
+      currentResult = resultData;
+
+      document.getElementById('emptyResult').style.display = 'none';
+      document.getElementById('batchResultContainer').style.display = 'none';
+      document.getElementById('singleResultContainer').style.display = 'block';
+      document.getElementById('resultActions').style.display = 'flex';
+
+      const meta = resultData.metadata;
+
+      // Status badge color
+      let statusBadge = `<span class="badge-status badge-success"><i class="fa-solid fa-check"></i> ${resultData.status}</span>`;
+      if (resultData.status === 'partial') statusBadge = `<span class="badge-status badge-warning">${resultData.status}</span>`;
+      if (resultData.status === 'failed') statusBadge = `<span class="badge-status badge-danger">${resultData.status}</span>`;
+
+      // PostgreSQL Status Badge
+      let dbBadge = `<span class="badge-status badge-warning"><i class="fa-solid fa-database"></i> No disponible</span>`;
+      if (resultData.rag_report) {
+        const rag = resultData.rag_report;
+        if (rag.policy_id) {
+          dbBadge = `<span class="badge-status badge-success" title="Policy ID: ${rag.policy_id}"><i class="fa-solid fa-database"></i> Persistido (${rag.chunks_created} chunks)</span>`;
+        } else if (rag.skipped_duplicate) {
+          dbBadge = `<span class="badge-status badge-warning" title="Hash duplicado"><i class="fa-solid fa-database"></i> Duplicado (Omitido)</span>`;
+        } else if (rag.errors && rag.errors.length > 0) {
+          dbBadge = `<span class="badge-status badge-danger" title="${escapeHtml(rag.errors.join('; '))}"><i class="fa-solid fa-triangle-exclamation"></i> Error BD</span>`;
+        }
+      }
+
+      // Envelope indicators
+      const envelopeBadge = meta.envelope_id
+        ? `<span style="color: #38bdf8; font-weight: 600;"><i class="fa-solid fa-folder-tree"></i> Vinculado</span>`
+        : `<span style="color: var(--text-dim);">Sin sobre</span>`;
+
+      const tipoDocBadge = meta.tipo_documento
+        ? `<span style="color: #34d399; font-weight: 600;"><i class="fa-solid fa-tag"></i> ${escapeHtml(meta.tipo_documento)}</span>`
+        : `<span style="color: var(--text-dim);">No asignado</span>`;
+
+      // Fill Metadata Grid
+      document.getElementById('metaGrid').innerHTML = `
+        <div class="meta-item"><div class="label">Estado PDF</div><div class="val">${statusBadge}</div></div>
+        <div class="meta-item"><div class="label">Base de Datos PG</div><div class="val">${dbBadge}</div></div>
+        <div class="meta-item"><div class="label">Empresa / Skill</div><div class="val" style="color: #a5b4fc;"><i class="fa-solid fa-building"></i> ${meta.company_sigla || 'General'}</div></div>
+        <div class="meta-item"><div class="label">Sobre / Póliza</div><div class="val">${envelopeBadge}</div></div>
+        <div class="meta-item"><div class="label">Tipo Documento</div><div class="val">${tipoDocBadge}</div></div>
+        <div class="meta-item"><div class="label">Archivo</div><div class="val" title="${meta.filename}">${meta.filename}</div></div>
+        <div class="meta-item"><div class="label">Páginas</div><div class="val">${meta.page_count}</div></div>
+        <div class="meta-item"><div class="label">Tiempo</div><div class="val">${meta.extraction_time_seconds.toFixed(2)}s</div></div>
+        <div class="meta-item"><div class="label">Tablas</div><div class="val">${meta.tables_detected}</div></div>
+        <div class="meta-item"><div class="label">Encabezados Eliminados</div><div class="val">${meta.headers_removed}</div></div>
+        <div class="meta-item"><div class="label">Pies Eliminados</div><div class="val">${meta.footers_removed}</div></div>
+        <div class="meta-item"><div class="label">Tamaño MD</div><div class="val">${formatBytes(meta.markdown_size_bytes)}</div></div>
+      `;
+
+      // Fetch Full Markdown from API
+      let fullMarkdown = resultData.markdown_preview;
+      const mdPath = resultData.output_paths?.md || '';
+
+      try {
+        const queryPath = mdPath ? `?path=${encodeURIComponent(mdPath)}` : '';
+        const mdRes = await fetch(`${getApiUrl()}/api/v1/extract/${resultData.document_id}/markdown${queryPath}`);
+        if (mdRes.ok) {
+          fullMarkdown = await mdRes.text();
+        }
+      } catch (e) {
+        console.warn('Could not fetch full markdown, falling back to preview:', e);
+      }
+
+      currentResult.full_markdown = fullMarkdown;
+
+      document.getElementById('mdCharCount').innerText = `${fullMarkdown.length.toLocaleString()} caracteres`;
+
+      // Render Markdown
+      if (window.marked) {
+        document.getElementById('markdownRendered').innerHTML = marked.parse(fullMarkdown);
+      } else {
+        document.getElementById('markdownRendered').innerHTML = `<pre>${escapeHtml(fullMarkdown)}</pre>`;
+      }
+
+      document.getElementById('markdownRaw').value = fullMarkdown;
+    }
+
+    // Display Batch Result Table
+    function displayBatchResult(batchData) {
+      document.getElementById('emptyResult').style.display = 'none';
+      document.getElementById('singleResultContainer').style.display = 'none';
+      document.getElementById('resultActions').style.display = 'none';
+      document.getElementById('batchResultContainer').style.display = 'block';
+
+      document.getElementById('batchSummaryTitle').innerText = 
+        `Resumen Batch (${batchData.successful}/${batchData.total_documents} Exitosos)`;
+
+      const tbody = document.getElementById('batchTableBody');
+      tbody.innerHTML = '';
+
+      batchData.results.forEach(res => {
+        const m = res.metadata;
+        let badge = `<span class="badge-status badge-success">${res.status}</span>`;
+        if (res.status !== 'success') badge = `<span class="badge-status badge-danger">${res.status}</span>`;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${badge}</td>
+          <td style="font-weight: 500;">${m.filename}</td>
+          <td>${m.page_count}</td>
+          <td>${m.tables_detected}</td>
+          <td>${m.extraction_time_seconds.toFixed(1)}s</td>
+          <td>
+            <button class="btn-chip" onclick='viewBatchItem(${JSON.stringify(res).replace(/'/g, "&apos;")})'>
+              <i class="fa-solid fa-eye"></i> Ver
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function viewBatchItem(itemResult) {
+      displaySingleResult(itemResult);
+    }
+
+    // View Toggles & Copy/Download
+    function toggleRawView() {
+      isRawView = !isRawView;
+      const rendered = document.getElementById('markdownRendered');
+      const raw = document.getElementById('markdownRaw');
+      const btnText = document.getElementById('rawBtnText');
+
+      if (isRawView) {
+        rendered.style.display = 'none';
+        raw.style.display = 'block';
+        btnText.innerText = 'Ver Render';
+      } else {
+        rendered.style.display = 'block';
+        raw.style.display = 'none';
+        btnText.innerText = 'Ver Raw';
+      }
+    }
+
+    function copyToClipboard(text) {
+      if (!text) return Promise.reject('No content to copy');
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      } else {
+        return new Promise((resolve, reject) => {
+          try {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) resolve();
+            else reject('execCommand copy failed');
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    }
+
+    function copyMarkdown() {
+      if (!currentResult) return;
+      const content = currentResult.full_markdown || currentResult.markdown_preview || '';
+      if (!content) {
+        alert('No hay contenido Markdown para copiar.');
+        return;
+      }
+      copyToClipboard(content).then(() => {
+        alert('¡Markdown copiado al portapapeles!');
+      }).catch(err => {
+        alert('Error al copiar: ' + err);
+      });
+    }
+
+    function downloadMarkdownFile() {
+      if (!currentResult) return;
+      const mdContent = currentResult.full_markdown || currentResult.markdown_preview || '';
+      let rawFilename = currentResult.metadata?.filename || (selectedFile ? selectedFile.name : 'documento');
+
+      // Strip UUID prefix if present
+      rawFilename = rawFilename.replace(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_/i, '');
+      const nameStem = rawFilename.replace(/\.pdf$/i, '');
+      const filename = `${nameStem}.md`;
+
+      const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Log Console Logic
+    let logBuffer = [];
+    let logFilterStage = 'ALL';
+    let logInterval = null;
+
+    function openLogModal() {
+      document.getElementById('logModal').style.display = 'flex';
+      fetchServerLogs();
+      if (document.getElementById('chkAutoRefreshLogs').checked) {
+        startAutoRefreshLogs();
+      }
+    }
+
+    function closeLogModal() {
+      document.getElementById('logModal').style.display = 'none';
+      stopAutoRefreshLogs();
+    }
+
+    function toggleAutoRefreshLogs() {
+      const chk = document.getElementById('chkAutoRefreshLogs');
+      const badge = document.getElementById('logLiveBadge');
+      if (chk.checked) {
+        startAutoRefreshLogs();
+        if (badge) {
+          badge.innerHTML = '<i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981;"></i> En vivo (1s)';
+          badge.style.color = '#34d399';
+        }
+      } else {
+        stopAutoRefreshLogs();
+        if (badge) {
+          badge.innerHTML = '<i class="fa-solid fa-pause" style="font-size: 0.5rem; color: #f59e0b;"></i> Pausado';
+          badge.style.color = '#fbbf24';
+        }
+      }
+    }
+
+    function startAutoRefreshLogs() {
+      stopAutoRefreshLogs();
+      logInterval = setInterval(fetchServerLogs, 1000);
+    }
+
+    function stopAutoRefreshLogs() {
+      if (logInterval) {
+        clearInterval(logInterval);
+        logInterval = null;
+      }
+    }
+
+    async function clearServerLogBuffer() {
+      logBuffer = [];
+      try {
+        await fetch(`${getApiUrl()}/api/v1/logs/clear`, { method: 'POST' });
+      } catch (e) {
+        console.warn('Could not clear server log buffer:', e);
+      }
+      renderLogs();
+    }
+
+    async function fetchServerLogs() {
+      try {
+        const res = await fetch(`${getApiUrl()}/api/v1/logs?lines=500`);
+        if (res.ok) {
+          const data = await res.json();
+          logBuffer = data.logs || [];
+          renderLogs();
+        }
+      } catch (err) {
+        console.warn('Error fetching logs:', err);
+      }
+    }
+
+    function filterLogsByStage(stage) {
+      logFilterStage = stage;
+      const stages = ['All', 'Docling', 'Skill', 'Chunking', 'Embeddings', 'Json', 'Bd', 'Error'];
+      stages.forEach(name => {
+        const btn = document.getElementById(`btnLogStage${name}`);
+        if (btn) {
+          btn.classList.toggle('active', name.toUpperCase() === stage);
+        }
+      });
+      renderLogs();
+    }
+
+    function formatLogLine(rawLine) {
+      if (!rawLine) return '';
+      let parsed = null;
+      let timestamp = '';
+      let level = 'info';
+      let eventText = rawLine;
+      let extraPairs = [];
+
+      // Check if rawLine is JSON (structlog JSON output from Docker or JSON logger)
+      if (typeof rawLine === 'string' && rawLine.trim().startsWith('{') && rawLine.trim().endsWith('}')) {
+        try {
+          parsed = JSON.parse(rawLine);
+          level = (parsed.level || 'info').toLowerCase();
+          eventText = parsed.event || '';
+          if (parsed.timestamp) {
+            try {
+              const d = new Date(parsed.timestamp);
+              timestamp = d.toLocaleTimeString();
+            } catch(e) {
+              timestamp = parsed.timestamp.slice(11, 19);
+            }
+          }
+          // Collect extra parameters
+          for (const [k, v] of Object.entries(parsed)) {
+            if (!['event', 'level', 'timestamp', 'logger', 'version', 'environment', 'os'].includes(k)) {
+              const strVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+              extraPairs.push(`${k}=${strVal}`);
+            }
+          }
+        } catch(e) {
+          parsed = null;
+        }
+      }
+
+      let lineHtml = escapeHtml(eventText);
+      if (extraPairs.length > 0) {
+        lineHtml += ' ' + escapeHtml(extraPairs.join(' '));
+      }
+
+      let cls = 'info';
+      const isError = level === 'error' || /error|failed|fail|exception|traceback/i.test(lineHtml);
+      const isWarn = level === 'warn' || level === 'warning' || /warning|warn/i.test(lineHtml);
+      const isSuccess = /completad|exitos|succes|finalizad|ready/i.test(lineHtml);
+
+      if (isError) cls = 'error';
+      else if (isWarn) cls = 'warn';
+      else if (isSuccess) cls = 'success';
+
+      // Transform known stage tags into colorful badge pills
+      lineHtml = lineHtml.replace(/\[Docling\]/gi, '<span class="log-tag log-tag-docling"><i class="fa-solid fa-file-invoice"></i> Docling</span>');
+      lineHtml = lineHtml.replace(/\[Skill\]/gi, '<span class="log-tag log-tag-skill"><i class="fa-solid fa-shield-halved"></i> Skill</span>');
+      lineHtml = lineHtml.replace(/\[Chunking\]/gi, '<span class="log-tag log-tag-chunking"><i class="fa-solid fa-cubes-stacked"></i> Chunking</span>');
+      lineHtml = lineHtml.replace(/\[Embeddings\]/gi, '<span class="log-tag log-tag-embeddings"><i class="fa-solid fa-network-wired"></i> Embeddings</span>');
+      lineHtml = lineHtml.replace(/\[JSON Estructurado\]|\[JSON\]/gi, '<span class="log-tag log-tag-json"><i class="fa-solid fa-code-merge"></i> JSON LLM</span>');
+      lineHtml = lineHtml.replace(/\[Persistencia BD\]|\[BD\]/gi, '<span class="log-tag log-tag-bd"><i class="fa-solid fa-database"></i> BD pgvector</span>');
+      lineHtml = lineHtml.replace(/\[RAG\]/gi, '<span class="log-tag log-tag-rag"><i class="fa-solid fa-brain"></i> RAG</span>');
+      lineHtml = lineHtml.replace(/\[Upload\]/gi, '<span class="log-tag log-tag-upload"><i class="fa-solid fa-cloud-arrow-up"></i> Upload</span>');
+      lineHtml = lineHtml.replace(/\[Idempotencia\]/gi, '<span class="log-tag log-tag-default"><i class="fa-solid fa-fingerprint"></i> Hash ID</span>');
+      lineHtml = lineHtml.replace(/\[Paralelo\]/gi, '<span class="log-tag log-tag-default"><i class="fa-solid fa-arrows-split-up-and-left"></i> Paralelo</span>');
+      lineHtml = lineHtml.replace(/\[Pipeline\]/gi, '<span class="log-tag log-tag-pipeline"><i class="fa-solid fa-diagram-project"></i> Pipeline</span>');
+      lineHtml = lineHtml.replace(/\[Almacenamiento\]/gi, '<span class="log-tag log-tag-default"><i class="fa-solid fa-hard-drive"></i> Disco</span>');
+      lineHtml = lineHtml.replace(/\[ERROR\]/gi, '<span class="log-tag log-tag-error"><i class="fa-solid fa-triangle-exclamation"></i> ERROR</span>');
+
+      // Highlight key=val patterns
+      lineHtml = lineHtml.replace(/([a-zA-Z0-9_\-]+)=(&quot;[^&]*&quot;|&#039;[^&#]*&#039;|[^\s,]+)/g, '<span class="log-key-val"><span class="log-key">$1</span>=<span class="log-val">$2</span></span>');
+
+      const timePrefix = timestamp ? `<span class="log-timestamp">[${timestamp}]</span>` : '';
+      return `<span class="log-line ${cls}">${timePrefix}${lineHtml}</span>`;
+    }
+
+    function renderLogs() {
+      const consoleElem = document.getElementById('logConsoleContainer');
+      const countBadge = document.getElementById('logCountBadge');
+      const searchQuery = (document.getElementById('logSearchInput')?.value || '').toLowerCase();
+      const autoScroll = document.getElementById('chkAutoScrollLogs')?.checked ?? true;
+
+      let filtered = logBuffer.filter(line => {
+        const lineLower = line.toLowerCase();
+        
+        // Stage filtering
+        if (logFilterStage === 'DOCLING' && !lineLower.includes('docling')) return false;
+        if (logFilterStage === 'SKILL' && !lineLower.includes('skill')) return false;
+        if (logFilterStage === 'CHUNKING' && !lineLower.includes('chunk')) return false;
+        if (logFilterStage === 'EMBEDDINGS' && !lineLower.includes('embedding') && !lineLower.includes('vector')) return false;
+        if (logFilterStage === 'JSON' && !lineLower.includes('json') && !lineLower.includes('openai') && !lineLower.includes('cobertura')) return false;
+        if (logFilterStage === 'BD' && !lineLower.includes('bd') && !lineLower.includes('postgres') && !lineLower.includes('pgvector') && !lineLower.includes('rag') && !lineLower.includes('persistencia')) return false;
+        if (logFilterStage === 'ERROR' && !lineLower.includes('error') && !lineLower.includes('fail') && !lineLower.includes('exception')) return false;
+
+        // Keyword search
+        if (searchQuery && !lineLower.includes(searchQuery)) return false;
+        return true;
+      });
+
+      if (countBadge) {
+        countBadge.innerText = `${filtered.length} eventos${filtered.length !== logBuffer.length ? ` (de ${logBuffer.length})` : ''}`;
+      }
+
+      if (filtered.length === 0) {
+        consoleElem.innerHTML = '<span style="color: var(--text-dim); padding: 1rem; display: block; text-align: center;">No hay eventos registrados para el filtro seleccionado.</span>';
+        return;
+      }
+
+      consoleElem.innerHTML = filtered.map(formatLogLine).join('');
+
+      if (autoScroll) {
+        consoleElem.scrollTop = consoleElem.scrollHeight;
+      }
+
+      // Update inline mini log container on the loader screen
+      updateLoaderLiveLog(filtered);
+    }
+
+    function copyServerLogs() {
+      const text = logBuffer.join('\n');
+      if (!text) {
+        alert('No hay logs para copiar.');
+        return;
+      }
+      copyToClipboard(text).then(() => {
+        alert('¡Logs copiados al portapapeles!');
+      }).catch(err => {
+        alert('Error al copiar logs: ' + err);
+      });
+    }
+
+    function downloadServerLogs() {
+      if (!logBuffer || logBuffer.length === 0) {
+        alert('No hay logs para descargar.');
+        return;
+      }
+      const text = logBuffer.join('\n');
+      const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `docengine_server_logs_${now}.txt`;
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
