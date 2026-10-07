@@ -108,13 +108,16 @@ class EmbeddingService:
             if hasattr(self._model, "max_seq_length") and self._model.max_seq_length > 1024:
                 self._model.max_seq_length = 1024
 
-            # Ensure optimal CPU parallelism across Zen 4 cores
+            # Ensure optimal CPU parallelism across cores
             try:
                 import torch  # noqa: PLC0415
                 if str(device) == "cpu" and hasattr(torch, "set_num_threads"):
-                    import os  # noqa: PLC0415
-                    threads = os.cpu_count() or 8
-                    torch.set_num_threads(min(threads, 8))
+                    if self._config.num_threads is not None:
+                        torch.set_num_threads(self._config.num_threads)
+                    else:
+                        import os  # noqa: PLC0415
+                        threads = os.cpu_count() or 8
+                        torch.set_num_threads(min(threads, 8))
             except Exception:
                 pass
 
@@ -152,6 +155,8 @@ class EmbeddingService:
         # Generate vectors using batch encoding with minimal memory overhead
         try:
             import torch  # noqa: PLC0415
+            if self._config.num_threads is not None and str(self._config.device) == "cpu" and hasattr(torch, "set_num_threads"):
+                torch.set_num_threads(self._config.num_threads)
             with torch.inference_mode():
                 embeddings_matrix = model.encode(
                     texts,

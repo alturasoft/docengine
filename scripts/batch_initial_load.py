@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import gc
 import logging
 from pathlib import Path
 import re
@@ -259,6 +260,7 @@ class CheckpointManager:
         pages: int = 0,
         chunks: int = 0,
         error_message: str | None = None,
+        **kwargs: Any,
     ) -> None:
         """Record or update execution checkpoint for a file."""
         now_str = datetime.now(tz=timezone.utc).isoformat()
@@ -414,6 +416,7 @@ def run_batch(
     report_path: Path | None = None,
     csv_path: Path | None = None,
     log_file_path: Path | None = None,
+    torch_threads: int | None = None,
 ) -> None:
     """Execute bulk processing of policy documents."""
     start_total_time = time.perf_counter()
@@ -525,6 +528,15 @@ def run_batch(
             logger.error("Si deseas extraer únicamente a disco sin base de datos, ejecuta con --skip-rag.")
             sys.exit(1)
 
+    effective_torch_threads = torch_threads or getattr(settings.embedding, "num_threads", None)
+    if effective_torch_threads:
+        try:
+            import torch
+            torch.set_num_threads(effective_torch_threads)
+            logger.info(f"PyTorch thread pool explícitamente configurado a {effective_torch_threads} hilos.")
+        except Exception:
+            pass
+
     # 4. Processing Loop
     processed_count = 0
     skipped_count = 0
@@ -539,113 +551,159 @@ def run_batch(
         for idx, job in enumerate(jobs, 1):
             t0 = time.perf_counter()
             prefix = f"[{idx}/{len(jobs)}] [{job.company_sigla}] Pol: {job.numero_poliza}"
+            f_hash = ""
 
-            # Calculate SHA-256 for checkpointing & deduplication
             try:
-                f_hash = compute_sha256(job.file_path)
-            except Exception as exc:
-                logger.error(f"{prefix} Error calculando hash: {exc}")
-                error_count += 1
-                failed_jobs.append((job, str(exc)))
-                reporter.log_result(job, "FAILED", 0.0, error_msg=f"Hash calculation error: {exc}")
-                continue
-
-            # Checkpoint Skip
-            if resume and checkpoint.is_completed(f_hash):
-                skipped_count += 1
-                logger.info(f"{prefix} [SKIP] Ya procesado previamente en checkpoint.")
-                continue
-
-            logger.info(f"{prefix} -> Procesando: {job.file_path.name} ({job.tipo_documento})")
-
-            # Load company-specific skill
-            skill = load_company_skill_merged(job.company_sigla)
-
-            # Build extraction request
-            req = ExtractionRequest(
-                source=job.file_path,
-                output_formats=["all"],
-                company_sigla=job.company_sigla,
-                numero_poliza=job.numero_poliza,
-                ramo=job.ramo,
-                tipo_documento=job.tipo_documento,
-            )
-            req._company_skill = skill  # type: ignore[attr-defined]
-
-            # 4.1 Document Extraction
-            try:
-                result = extraction_service.extract_document(req)
-            except Exception as exc:
-                elapsed_fail = time.perf_counter() - t0
-                error_msg = f"Extraction failure: {exc}"
-                logger.error(f"{prefix} [FAIL] {error_msg}")
-                error_count += 1
-                failed_jobs.append((job, error_msg))
-                checkpoint.record_job(
-                    f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
-                    "FAILED", elapsed_fail, error_message=error_msg
-                )
-                reporter.log_result(job, "FAILED", elapsed_fail, error_msg=error_msg)
-                continue
-
-            if not result.is_successful:
-                elapsed_fail = time.perf_counter() - t0
-                err_detail = "; ".join(result.metadata.errors) or "Extraction unsuccesful"
-                logger.error(f"{prefix} [FAIL] {err_detail}")
-                error_count += 1
-                failed_jobs.append((job, err_detail))
-                checkpoint.record_job(
-                    f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
-                    "FAILED", elapsed_fail, pages=result.metadata.page_count,
-                    tables=result.metadata.tables_detected, error_message=err_detail
-                )
-                reporter.log_result(job, "FAILED", elapsed_fail, pages=result.metadata.page_count, error_msg=err_detail)
-                continue
-
-            pages = result.metadata.page_count
-            tables = result.metadata.tables_detected
-            total_pages += pages
-
-            # 4.2 RAG Vectorization & PostgreSQL Persistence
-            chunks = 0
-            if rag_service:
+                # Calculate SHA-256 for checkpointing & deduplication
                 try:
-                    rag_report = rag_service.process_extraction_result(
-                        result,
-                        numero_poliza=job.numero_poliza,
-                        ramo=job.ramo,
-                        tipo_documento=job.tipo_documento,
-                    )
-                    if rag_report.skipped_duplicate:
-                        logger.info(f"{prefix}    [RAG] Duplicado omitido en PostgreSQL ({f_hash[:10]}...)")
-                    elif rag_report.policy_id:
-                        chunks = rag_report.chunks_created
-                        total_chunks += chunks
-                        logger.info(f"{prefix}    [RAG] Persistido en PostgreSQL! ({chunks} chunks)")
-                    elif rag_report.errors:
-                        logger.warning(f"{prefix}    [RAG WARN] Errores en RAG: {rag_report.errors}")
+                    f_hash = compute_sha256(job.file_path)
                 except Exception as exc:
-                    logger.error(f"{prefix}    [RAG ERROR] Falló persistencia RAG: {exc}")
+                    logger.error(f"{prefix} Error calculando hash: {exc}")
+                    error_count += 1
+                    failed_jobs.append((job, str(exc)))
+                    reporter.log_result(job, "FAILED", 0.0, error_msg=f"Hash calculation error: {exc}")
+                    continue
 
-            elapsed = time.perf_counter() - t0
-            processed_count += 1
+                # Checkpoint Skip
+                if resume and checkpoint.is_completed(f_hash):
+                    skipped_count += 1
+                    logger.info(f"{prefix} [SKIP] Ya procesado previamente en checkpoint.")
+                    continue
 
-            # Record success in Checkpoint & CSV
-            checkpoint.record_job(
-                f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
-                "SUCCESS", elapsed, pages=pages, chunks=chunks
-            )
-            reporter.log_result(
-                job, "SUCCESS", elapsed, pages=pages, tables=tables, chunks=chunks
-            )
-            logger.info(f"{prefix} [OK] Completado en {elapsed:.2f}s ({pages} págs, {tables} tablas, {chunks} chunks)")
+                logger.info(f"{prefix} -> Procesando: {job.file_path.name} ({job.tipo_documento})")
 
-            # Periodic update of batch_report.txt every 25 files
-            if processed_count % 25 == 0:
-                reporter.write_summary_report(
-                    start_total_time, len(jobs), processed_count, skipped_count,
-                    error_count, total_pages, total_chunks, failed_jobs
+                # Load company-specific skill
+                skill = load_company_skill_merged(job.company_sigla)
+
+                # Build extraction request
+                req = ExtractionRequest(
+                    source=job.file_path,
+                    output_formats=["all"],
+                    company_sigla=job.company_sigla,
+                    numero_poliza=job.numero_poliza,
+                    ramo=job.ramo,
+                    tipo_documento=job.tipo_documento,
                 )
+                req._company_skill = skill  # type: ignore[attr-defined]
+
+                # 4.1 Document Extraction
+                try:
+                    result = extraction_service.extract_document(req)
+                except Exception as exc:
+                    elapsed_fail = time.perf_counter() - t0
+                    error_msg = f"Extraction failure: {exc}"
+                    logger.error(f"{prefix} [FAIL] {error_msg}")
+                    error_count += 1
+                    failed_jobs.append((job, error_msg))
+                    checkpoint.record_job(
+                        f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
+                        "FAILED", elapsed_fail, error_message=error_msg
+                    )
+                    reporter.log_result(job, "FAILED", elapsed_fail, error_msg=error_msg)
+                    continue
+
+                if not result.is_successful:
+                    elapsed_fail = time.perf_counter() - t0
+                    err_detail = "; ".join(result.metadata.errors) or "Extraction unsuccesful"
+                    logger.error(f"{prefix} [FAIL] {err_detail}")
+                    error_count += 1
+                    failed_jobs.append((job, err_detail))
+                    checkpoint.record_job(
+                        f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
+                        "FAILED", elapsed_fail, pages=result.metadata.page_count,
+                        tables=result.metadata.tables_detected, error_message=err_detail
+                    )
+                    reporter.log_result(job, "FAILED", elapsed_fail, pages=result.metadata.page_count, error_msg=err_detail)
+                    continue
+
+                pages = result.metadata.page_count
+                tables = result.metadata.tables_detected
+                total_pages += pages
+
+                # 4.2 RAG Vectorization & PostgreSQL Persistence
+                chunks = 0
+                rag_failed = False
+                rag_error_detail = ""
+                if rag_service:
+                    try:
+                        rag_report = rag_service.process_extraction_result(
+                            result,
+                            numero_poliza=job.numero_poliza,
+                            ramo=job.ramo,
+                            tipo_documento=job.tipo_documento,
+                        )
+                        if rag_report.skipped_duplicate:
+                            logger.info(f"{prefix}    [RAG] Duplicado omitido en PostgreSQL ({f_hash[:10]}...)")
+                        elif rag_report.policy_id:
+                            chunks = rag_report.chunks_created
+                            total_chunks += chunks
+                            logger.info(f"{prefix}    [RAG] Persistido en PostgreSQL! ({chunks} chunks)")
+                        elif rag_report.errors:
+                            rag_failed = True
+                            rag_error_detail = "; ".join(rag_report.errors)
+                            logger.error(f"{prefix}    [RAG ERROR] Falló persistencia RAG: {rag_error_detail}")
+                        else:
+                            rag_failed = True
+                            rag_error_detail = "No se generó policy_id en RAG"
+                            logger.error(f"{prefix}    [RAG ERROR] Falló persistencia RAG: {rag_error_detail}")
+                    except Exception as exc:
+                        rag_failed = True
+                        rag_error_detail = str(exc)
+                        logger.error(f"{prefix}    [RAG ERROR] Falló persistencia RAG: {exc}")
+
+                if rag_failed:
+                    elapsed_fail = time.perf_counter() - t0
+                    error_count += 1
+                    failed_jobs.append((job, f"RAG Error: {rag_error_detail}"))
+                    checkpoint.record_job(
+                        f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
+                        "FAILED", elapsed_fail, pages=pages,
+                        error_message=f"RAG Error: {rag_error_detail}"
+                    )
+                    reporter.log_result(job, "FAILED", elapsed_fail, pages=pages, tables=tables, error_msg=rag_error_detail)
+                    continue
+
+                elapsed = time.perf_counter() - t0
+                processed_count += 1
+
+                # Record success in Checkpoint & CSV
+                checkpoint.record_job(
+                    f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
+                    "SUCCESS", elapsed, pages=pages, chunks=chunks
+                )
+                reporter.log_result(
+                    job, "SUCCESS", elapsed, pages=pages, tables=tables, chunks=chunks
+                )
+                logger.info(f"{prefix} [OK] Completado en {elapsed:.2f}s ({pages} págs, {tables} tablas, {chunks} chunks)")
+
+                # Periodic garbage collection to maintain flat memory profile over thousands of PDFs
+                if idx % 10 == 0:
+                    gc.collect()
+
+                # Periodic update of batch_report.txt every 25 files
+                if processed_count % 25 == 0:
+                    reporter.write_summary_report(
+                        start_total_time, len(jobs), processed_count, skipped_count,
+                        error_count, total_pages, total_chunks, failed_jobs
+                    )
+
+            except Exception as unexp_exc:
+                elapsed_fail = time.perf_counter() - t0
+                err_msg = f"Unexpected failure: {unexp_exc}"
+                logger.error(f"{prefix} [UNEXPECTED FAIL] {err_msg}", exc_info=True)
+                error_count += 1
+                failed_jobs.append((job, err_msg))
+                try:
+                    if not f_hash:
+                        f_hash = compute_sha256(job.file_path)
+                    checkpoint.record_job(
+                        f_hash, job.rel_path, job.company_sigla, job.numero_poliza,
+                        "FAILED", elapsed_fail, error_message=err_msg
+                    )
+                    reporter.log_result(job, "FAILED", elapsed_fail, error_msg=err_msg)
+                except Exception:
+                    pass
+                continue
 
     except KeyboardInterrupt:
         logger.warning("\n[INTERRUPCIÓN MANUAL] Proceso detenido por el usuario (Ctrl+C).")
@@ -735,6 +793,12 @@ def main() -> None:
         default=None,
         help="Ruta personalizada para la base SQLite de checkpoint.",
     )
+    parser.add_argument(
+        "--torch-threads",
+        type=int,
+        default=None,
+        help="Número de hilos de CPU explícitos para PyTorch (ej. 6).",
+    )
 
     args = parser.parse_args()
 
@@ -754,6 +818,7 @@ def main() -> None:
         report_path=Path(args.report_file) if args.report_file else None,
         csv_path=Path(args.csv_file) if args.csv_file else None,
         log_file_path=Path(args.log_file) if args.log_file else None,
+        torch_threads=args.torch_threads,
     )
 
 

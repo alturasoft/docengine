@@ -452,6 +452,12 @@ class EmbeddingConfig(BaseSettings):
         default=None,
         description="Optional custom directory path for storing/loading embedding models",
     )
+    num_threads: int | None = Field(
+        default=None,
+        description="Optional explicit CPU threads for torch embedding inference",
+        ge=1,
+        le=128,
+    )
 
 
 class RAGQueryConfig(BaseSettings):

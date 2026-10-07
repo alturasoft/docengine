@@ -36,6 +36,17 @@ def _normalize_file_type(raw_file_type: str | None) -> str:
     return "UNKNOWN"
 
 
+def _sanitize_null_bytes(val: Any) -> Any:
+    """Recursively remove null byte characters (\\x00 / \\u0000) incompatible with PostgreSQL."""
+    if isinstance(val, str):
+        return val.replace("\x00", "").replace("\u0000", "")
+    elif isinstance(val, dict):
+        return {k: _sanitize_null_bytes(v) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [_sanitize_null_bytes(item) for item in val]
+    return val
+
+
 class PgRagRepository:
     """Repository for managing policy RAG persistence in PostgreSQL + pgvector."""
 
@@ -160,6 +171,12 @@ class PgRagRepository:
         # Normalize company_sigla to uppercase if provided
         sigla = company_sigla.upper() if company_sigla else None
 
+        # Sanitize text and JSON values to remove \u0000 / \x00 which PostgreSQL rejects
+        file_name = _sanitize_null_bytes(file_name)
+        markdown_content = _sanitize_null_bytes(markdown_content)
+        if structured_data is not None:
+            structured_data = _sanitize_null_bytes(structured_data)
+
         with self._db.get_connection() as conn:
             try:
                 with conn.cursor() as cur:
@@ -194,6 +211,12 @@ class PgRagRepository:
                     if chunks:
                         chunk_tuples = []
                         for chunk in chunks:
+                            clean_chunk_content = _sanitize_null_bytes(chunk.chunk_content)
+                            clean_meta = (
+                                _sanitize_null_bytes(chunk.metadata_json)
+                                if chunk.metadata_json is not None
+                                else None
+                            )
                             # Format embedding list as string vector representation '[0.1, 0.2, ...]'
                             vector_str = (
                                 json.dumps(chunk.embedding)
@@ -204,8 +227,8 @@ class PgRagRepository:
                                 (
                                     policy_id,
                                     chunk.chunk_index,
-                                    chunk.chunk_content,
-                                    Json(chunk.metadata_json),
+                                    clean_chunk_content,
+                                    Json(clean_meta) if clean_meta is not None else None,
                                     vector_str,
                                     chunk.chunk_id,
                                     chunk.parent_id,
