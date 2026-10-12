@@ -339,3 +339,89 @@ class PgEnvelopeRepository:
                     env["documents_count"] = len(env["documents"])
 
         return envelopes
+
+    def delete_envelope(self, envelope_id: str) -> dict[str, Any] | None:
+        """Atomically delete a policy envelope and all bound documents from PostgreSQL.
+
+        Due to ON DELETE CASCADE on:
+        - policy_raw_md
+        - policy_structured_data
+        - policy_chunks
+        - policy_processing_stats
+        deleting records from `policies` automatically cleans up all associated
+        content, vector embeddings, and telemetry.
+
+        Args:
+            envelope_id: UUID string of the envelope.
+
+        Returns:
+            Dictionary with deleted envelope info and deleted documents list,
+            or None if the envelope does not exist.
+        """
+        with self._db.get_connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    # 1. Verify existence and retrieve envelope details
+                    cur.execute(
+                        """
+                        SELECT id::text, numero_poliza, company_sigla, ramo
+                        FROM policy_envelopes
+                        WHERE id = %s::uuid;
+                        """,
+                        (envelope_id,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+
+                    envelope_info: dict[str, Any] = {
+                        "id": str(row[0]),
+                        "numero_poliza": row[1],
+                        "company_sigla": row[2],
+                        "ramo": row[3],
+                        "deleted_documents": [],
+                    }
+
+                    # 2. Retrieve bound documents for audit and disk cleanup
+                    cur.execute(
+                        """
+                        SELECT id::text, file_name, file_hash, company_sigla
+                        FROM policies
+                        WHERE envelope_id = %s::uuid;
+                        """,
+                        (envelope_id,),
+                    )
+                    docs = cur.fetchall()
+                    for d in docs:
+                        envelope_info["deleted_documents"].append({
+                            "policy_id": str(d[0]),
+                            "file_name": d[1],
+                            "file_hash": d[2],
+                            "company_sigla": d[3],
+                        })
+
+                    # 3. Delete bound documents from policies
+                    # Cascade handles policy_raw_md, policy_structured_data,
+                    # policy_chunks, and policy_processing_stats.
+                    cur.execute(
+                        """
+                        DELETE FROM policies
+                        WHERE envelope_id = %s::uuid;
+                        """,
+                        (envelope_id,),
+                    )
+
+                    # 4. Delete the envelope container
+                    cur.execute(
+                        """
+                        DELETE FROM policy_envelopes
+                        WHERE id = %s::uuid;
+                        """,
+                        (envelope_id,),
+                    )
+
+                conn.commit()
+                return envelope_info
+            except Exception:
+                conn.rollback()
+                raise

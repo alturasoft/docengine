@@ -314,3 +314,29 @@ class PolicyEnvelopeSearchResponse(BaseModel):
     total: int = Field(description="Cantidad de envelopes encontrados")
     envelopes: list[PolicyEnvelopeSchema] = Field(default_factory=list, description="Lista de envelopes")
 
+
+class DeletedDocumentInfoSchema(BaseModel):
+    """Información básica de un documento eliminado del sobre."""
+
+    policy_id: str = Field(description="UUID del documento en la tabla policies")
+    file_name: str = Field(description="Nombre del archivo original")
+    file_hash: str | None = Field(default=None, description="Hash SHA-256 del documento")
+    company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora")
+
+
+class DeleteEnvelopeResponseSchema(BaseModel):
+    """Respuesta a la eliminación de un sobre de póliza completo."""
+
+    envelope_id: str = Field(description="UUID del sobre de póliza eliminado")
+    numero_poliza: str = Field(description="Número de póliza del sobre")
+    company_sigla: str | None = Field(default=None, description="Sigla de la compañía aseguradora")
+    ramo: str | None = Field(default=None, description="Ramo del seguro")
+    deleted_documents_count: int = Field(description="Cantidad de documentos eliminados")
+    deleted_documents: list[DeletedDocumentInfoSchema] = Field(
+        default_factory=list, description="Lista de documentos asociados que fueron eliminados"
+    )
+    deleted_disk_dirs: list[str] = Field(
+        default_factory=list, description="Directorios de salida en disco eliminados"
+    )
+    message: str = Field(description="Mensaje informativo del resultado")
+

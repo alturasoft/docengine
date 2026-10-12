@@ -173,6 +173,48 @@ class LocalStorageService(IStorageService):
             return self._base_dir / company_sigla.upper() / folder_name
         return self._base_dir / folder_name
 
+    def delete_result_files(
+        self,
+        document_id: str | None = None,
+        company_sigla: str | None = None,
+        filename: str | None = None,
+    ) -> list[str]:
+        """Delete generated output files and directory for a given document.
+
+        Args:
+            document_id: Optional unique extraction identifier.
+            company_sigla: Optional company code.
+            filename: Optional original filename.
+
+        Returns:
+            List of directory paths (as strings) that were deleted.
+        """
+        import shutil
+
+        deleted: list[str] = []
+        if not document_id and not filename:
+            return deleted
+
+        output_dir = self.get_output_dir(
+            document_id=document_id or "",
+            company_sigla=company_sigla,
+            filename=filename,
+        )
+
+        if output_dir.exists() and output_dir.is_dir():
+            try:
+                shutil.rmtree(output_dir)
+                deleted.append(str(output_dir))
+                logger.info("Deleted output directory", path=str(output_dir))
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete output directory",
+                    path=str(output_dir),
+                    error=str(exc),
+                )
+
+        return deleted
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

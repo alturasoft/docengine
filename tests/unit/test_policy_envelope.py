@@ -17,11 +17,12 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_extraction_service, get_rag_pipeline_service
 from app.api.main import create_app
-from app.api.v1.policies import get_envelope_repo
+from app.api.v1.policies import get_envelope_repo, get_storage_service
 from app.domain.models.document import DocumentMetadata, ExtractionResult
 from app.domain.models.envelope import DocumentType, PolicyEnvelope, normalize_document_type
 from app.domain.models.extraction import ExtractionRequest, ExtractionStatus
 from app.infrastructure.database.pg_envelope_repository import PgEnvelopeRepository
+from app.infrastructure.storage.local_storage import LocalStorageService
 
 
 class TestDocumentTypeNormalization:
@@ -154,6 +155,46 @@ class TestPgEnvelopeRepository:
         assert args[1] == DocumentType.CONDICIONADO_GENERAL.value
         assert args[2] == "policy-uuid"
 
+    def test_delete_envelope_success(self):
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+
+        mock_db.get_connection.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        # Envelope row, then bound documents
+        mock_cur.fetchone.return_value = ("env-123", "POL-999", "CRI", "AUTOMOTOR")
+        mock_cur.fetchall.return_value = [
+            ("pol-1", "doc1.pdf", "hash1", "CRI"),
+            ("pol-2", "doc2.pdf", "hash2", "CRI"),
+        ]
+
+        repo = PgEnvelopeRepository(mock_db)
+        res = repo.delete_envelope("env-123")
+
+        assert res is not None
+        assert res["id"] == "env-123"
+        assert res["numero_poliza"] == "POL-999"
+        assert len(res["deleted_documents"]) == 2
+        assert res["deleted_documents"][0]["file_name"] == "doc1.pdf"
+        assert mock_cur.execute.call_count == 4  # 1: fetch env, 2: fetch docs, 3: delete policies, 4: delete envelope
+        mock_conn.commit.assert_called_once()
+
+    def test_delete_envelope_not_found(self):
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+
+        mock_db.get_connection.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+        mock_cur.fetchone.return_value = None
+
+        repo = PgEnvelopeRepository(mock_db)
+        res = repo.delete_envelope("non-existent-uuid")
+
+        assert res is None
+
 
 class TestPolicyEnvelopeEndpoints:
     """Test FastAPI endpoints for policy envelopes."""
@@ -226,6 +267,62 @@ class TestPolicyEnvelopeEndpoints:
         data = response.json()
         assert data["total"] == 1
         assert data["envelopes"][0]["numero_poliza"] == "POL-12345"
+
+    def test_delete_envelope_endpoint_success(self):
+        app = create_app()
+        mock_repo = MagicMock(spec=PgEnvelopeRepository)
+        mock_storage = MagicMock(spec=LocalStorageService)
+
+        deleted_info = {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "numero_poliza": "POL-12345",
+            "company_sigla": "CRI",
+            "ramo": "AUTOMOTOR",
+            "deleted_documents": [
+                {
+                    "policy_id": "pol-uuid-1",
+                    "file_name": "condicionado.pdf",
+                    "file_hash": "hash1",
+                    "company_sigla": "CRI",
+                }
+            ],
+        }
+        mock_repo.delete_envelope.return_value = deleted_info
+        mock_storage.delete_result_files.return_value = ["outputs/CRI/condicionado"]
+
+        app.dependency_overrides[get_envelope_repo] = lambda: mock_repo
+        app.dependency_overrides[get_storage_service] = lambda: mock_storage
+
+        client = TestClient(app)
+        response = client.delete("/api/v1/policies/envelopes/11111111-1111-1111-1111-111111111111?delete_files=true")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["envelope_id"] == "11111111-1111-1111-1111-111111111111"
+        assert data["numero_poliza"] == "POL-12345"
+        assert data["deleted_documents_count"] == 1
+        assert len(data["deleted_documents"]) == 1
+        assert data["deleted_disk_dirs"] == ["outputs/CRI/condicionado"]
+        mock_storage.delete_result_files.assert_called_once_with(
+            document_id="pol-uuid-1",
+            company_sigla="CRI",
+            filename="condicionado.pdf",
+        )
+
+    def test_delete_envelope_endpoint_not_found(self):
+        app = create_app()
+        mock_repo = MagicMock(spec=PgEnvelopeRepository)
+        mock_storage = MagicMock(spec=LocalStorageService)
+
+        mock_repo.delete_envelope.return_value = None
+        app.dependency_overrides[get_envelope_repo] = lambda: mock_repo
+        app.dependency_overrides[get_storage_service] = lambda: mock_storage
+
+        client = TestClient(app)
+        response = client.delete("/api/v1/policies/envelopes/00000000-0000-0000-0000-000000000000")
+
+        assert response.status_code == 404
+        assert "no encontrado" in response.json()["detail"]
 
     def test_extract_file_with_envelope_fields(self):
         from pathlib import Path

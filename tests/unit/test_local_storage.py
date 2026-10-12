@@ -129,3 +129,22 @@ class TestLocalStorageFolderNaming:
             company_sigla="CRI",
             filename="POLIZA_PRUEBA_123.pdf",
         )
+
+    def test_delete_result_files_removes_directory(
+        self,
+        storage_service: LocalStorageService,
+        dummy_result: ExtractionResult,
+    ) -> None:
+        """delete_result_files removes the output folder and its contents."""
+        saved_paths = storage_service.save_result(dummy_result)
+        out_dir = saved_paths["md"].parent
+        assert out_dir.exists()
+
+        deleted = storage_service.delete_result_files(
+            document_id=dummy_result.document_id,
+            company_sigla="CRI",
+            filename="POLIZA_PRUEBA_123.pdf",
+        )
+
+        assert len(deleted) == 1
+        assert not out_dir.exists()

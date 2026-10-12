@@ -12,6 +12,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.v1.schemas import (
+    DeleteEnvelopeResponseSchema,
+    DeletedDocumentInfoSchema,
     PolicyBasicInfoSchema,
     PolicyEnvelopeSchema,
     PolicyEnvelopeSearchResponse,
@@ -24,6 +26,7 @@ from app.infrastructure.database.pg_structured_search import (
     PgStructuredSearchRepository,
 )
 from app.infrastructure.logging.logger import get_logger
+from app.infrastructure.storage.local_storage import LocalStorageService
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/policies", tags=["Policies"])
@@ -59,6 +62,23 @@ def get_envelope_repo(request: Request) -> PgEnvelopeRepository:
 
 
 EnvelopeRepoDep = Annotated[PgEnvelopeRepository, Depends(get_envelope_repo)]
+
+
+def get_storage_service(request: Request) -> LocalStorageService:
+    """Dependency to retrieve or instantiate LocalStorageService."""
+    extraction_svc = getattr(request.app.state, "extraction_service", None)
+    if extraction_svc and hasattr(extraction_svc, "_storage") and extraction_svc._storage is not None:
+        return extraction_svc._storage
+
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        from app.config.settings import get_settings
+        settings = get_settings()
+
+    return LocalStorageService(settings)
+
+
+StorageServiceDep = Annotated[LocalStorageService, Depends(get_storage_service)]
 
 
 
@@ -239,4 +259,81 @@ def get_policy_by_id(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve policy: {exc}",
+        ) from exc
+
+
+@router.delete(
+    "/envelopes/{envelope_id}",
+    response_model=DeleteEnvelopeResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Eliminar sobre de póliza completo y todos sus documentos",
+    description=(
+        "Elimina de forma atómica y completa un sobre de póliza (envelope) junto con todos los "
+        "documentos asociados a él en PostgreSQL (incluyendo chunks vectoriales, datos estructurados, "
+        "markdown y estadísticas). Opcionalmente elimina las carpetas de salida en disco."
+    ),
+)
+def delete_envelope(
+    envelope_id: str,
+    repo: EnvelopeRepoDep,
+    storage: StorageServiceDep,
+    delete_files: bool = Query(
+        default=True,
+        description="Si es True, elimina también del sistema de archivos las carpetas generadas en outputs/",
+    ),
+) -> DeleteEnvelopeResponseSchema:
+    """Delete a policy envelope and all associated documents."""
+    try:
+        deleted_data = repo.delete_envelope(envelope_id)
+        if not deleted_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Sobre de póliza (envelope) con ID '{envelope_id}' no encontrado.",
+            )
+
+        deleted_disk_dirs: list[str] = []
+        if delete_files:
+            for doc in deleted_data.get("deleted_documents", []):
+                dirs = storage.delete_result_files(
+                    document_id=doc.get("policy_id"),
+                    company_sigla=doc.get("company_sigla"),
+                    filename=doc.get("file_name"),
+                )
+                deleted_disk_dirs.extend(dirs)
+
+        deleted_docs_schema = [
+            DeletedDocumentInfoSchema(
+                policy_id=d["policy_id"],
+                file_name=d["file_name"],
+                file_hash=d.get("file_hash"),
+                company_sigla=d.get("company_sigla"),
+            )
+            for d in deleted_data.get("deleted_documents", [])
+        ]
+
+        logger.info(
+            "Envelope y documentos eliminados exitosamente",
+            envelope_id=envelope_id,
+            numero_poliza=deleted_data.get("numero_poliza"),
+            deleted_docs_count=len(deleted_docs_schema),
+            deleted_disk_dirs_count=len(deleted_disk_dirs),
+        )
+
+        return DeleteEnvelopeResponseSchema(
+            envelope_id=deleted_data["id"],
+            numero_poliza=deleted_data["numero_poliza"],
+            company_sigla=deleted_data.get("company_sigla"),
+            ramo=deleted_data.get("ramo"),
+            deleted_documents_count=len(deleted_docs_schema),
+            deleted_documents=deleted_docs_schema,
+            deleted_disk_dirs=deleted_disk_dirs,
+            message="Sobre de póliza y todos sus documentos asociados fueron eliminados exitosamente.",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error al eliminar el sobre de póliza", envelope_id=envelope_id, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al eliminar el sobre de póliza: {exc}",
         ) from exc
