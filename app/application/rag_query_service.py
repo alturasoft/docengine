@@ -194,15 +194,36 @@ class RAGQueryService:
         # Step 1: Embed the query using the shared bge-m3 model
         query_vector = self._embed_query(question)
 
-        # Step 2: Retrieve policy chunks (recuperación de la póliza completa o acotada por sobre)
+        # Step 2: Retrieve policy chunks (recuperación de la póliza completa o acotada por sobre o cliente)
         target_envelope_id = effective_filters.get("envelope_id")
         target_policy_id = effective_filters.get("policy_id")
+        target_id_cliente = effective_filters.get("id_cliente")
 
         if target_envelope_id and hasattr(self._vector_search, "get_all_chunks_for_envelope"):
             logger.info("Recuperando toda la póliza completa y anexos del sobre para contexto", envelope_id=target_envelope_id)
             retrieved_chunks = self._vector_search.get_all_chunks_for_envelope(target_envelope_id)
         elif target_envelope_id:
             logger.info("Búsqueda RAG acotada a sobre de póliza", envelope_id=target_envelope_id)
+            search_filters = effective_filters
+            if self._hybrid_search is not None:
+                retrieved_chunks = self._retrieve_and_rerank(
+                    query_vector=query_vector,
+                    query_text=question,
+                    top_k=resolved_top_k,
+                    filters=search_filters,
+                )
+            else:
+                retrieved_chunks = self._retrieve_chunks(
+                    query_vector=query_vector,
+                    top_k=resolved_top_k,
+                    threshold=resolved_threshold,
+                    filters=search_filters,
+                )
+        elif target_id_cliente and hasattr(self._vector_search, "get_all_chunks_for_client"):
+            logger.info("Recuperando todos los documentos del cliente para contexto", id_cliente=target_id_cliente)
+            retrieved_chunks = self._vector_search.get_all_chunks_for_client(target_id_cliente)
+        elif target_id_cliente:
+            logger.info("Búsqueda RAG acotada a cliente", id_cliente=target_id_cliente)
             search_filters = effective_filters
             if self._hybrid_search is not None:
                 retrieved_chunks = self._retrieve_and_rerank(

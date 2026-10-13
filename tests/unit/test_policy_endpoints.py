@@ -188,6 +188,36 @@ class TestPgStructuredSearchRecentAndFind:
         assert res["numero_poliza"] == "SCR0667473"
         assert res["asegurado"] == "Credinform Client"
 
+    def test_find_basic_by_client_id_found(self) -> None:
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_db.get_connection.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        mock_cur.fetchone.return_value = (
+            "uuid-456",
+            "file_client.pdf",
+            "CRI",
+            "2026-09-14",
+            {
+                "datos_cabecera": {
+                    "numero_poliza": "SCR999999",
+                    "asegurado": "Cliente con CI",
+                    "documento_identidad": "10203040",
+                }
+            },
+            "10203040",
+        )
+
+        repo = PgStructuredSearchRepository(mock_db)
+        res = repo.find_basic_by_policy_number_or_id("10203040")
+
+        assert res is not None
+        assert res["policy_id"] == "uuid-456"
+        assert res["id_cliente"] == "10203040"
+        assert res["numero_poliza"] == "SCR999999"
+
     def test_find_basic_by_policy_number_or_id_not_found(self) -> None:
         mock_db = MagicMock()
         mock_conn = MagicMock()

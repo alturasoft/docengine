@@ -974,38 +974,50 @@
           </label>
           <select id="companySelect" class="form-control" style="border-color: rgba(99, 102, 241, 0.4); font-weight: 500;" required>
             <option value="" disabled selected>-- Selecciona una Empresa --</option>
-            <option value="ALI">ALI — ALIANZA CIA DE SEGUROS Y REASEGUROS SA</option>
-            <option value="ALV">ALV — ALIANZA VIDA SEGUROS Y REASEGUROS S.A</option>
-            <option value="BIS">BIS — BISA SEGUROS Y REASEGUROS</option>
-            <option value="FOV">FOV — COMPAÑIA DE SEGUROS DE VIDA FORTALEZA S.A</option>
-            <option value="CRI">CRI — CREDINFORM INTERNATIONAL S.A</option>
-            <option value="CRG">CRG — CREDISEGURO S.A. SEGUROS GENERALES</option>
-            <option value="CRP">CRP — CREDISEGURO S.A. SEGUROS PERSONALES</option>
-            <option value="FOR">FOR — FORTALEZA COMPAÑIA DE SEGUROS Y REASEGUROS</option>
+            <option value="ALI-SEG">ALI-SEG — ALIANZA CIA DE SEGUROS Y REASEGUROS SA.</option>
+            <option value="ALI-VIDA">ALI-VIDA — ALIANZA VIDA SEGUROS Y REASEGUROS S.A.</option>
+            <option value="BISA">BISA — BISA SEGUROS Y REASEGUROS</option>
+            <option value="CRE">CRE — CREDINFORM INTERNATIONAL S.A.</option>
+            <option value="CRDI-G">CRDI-G — CREDISEGURO S.A. SEGUROS GENERALES</option>
+            <option value="CRESEG">CRESEG — CREDISEGURO S.A. SEGUROS PERSONALES</option>
+            <option value="DHI">DHI — BUPA ISURANCE S.A.</option>
+            <option value="FORT">FORT — FORTALEZA COMPAÑÍA DE SEGUROS Y REASEGUROS</option>
+            <option value="FORT-P">FORT-P — COMPAÑÍA DE SEGUROS DE VIDA FORTALEZA S.A.</option>
+            <option value="ILLI">ILLI — SEGUROS ILLIMANI</option>
             <option value="LBC">LBC — LA BOLIVIANA CIACRUZ DE SEGUROS Y REASEGUROS</option>
-            <option value="LBP">LBP — LA BOLIVIANA CIACRUZ SEGUROS PERSONALES</option>
+            <option value="LBC-P">LBC-P — LA BOLIVIANA CIACRUZ SEGUROS PERSONALES</option>
+            <option value="MSC">MSC — MERCANTIL SANTA CRUZ SEGUROS Y REASEGUROS GENERALES S.A.</option>
+            <option value="NAL-VIDA">NAL-VIDA — NACIONAL SEGUROS VIDA Y SALUD S.A.</option>
+            <option value="NSPF">NSPF — NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A.</option>
+            <option value="UNIBIENES">UNIBIENES — UNIBIENES SEGUROS Y REASEGUROS</option>
+            <option value="UNIVIDA">UNIVIDA — SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A.</option>
             <option value="VIT">VIT — LA VITALICIA DE SEGUROS Y REASEGUROS</option>
-            <option value="MSC">MSC — MERCANTIL SANTA CRUZ SEGUROS Y REASEGUROS GENERALES S.A</option>
-            <option value="NPF">NPF — NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A</option>
-            <option value="NVS">NVS — NACIONAL SEGUROS VIDA Y SALUD S.A</option>
-            <option value="UNI">UNI — SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A</option>
-            <option value="UBI">UBI — UNIBIENES SEGUROS Y REASEGUROS</option>
           </select>
         </div>
 
-        <!-- Policy Envelope Linking Card (Optional) -->
+        <!-- Policy Envelope & Client Linking Card -->
         <div id="envelopeSection" style="margin-bottom: 1.25rem; padding: 0.95rem; background: rgba(15, 23, 42, 0.45); border: 1px solid var(--bg-card-border); border-radius: var(--radius-sm);">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
             <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 0.45rem;">
-              <i class="fa-solid fa-folder-tree" style="color: var(--accent-primary);"></i> Vinculación a Póliza <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal;">(Opcional)</span>
+              <i class="fa-solid fa-id-card" style="color: var(--accent-primary);"></i> Identificación de Cliente y Póliza
             </span>
-            <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 4px;">SOBRE DIGITAL</span>
+            <span class="badge-status" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 4px;">JERARQUÍA SUPERIOR</span>
           </div>
 
+          <!-- Nivel 1: ID Cliente (REQUERIDO) -->
+          <div style="margin-bottom: 0.75rem; background: rgba(99, 102, 241, 0.08); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px dashed rgba(99, 102, 241, 0.35);">
+            <label style="font-size: 0.76rem; color: #a5b4fc; font-weight: 600; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
+              <span><i class="fa-solid fa-address-card" style="font-size: 0.72rem;"></i> ID Cliente (Carnet o NIT) <span style="color: #ef4444; font-weight: bold;">* REQUERIDO</span></span>
+              <span style="font-size: 0.68rem; color: var(--text-dim); font-weight: normal;">(Jerarquía 1)</span>
+            </label>
+            <input type="text" id="envelopeIdCliente" class="form-control" style="font-size: 0.84rem; padding: 0.45rem 0.65rem; border-color: rgba(99, 102, 241, 0.45); font-weight: 500;" placeholder="Ej. 1020415021 o 4892341 SC" autocomplete="off" required>
+          </div>
+
+          <!-- Nivel 2: Póliza y Ramo -->
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem;">
             <div>
               <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
-                <i class="fa-solid fa-hashtag" style="font-size: 0.68rem;"></i> N° de Póliza
+                <i class="fa-solid fa-hashtag" style="font-size: 0.68rem;"></i> N° de Póliza <span style="font-size: 0.68rem; color: var(--text-dim);">(Opcional)</span>
               </label>
               <input type="text" id="envelopeNumeroPoliza" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Ej. P2000111588" autocomplete="off">
             </div>
@@ -1041,19 +1053,16 @@
             </label>
             <select id="envelopeTipoDocumento" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;">
               <option value="">-- No especificado (Auto-detectar) --</option>
-              <option value="CONDICIONADO_GENERAL">Condicionado General</option>
-              <option value="CONDICIONADO_PARTICULAR">Condicionado Particular</option>
-              <option value="LIQUIDACION_PAGOS">Liquidación / Plan de Pagos</option>
-              <option value="ANEXO">Anexo</option>
-              <option value="POLIZA_PRINCIPAL">Póliza Principal / Carátula</option>
-              <option value="ENDOSO">Endoso</option>
-              <option value="CERTIFICADO">Certificado de Cobertura</option>
-              <option value="DECLARACION_INDIVIDUAL">Declaración Individual</option>
-              <option value="OTRO">Otro documento</option>
+              <option value="Condicionado General">1. Condicionado General</option>
+              <option value="Condicionado(s) Particular(es) por Riesgo o Ramo o Anexo de Liquidación Anual">2. Condicionado(s) Particular(es) por Riesgo o Ramo o Anexo de Liquidación Anual</option>
+              <option value="Liquidación de Cobranzas/Plan de Pagos (CLIENTE)">3. Liquidación de Cobranzas/Plan de Pagos (CLIENTE)</option>
+              <option value="Clausulas y/o anexos">4. Clausulas y/o anexos</option>
+              <option value="Certificados">5. Certificados</option>
+              <option value="Anexo, Certificado, Aplicación y Liquidación de cobranzas (Si corresponde)">6. Anexo, Certificado, Aplicación y Liquidación de cobranzas (Si corresponde)</option>
             </select>
           </div>
           <div style="margin-top: 0.45rem; font-size: 0.7rem; color: var(--text-dim); line-height: 1.35;">
-            <i class="fa-solid fa-circle-info" style="color: var(--accent-primary);"></i> Permite agrupar varios archivos (condicionado general, particular, liquidación) bajo una misma póliza.
+            <i class="fa-solid fa-circle-info" style="color: var(--accent-primary);"></i> Permite agrupar las pólizas y documentos bajo el cliente titular identificado por CI o NIT.
           </div>
         </div>
 
@@ -1611,8 +1620,22 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
+      const idCliente = document.getElementById('envelopeIdCliente')?.value?.trim();
+      if (!idCliente) {
+        alert('⚠️ DEBES INGRESAR OBLIGATORIAMENTE EL ID DEL CLIENTE (Carnet de Identidad o NIT) ANTES DE EXTRAER.');
+        const idInput = document.getElementById('envelopeIdCliente');
+        if (idInput) {
+          idInput.focus();
+          idInput.style.borderColor = '#ef4444';
+        }
+        return;
+      }
+      const idInput = document.getElementById('envelopeIdCliente');
+      if (idInput) idInput.style.borderColor = 'rgba(99, 102, 241, 0.45)';
+
       const formData = new FormData();
       formData.append('file', selectedFile);
+      formData.append('id_cliente', idCliente);
       formData.append('company_sigla', sigla);
 
       const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
@@ -1623,7 +1646,7 @@
       if (ramo) formData.append('ramo', ramo);
       if (tipoDoc) formData.append('tipo_documento', tipoDoc);
 
-      const extraInfo = numPoliza ? ` [Póliza: ${numPoliza}]` : '';
+      const extraInfo = numPoliza ? ` [Cliente: ${idCliente} | Póliza: ${numPoliza}]` : ` [Cliente: ${idCliente}]`;
       showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]${extraInfo}...`);
       startProgressSimulation();
       startExtractionLogPolling();
@@ -1662,7 +1685,18 @@
       const sigla = getSelectedCompany();
       if (!sigla) return;
 
-      showLoader(`Descargando y extrayendo desde URL con Skill [${sigla}]...`);
+      const idCliente = document.getElementById('envelopeIdCliente')?.value?.trim();
+      if (!idCliente) {
+        alert('⚠️ DEBES INGRESAR OBLIGATORIAMENTE EL ID DEL CLIENTE (Carnet de Identidad o NIT) PARA EXTRAER DESDE URL.');
+        const idInput = document.getElementById('envelopeIdCliente');
+        if (idInput) {
+          idInput.focus();
+          idInput.style.borderColor = '#ef4444';
+        }
+        return;
+      }
+
+      showLoader(`Descargando y extrayendo desde URL con Skill [${sigla}] [Cliente: ${idCliente}]...`);
       startProgressSimulation();
       startExtractionLogPolling();
 
@@ -1670,7 +1704,7 @@
         const res = await fetch(`${getApiUrl()}/api/v1/extract/url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url, output_formats: ['all'], company_sigla: sigla })
+          body: JSON.stringify({ url: url, id_cliente: idCliente, output_formats: ['all'], company_sigla: sigla })
         });
 
         if (!res.ok) {
@@ -1705,6 +1739,7 @@
       startProgressSimulation();
       startExtractionLogPolling();
 
+      const idCliente = document.getElementById('envelopeIdCliente')?.value?.trim();
       const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
       const ramo = document.getElementById('envelopeRamo')?.value?.trim();
 
@@ -1713,6 +1748,7 @@
         output_formats: ['all'],
         company_sigla: sigla
       };
+      if (idCliente) payload.id_cliente = idCliente;
       if (numPoliza) payload.numero_poliza = numPoliza;
       if (ramo) payload.ramo = ramo;
 
@@ -2176,6 +2212,56 @@
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
+
+    async function initCatalogs() {
+      try {
+        const baseUrl = getApiUrl();
+        const [compRes, ramosRes, docsRes] = await Promise.allSettled([
+          fetch(`${baseUrl}/api/v1/catalogs/companies`).then(r => r.ok ? r.json() : null),
+          fetch(`${baseUrl}/api/v1/catalogs/ramos/grouped`).then(r => r.ok ? r.json() : null),
+          fetch(`${baseUrl}/api/v1/catalogs/document-types`).then(r => r.ok ? r.json() : null)
+        ]);
+
+        if (compRes.status === 'fulfilled' && compRes.value) {
+          const compSel = document.getElementById('companySelect');
+          if (compSel) {
+            const currentVal = compSel.value;
+            compSel.innerHTML = '<option value="" disabled selected>-- Selecciona una Empresa --</option>' +
+              compRes.value.map(c => `<option value="${c.sigla}">${c.sigla} — ${c.nombre}</option>`).join('');
+            if (currentVal) compSel.value = currentVal;
+          }
+        }
+
+        if (ramosRes.status === 'fulfilled' && ramosRes.value) {
+          const ramoSel = document.getElementById('envelopeRamo');
+          if (ramoSel) {
+            let html = '<option value="">-- No especificado --</option>';
+            for (const [grupo, lista] of Object.entries(ramosRes.value)) {
+              html += `<optgroup label="${escapeHtml(grupo)}">`;
+              lista.forEach(item => {
+                html += `<option value="${escapeHtml(item.ramo)}">${item.codigo} - ${escapeHtml(item.ramo)}</option>`;
+              });
+              html += `</optgroup>`;
+            }
+            ramoSel.innerHTML = html;
+          }
+        }
+
+        if (docsRes.status === 'fulfilled' && docsRes.value) {
+          const docSel = document.getElementById('envelopeTipoDocumento');
+          if (docSel) {
+            let html = '<option value="">-- No especificado (Auto-detectar) --</option>';
+            docsRes.value.forEach(d => {
+              html += `<option value="${escapeHtml(d.documento)}">${d.id}. ${escapeHtml(d.documento)}</option>`;
+            });
+            docSel.innerHTML = html;
+          }
+        }
+      } catch (e) {
+        console.warn('Usando catálogos predeterminados locales:', e);
+      }
+    }
+    window.addEventListener('DOMContentLoaded', initCatalogs);
   </script>
 </body>
 </html>

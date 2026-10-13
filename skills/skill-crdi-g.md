@@ -1,6 +1,6 @@
 ﻿---
-sigla: UNI
-empresa: SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A
+sigla: CRDI-G
+empresa: CREDISEGURO S.A. SEGUROS GENERALES
 version: 1
 estado: borrador
 ultima_revision: 2026-07-30
@@ -8,7 +8,7 @@ ultima_revision: 2026-07-30
 
 ## Descripción
 
-Reglas de extracción para pólizas de **SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A**.
+Reglas de extracción para pólizas de **CREDISEGURO S.A. SEGUROS GENERALES**.
 
 Completar este skill a medida que se analicen documentos y se identifiquen patrones
 propios de esta aseguradora.

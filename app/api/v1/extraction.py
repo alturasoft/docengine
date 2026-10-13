@@ -7,6 +7,7 @@ POST /api/v1/extract/folder   — Extract all PDFs in a server-side folder
 
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,7 @@ _MAX_FILENAME_LEN = 255
 async def extract_file(
     file: UploadFile,
     extraction_service: ExtractionServiceDep,
+    id_cliente: str = Form(..., description="Carnet de Identidad o NIT del cliente (REQUERIDO)"),
     rag_service: RagPipelineServiceDep = None,
     company_sigla: str | None = Form(default=None, description="Sigla identificadora de la compañía aseguradora (ej. CRI, LBC, ALI) para aplicar reglas especializadas"),
     numero_poliza: str | None = Form(default=None, description="Número de póliza para vincular el documento a un sobre de póliza (envelope)"),
@@ -62,6 +64,7 @@ async def extract_file(
     Args:
         file: Uploaded PDF file via multipart/form-data.
         extraction_service: Injected ExtractionService.
+        id_cliente: Customer identifier (Carnet or NIT) (REQUIRED).
         rag_service: Injected RagPipelineService (optional).
         company_sigla: Optional 3-letter company code.
         numero_poliza: Optional policy number to bind this file to a policy envelope.
@@ -72,10 +75,17 @@ async def extract_file(
         ExtractionResultSchema with Markdown preview and metadata.
 
     Raises:
-        HTTPException 400: If the file is not a valid PDF.
+        HTTPException 400: If the file is not a valid PDF or id_cliente is empty.
         HTTPException 500: If extraction fails unexpectedly.
     """
     _validate_upload(file)
+
+    id_cliente_clean = id_cliente.strip() if id_cliente else ""
+    if not id_cliente_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El campo 'id_cliente' (Carnet de Identidad o NIT) es requerido y no puede estar vacío.",
+        )
 
     # Save uploaded file to a temporary location
     temp_path = Path("outputs") / "_uploads" / f"{uuid.uuid4()}_{file.filename}"
@@ -94,6 +104,7 @@ async def extract_file(
             "[Upload] Archivo PDF recibido para extracción",
             filename=file.filename,
             size_bytes=len(content),
+            id_cliente=id_cliente_clean,
             company_sigla=sigla_clean or "NO_ESPECIFICADA",
             numero_poliza=num_poliza_clean,
             tipo_documento=tipo_doc_clean,
@@ -107,11 +118,14 @@ async def extract_file(
             numero_poliza=num_poliza_clean,
             ramo=ramo_clean,
             tipo_documento=tipo_doc_clean,
+            id_cliente=id_cliente_clean,
         )
 
         result = extraction_service.extract_document(request)
         if file.filename:
             result.metadata.filename = file.filename
+        if result.metadata:
+            result.metadata.id_cliente = id_cliente_clean
         _record_and_log(result)
 
         rag_report_schema = _process_rag_safe(
@@ -120,6 +134,7 @@ async def extract_file(
             numero_poliza=num_poliza_clean,
             ramo=ramo_clean,
             tipo_documento=tipo_doc_clean,
+            id_cliente=id_cliente_clean,
         )
         return _to_schema(result, rag_report=rag_report_schema)
 
@@ -153,7 +168,7 @@ def extract_url(
     """Extract content from a PDF available at a URL.
 
     Args:
-        body: Request body containing the URL and optional company_sigla.
+        body: Request body containing the URL, id_cliente and optional company_sigla.
         extraction_service: Injected ExtractionService.
         rag_service: Injected RagPipelineService (optional).
 
@@ -161,14 +176,23 @@ def extract_url(
         ExtractionResultSchema with Markdown preview and metadata.
 
     Raises:
-        HTTPException 400: If the URL does not appear to point to a PDF.
+        HTTPException 400: If the URL does not appear to point to a PDF or id_cliente is missing.
         HTTPException 500: If extraction fails unexpectedly.
     """
     try:
         sigla_clean = body.company_sigla.strip().upper() if body.company_sigla else None
+        id_cliente_clean = body.id_cliente.strip() if body.id_cliente else ""
+        if not id_cliente_clean:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El campo 'id_cliente' (Carnet de Identidad o NIT) es requerido.",
+            )
+
         result = extraction_service.extract_from_url(body.url, company_sigla=sigla_clean)
+        if result.metadata:
+            result.metadata.id_cliente = id_cliente_clean
         _record_and_log(result)
-        rag_report_schema = _process_rag_safe(rag_service, result)
+        rag_report_schema = _process_rag_safe(rag_service, result, id_cliente=id_cliente_clean)
         return _to_schema(result, rag_report=rag_report_schema)
     except ValueError as exc:
         raise HTTPException(
@@ -182,6 +206,43 @@ def extract_url(
         ) from exc
 
 
+def _infer_client_and_policy(
+    filename: str,
+    default_client: str | None = None,
+    default_pol: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Infers id_cliente and numero_poliza from filename prefixes.
+
+    Supports formats like:
+      - '{id_cliente}_{numero_poliza}_document.pdf' (e.g. '10203040_POL-123_Condicionado.pdf')
+      - '{id_cliente}_document.pdf' (e.g. '10203040_Condicionado.pdf')
+    Falls back to default_client and default_pol if not present in prefix.
+    """
+    if not filename:
+        return default_client, default_pol
+
+    stem = Path(filename).stem
+    tokens = [t.strip() for t in re.split(r"[_\#]+", stem) if t.strip()]
+    inferred_client = default_client
+    inferred_pol = default_pol
+
+    if tokens:
+        first = tokens[0]
+        digits = re.sub(r"\D", "", first)
+        if 4 <= len(digits) <= 12 and (first.isdigit() or any(first.upper().startswith(p) for p in ("CI", "NIT"))):
+            inferred_client = first
+            if len(tokens) > 1 and not default_pol:
+                second = tokens[1]
+                if (
+                    any(c.isdigit() for c in second)
+                    and len(second) >= 3
+                    and second.upper() not in ("CONDICIONADO", "LIQUIDACION", "ANEXO", "CARATULA", "GENERAL", "PARTICULAR")
+                ):
+                    inferred_pol = second
+
+    return inferred_client, inferred_pol
+
+
 @router.post(
     "/extract/folder",
     response_model=BatchExtractionResultSchema,
@@ -189,6 +250,7 @@ def extract_url(
     summary="Extraer todos los PDFs de una carpeta",
     description=(
         "Procesa de forma recursiva todos los archivos PDF encontrados en un directorio del servidor. "
+        "Permite asociar id_cliente a toda la carpeta o inferirlo mediante prefijos en los nombres de archivo. "
         "Retorna un reporte consolidado por lote con el estado individual de cada documento procesado."
     ),
 )
@@ -200,7 +262,7 @@ def extract_folder(
     """Extract all PDFs in a server-side directory.
 
     Args:
-        body: Request body with folder_path and optional company_sigla.
+        body: Request body with folder_path, optional id_cliente and optional company_sigla.
         extraction_service: Injected ExtractionService.
         rag_service: Injected RagPipelineService (optional).
 
@@ -222,6 +284,14 @@ def extract_folder(
         sigla_clean = body.company_sigla.strip().upper() if body.company_sigla else None
         pol_num_hint = body.numero_poliza.strip() if body.numero_poliza else None
         ramo_hint = body.ramo.strip() if body.ramo else None
+        client_hint = body.id_cliente.strip() if body.id_cliente else None
+
+        # Auto-infer client ID from folder name if folder resembles CI/NIT (e.g. '10203040' or 'NIT_10203040')
+        if not client_hint and folder.name:
+            folder_candidate = folder.name.strip()
+            digits = re.sub(r"\D", "", folder_candidate)
+            if 4 <= len(digits) <= 12 and (folder_candidate.isdigit() or any(folder_candidate.upper().startswith(p) for p in ("CI", "NIT"))):
+                client_hint = folder_candidate
 
         # Auto-infer policy number from folder name if folder resembles a policy code
         if not pol_num_hint and folder.name:
@@ -230,6 +300,7 @@ def extract_folder(
                 any(c.isdigit() for c in folder_candidate)
                 and len(folder_candidate) >= 4
                 and folder_candidate.lower() not in ("samples", "outputs", "pdfs", "inputs")
+                and folder_candidate != client_hint
             ):
                 pol_num_hint = folder_candidate
 
@@ -239,16 +310,28 @@ def extract_folder(
         schema_results = []
         for r in results:
             auto_tipo_doc = None
-            if r.metadata and r.metadata.filename:
+            filename = r.metadata.filename if (r.metadata and r.metadata.filename) else ""
+            if filename:
                 from app.domain.models.envelope import normalize_document_type  # noqa: PLC0415
-                auto_tipo_doc = normalize_document_type(r.metadata.filename)
+                auto_tipo_doc = normalize_document_type(filename)
+
+            # Infer per-file client and policy if prefixes exist in filename
+            effective_client, effective_pol = _infer_client_and_policy(
+                filename,
+                default_client=client_hint,
+                default_pol=pol_num_hint,
+            )
+
+            if r.metadata:
+                r.metadata.id_cliente = effective_client
 
             rag_report_schema = _process_rag_safe(
                 rag_service,
                 r,
-                numero_poliza=pol_num_hint,
+                numero_poliza=effective_pol,
                 ramo=ramo_hint,
                 tipo_documento=auto_tipo_doc,
+                id_cliente=effective_client,
             )
             schema_results.append(_to_schema(r, rag_report=rag_report_schema))
 
@@ -378,6 +461,7 @@ def _process_rag_safe(
     numero_poliza: str | None = None,
     ramo: str | None = None,
     tipo_documento: str | None = None,
+    id_cliente: str | None = None,
 ) -> RagReportSchema | None:
     """Helper to safely execute RAG pipeline without failing primary extraction."""
     if not rag_service or not result.is_successful:
@@ -388,6 +472,7 @@ def _process_rag_safe(
             numero_poliza=numero_poliza,
             ramo=ramo,
             tipo_documento=tipo_documento,
+            id_cliente=id_cliente,
         )
         if report:
             return RagReportSchema(
@@ -445,6 +530,7 @@ def _to_schema(
             pdf_detection_time_seconds=getattr(meta, "pdf_detection_time_seconds", None),
             envelope_id=getattr(meta, "envelope_id", None),
             tipo_documento=getattr(meta, "tipo_documento", None),
+            id_cliente=getattr(meta, "id_cliente", None),
         ),
         output_paths={k: str(v) for k, v in result.output_paths.items()},
         rag_report=rag_report,

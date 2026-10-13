@@ -84,6 +84,7 @@ class PolicyEnvelope:
     numero_poliza: str
     company_sigla: str | None = None
     ramo: str | None = None
+    id_cliente: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
     )
@@ -99,6 +100,7 @@ class PolicyEnvelope:
             "numero_poliza": self.numero_poliza,
             "company_sigla": self.company_sigla,
             "ramo": self.ramo,
+            "id_cliente": self.id_cliente,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "documents_count": len(self.documents),

@@ -152,6 +152,7 @@ def list_envelopes(
     limit: int = Query(default=50, ge=1, le=100, description="Cantidad máxima de pólizas a retornar"),
     offset: int = Query(default=0, ge=0, description="Offset para paginación"),
     company_sigla: str | None = Query(default=None, description="Filtro opcional por sigla de compañía"),
+    id_cliente: str | None = Query(default=None, description="Filtro opcional por identificador de cliente (Carnet o NIT)"),
 ) -> PolicyEnvelopeSearchResponse:
     """List policy envelopes with bound documents."""
     try:
@@ -159,6 +160,7 @@ def list_envelopes(
             limit=limit,
             offset=offset,
             company_sigla=company_sigla,
+            id_cliente=id_cliente,
         )
         return PolicyEnvelopeSearchResponse(
             total=len(envelopes),
@@ -169,6 +171,38 @@ def list_envelopes(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error listing envelopes: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/envelopes/by-client/{id_cliente}",
+    response_model=PolicyEnvelopeSearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Buscar sobres de póliza por cliente (Carnet o NIT)",
+    description="Retorna todas las pólizas (sobres) y documentos vinculados pertenecientes a un cliente específico.",
+)
+def get_envelopes_by_client(
+    id_cliente: str,
+    repo: EnvelopeRepoDep,
+    limit: int = Query(default=50, ge=1, le=100, description="Cantidad máxima de pólizas a retornar"),
+    offset: int = Query(default=0, ge=0, description="Offset para paginación"),
+) -> PolicyEnvelopeSearchResponse:
+    """Find policy envelopes and bound documents for a specific client."""
+    try:
+        envelopes = repo.get_envelopes_by_client_id(
+            id_cliente=id_cliente,
+            limit=limit,
+            offset=offset,
+        )
+        return PolicyEnvelopeSearchResponse(
+            total=len(envelopes),
+            envelopes=[PolicyEnvelopeSchema(**e) for e in envelopes],
+        )
+    except Exception as exc:
+        logger.error("Error searching envelopes by client ID", id_cliente=id_cliente, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error searching envelopes by client: {exc}",
         ) from exc
 
 

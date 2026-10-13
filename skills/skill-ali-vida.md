@@ -1,6 +1,6 @@
 ﻿---
-sigla: FOR
-empresa: FORTALEZA COMPAÑIA DE SEGUROS Y REASEGUROS
+sigla: ALI-VIDA
+empresa: ALIANZA VIDA SEGUROS Y REASEGUROS S.A
 version: 1
 estado: borrador
 ultima_revision: 2026-07-30
@@ -8,7 +8,7 @@ ultima_revision: 2026-07-30
 
 ## Descripción
 
-Reglas de extracción para pólizas de **FORTALEZA COMPAÑIA DE SEGUROS Y REASEGUROS**.
+Reglas de extracción para pólizas de **ALIANZA VIDA SEGUROS Y REASEGUROS S.A**.
 
 Completar este skill a medida que se analicen documentos y se identifiquen patrones
 propios de esta aseguradora.

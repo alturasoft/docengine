@@ -58,6 +58,10 @@ class MetadataSchema(BaseModel):
         default=None,
         description="Clasificación del tipo de documento (ej. 'CONDICIONADO_GENERAL', 'CONDICIONADO_PARTICULAR')",
     )
+    id_cliente: str | None = Field(
+        default=None,
+        description="Identificador del cliente (Carnet de Identidad o NIT)",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +118,7 @@ class UrlExtractionRequest(BaseModel):
     """Cuerpo de la petición para extracción basada en URL remota."""
 
     url: str = Field(description="URL pública que apunta al documento PDF a procesar")
+    id_cliente: str = Field(description="Identificador del cliente (Carnet de Identidad o NIT) (REQUERIDO)")
     output_formats: list[str] = Field(
         default=["all"],
         description="Formatos de salida a generar: 'md', 'json', 'all'",
@@ -130,6 +135,10 @@ class FolderExtractionRequest(BaseModel):
     output_formats: list[str] = Field(default=["all"], description="Formatos de salida a generar: 'md', 'json', 'all'")
     company_sigla: str | None = Field(
         default=None, description="Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"
+    )
+    id_cliente: str | None = Field(
+        default=None,
+        description="Identificador del cliente (Carnet o NIT) para la carpeta, o inferible por prefijo de archivo/subcarpeta",
     )
     numero_poliza: str | None = Field(
         default=None,
@@ -203,7 +212,7 @@ class QueryRequest(BaseModel):
         default=None,
         description=(
             "Filtros opcionales de metadatos. Claves soportadas: "
-            "'policy_id' (str UUID), 'company_sigla' (str, ej. 'CRI')."
+            "'policy_id' (str UUID), 'envelope_id' (str UUID), 'company_sigla' (str, ej. 'CRI'), 'id_cliente' (str, ej. '10203040')."
         ),
     )
 
@@ -260,6 +269,7 @@ class PolicyBasicInfoSchema(BaseModel):
     prima_total: str = Field(description="Prima total y moneda.")
     company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora.")
     file_name: str | None = Field(default=None, description="Nombre del archivo original.")
+    id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet o NIT).")
     created_at: str | None = Field(default=None, description="Fecha de registro en la base de datos.")
 
 
@@ -292,6 +302,7 @@ class DocumentSummarySchema(BaseModel):
     tipo_documento: str | None = Field(default=None, description="Tipo de documento")
     total_pages: int | None = Field(default=None, description="Total de páginas")
     file_size_bytes: int | None = Field(default=None, description="Tamaño del archivo en bytes")
+    id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet o NIT)")
     created_at: str | None = Field(default=None, description="Fecha de creación")
 
 
@@ -302,6 +313,7 @@ class PolicyEnvelopeSchema(BaseModel):
     numero_poliza: str = Field(description="Número de póliza")
     company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora")
     ramo: str | None = Field(default=None, description="Ramo de la póliza")
+    id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet o NIT)")
     created_at: str | None = Field(default=None, description="Fecha de registro")
     updated_at: str | None = Field(default=None, description="Última actualización")
     documents_count: int = Field(default=0, description="Cantidad de documentos vinculados")

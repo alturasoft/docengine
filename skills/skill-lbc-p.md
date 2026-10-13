@@ -1,6 +1,6 @@
 ﻿---
-sigla: NPF
-empresa: NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A
+sigla: LBC-P
+empresa: LA BOLIVIANA CIACRUZ SEGUROS PERSONALES
 version: 1
 estado: borrador
 ultima_revision: 2026-07-30
@@ -8,7 +8,7 @@ ultima_revision: 2026-07-30
 
 ## Descripción
 
-Reglas de extracción para pólizas de **NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A**.
+Reglas de extracción para pólizas de **LA BOLIVIANA CIACRUZ SEGUROS PERSONALES**.
 
 Completar este skill a medida que se analicen documentos y se identifiquen patrones
 propios de esta aseguradora.

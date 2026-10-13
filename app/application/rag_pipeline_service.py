@@ -57,6 +57,7 @@ class RagPipelineService:
         numero_poliza: str | None = None,
         ramo: str | None = None,
         tipo_documento: str | None = None,
+        id_cliente: str | None = None,
     ) -> RagProcessingReport:
         """Process an ExtractionResult through the RAG pipeline and persist to PostgreSQL.
 
@@ -65,6 +66,7 @@ class RagPipelineService:
             numero_poliza: Optional policy number hint for envelope binding.
             ramo: Optional insurance branch/line name.
             tipo_documento: Optional document classification (e.g. CONDICIONADO_GENERAL).
+            id_cliente: Optional customer identifier (Carnet or NIT).
 
         Returns:
             RagProcessingReport with execution stats and status.
@@ -90,6 +92,7 @@ class RagPipelineService:
         pol_num = numero_poliza or getattr(result.metadata, "numero_poliza", None)
         pol_ramo = ramo or getattr(result.metadata, "ramo", None)
         doc_type = tipo_documento or getattr(result.metadata, "tipo_documento", None)
+        client_id_hint = id_cliente or getattr(result.metadata, "id_cliente", None)
 
         logger.info(
             "[RAG] Iniciando pipeline RAG y almacenamiento vectorial...",
@@ -98,6 +101,7 @@ class RagPipelineService:
             company_sigla=company_sigla,
             numero_poliza=pol_num,
             tipo_documento=doc_type,
+            id_cliente=client_id_hint,
         )
 
         job_id = None
@@ -358,10 +362,21 @@ class RagPipelineService:
                 if isinstance(structured_json.get("datos_cabecera"), dict)
                 else structured_json.get("ramo")
             )
+            extracted_nit = (
+                structured_json.get("datos_cabecera", {}).get("nit")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("nit")
+            )
+            extracted_ci = (
+                structured_json.get("datos_cabecera", {}).get("documento_identidad")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("documento_identidad")
+            )
 
             effective_pol_num = pol_num or extracted_policy_num
             effective_sigla = company_sigla or extracted_sigla or getattr(result.metadata, "company_sigla", None)
             effective_ramo = pol_ramo or extracted_ramo or getattr(result.metadata, "ramo", None)
+            effective_id_cliente = client_id_hint or extracted_nit or extracted_ci
             effective_doc_type = (
                 normalize_document_type(doc_type)
                 or normalize_document_type(file_name)
@@ -371,13 +386,24 @@ class RagPipelineService:
             envelope_id = None
             if effective_pol_num and self._envelope_repo:
                 try:
-                    envelope_id = self._envelope_repo.get_or_create_envelope(
-                        numero_poliza=effective_pol_num,
-                        company_sigla=effective_sigla,
-                        ramo=effective_ramo,
-                    )
+                    env_kwargs = {
+                        "numero_poliza": effective_pol_num,
+                        "company_sigla": effective_sigla,
+                        "ramo": effective_ramo,
+                    }
+                    if effective_id_cliente:
+                        env_kwargs["id_cliente"] = effective_id_cliente
+                    envelope_id = self._envelope_repo.get_or_create_envelope(**env_kwargs)
                 except Exception as env_exc:
                     logger.warning("Error creando o buscando envelope", error=str(env_exc))
+
+            # Enrich chunks metadata with id_cliente if available
+            if effective_id_cliente:
+                for c in chunks_with_embeddings:
+                    if c.metadata_json is None:
+                        c.metadata_json = {}
+                    if "id_cliente" not in c.metadata_json:
+                        c.metadata_json["id_cliente"] = effective_id_cliente
 
             logger.info(
                 "[Persistencia BD] Guardando póliza, chunks, vectores y estadísticas en PostgreSQL (pgvector)...",
@@ -385,6 +411,7 @@ class RagPipelineService:
                 file_name=file_name,
                 envelope_id=envelope_id,
                 tipo_documento=effective_doc_type,
+                id_cliente=effective_id_cliente,
             )
             policy_id = self._repo.save_rag_policy_transactional(
                 file_name=file_name,
@@ -398,14 +425,17 @@ class RagPipelineService:
                 stats=stats,
                 envelope_id=envelope_id,
                 tipo_documento=effective_doc_type,
+                id_cliente=effective_id_cliente,
             )
             result.metadata.envelope_id = envelope_id
             result.metadata.tipo_documento = effective_doc_type
+            result.metadata.id_cliente = effective_id_cliente
 
             logger.info(
                 "[Persistencia BD] Registro transaccional completado en PostgreSQL",
                 policy_id=policy_id,
                 envelope_id=envelope_id,
+                id_cliente=effective_id_cliente,
             )
 
             # 6. Update Job Status to COMPLETED

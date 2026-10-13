@@ -47,25 +47,47 @@ GENERAL_SKILL_SIGLA = "GENERAL"
 # Domain object
 # ---------------------------------------------------------------------------
 
-# Known company registry: maps SIGLA → full name
+# Known company registry: maps SIGLA (abreviatura oficial) → full name
 COMPANY_REGISTRY: dict[str, str] = {
-    "ALI": "ALIANZA CIA DE SEGUROS Y REASEGUROS SA",
-    "ALV": "ALIANZA VIDA SEGUROS Y REASEGUROS S.A",
-    "BIS": "BISA SEGUROS Y REASEGUROS",
-    "FOV": "COMPAÑIA DE SEGUROS DE VIDA FORTALEZA S.A",
-    "CRI": "CREDINFORM INTERNATIONAL S.A",
-    "CRG": "CREDISEGURO S.A. SEGUROS GENERALES",
-    "CRP": "CREDISEGURO S.A. SEGUROS PERSONALES",
-    "FOR": "FORTALEZA COMPAÑIA DE SEGUROS Y REASEGUROS",
     "LBC": "LA BOLIVIANA CIACRUZ DE SEGUROS Y REASEGUROS",
-    "LBP": "LA BOLIVIANA CIACRUZ SEGUROS PERSONALES",
+    "CRE": "CREDINFORM INTERNATIONAL S.A.",
+    "ILLI": "SEGUROS ILLIMANI",
+    "ALI-SEG": "ALIANZA CIA DE SEGUROS Y REASEGUROS SA.",
+    "BISA": "BISA SEGUROS Y REASEGUROS",
+    "FORT": "FORTALEZA COMPAÑÍA DE SEGUROS Y REASEGUROS",
+    "NSPF": "NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A.",
+    "DHI": "BUPA ISURANCE S.A.",
     "VIT": "LA VITALICIA DE SEGUROS Y REASEGUROS",
-    "MSC": "MERCANTIL SANTA CRUZ SEGUROS Y REASEGUROS GENERALES S.A",
-    "NPF": "NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A",
-    "NVS": "NACIONAL SEGUROS VIDA Y SALUD S.A",
-    "UNI": "SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A",
-    "UBI": "UNIBIENES SEGUROS Y REASEGUROS",
+    "LBC-P": "LA BOLIVIANA CIACRUZ SEGUROS PERSONALES",
+    "NAL-VIDA": "NACIONAL SEGUROS VIDA Y SALUD S.A.",
+    "ALI-VIDA": "ALIANZA VIDA SEGUROS Y REASEGUROS S.A.",
+    "CRESEG": "CREDISEGURO S.A. SEGUROS PERSONALES",
+    "UNIVIDA": "SEGUROS Y REASEGUROS PERSONALES UNIVIDA S.A.",
+    "FORT-P": "COMPAÑÍA DE SEGUROS DE VIDA FORTALEZA S.A.",
+    "UNIBIENES": "UNIBIENES SEGUROS Y REASEGUROS",
+    "CRDI-G": "CREDISEGURO S.A. SEGUROS GENERALES",
+    "MSC": "MERCANTIL SANTA CRUZ SEGUROS Y REASEGUROS GENERALES S.A.",
 }
+
+# Mapeo bidireccional de alias históricos (3 letras) para retrocompatibilidad
+HISTORICAL_ALIASES: dict[str, str] = {
+    "CRI": "CRE",
+    "BIS": "BISA",
+    "ALI": "ALI-SEG",
+    "ALV": "ALI-VIDA",
+    "FOR": "FORT",
+    "FOV": "FORT-P",
+    "FORTV": "FORT-P",
+    "NPF": "NSPF",
+    "LBP": "LBC-P",
+    "NVS": "NAL-VIDA",
+    "CRP": "CRESEG",
+    "UNI": "UNIVIDA",
+    "UBI": "UNIBIENES",
+    "CRG": "CRDI-G",
+}
+# Inverso para buscar archivos anteriores si no existen los nuevos
+REVERSE_ALIASES: dict[str, str] = {v: k for k, v in HISTORICAL_ALIASES.items()}
 
 
 @dataclass
@@ -228,23 +250,42 @@ def load_company_skill(
     - Front-matter metadata (sigla, empresa, version, estado)
     - Active rules from the ``yaml`` block in the "Reglas de Post-Procesado" section
 
+    Supports both current official siglas (e.g. 'CRE', 'BISA') and legacy
+    aliases (e.g. 'CRI', 'BIS') with automatic fallback.
+
     Args:
-        sigla: 3-letter company code, case-insensitive (e.g. "CRI", "ali").
+        sigla: Company code, case-insensitive (e.g. "CRE", "CRI", "ali").
         skills_dir: Directory containing skill files. Defaults to the
             project-level ``skills/`` directory.
 
     Returns:
         Parsed ``CompanySkill`` instance, or ``None`` if no skill file exists.
     """
-    sigla_upper = sigla.strip().upper()
-    sigla_lower = sigla_upper.lower()
+    sigla_raw = sigla.strip().upper()
+    canonical_sigla = HISTORICAL_ALIASES.get(sigla_raw, sigla_raw)
     skills_root = skills_dir or _DEFAULT_SKILLS_DIR
-    skill_path = skills_root / f"skill-{sigla_lower}.md"
+
+    # 1. Try canonical skill file
+    skill_path = skills_root / f"skill-{canonical_sigla.lower()}.md"
+
+    # 2. Try raw input skill file if different
+    if not skill_path.exists() and sigla_raw != canonical_sigla:
+        alt_path = skills_root / f"skill-{sigla_raw.lower()}.md"
+        if alt_path.exists():
+            skill_path = alt_path
+
+    # 3. Try legacy alias if canonical was requested but only legacy file exists
+    if not skill_path.exists():
+        legacy_sigla = REVERSE_ALIASES.get(canonical_sigla)
+        if legacy_sigla:
+            legacy_path = skills_root / f"skill-{legacy_sigla.lower()}.md"
+            if legacy_path.exists():
+                skill_path = legacy_path
 
     if not skill_path.exists():
         logger.warning(
             "Company skill file not found",
-            sigla=sigla_upper,
+            sigla=canonical_sigla,
             path=str(skill_path),
         )
         return None
@@ -252,7 +293,7 @@ def load_company_skill(
     try:
         content = skill_path.read_text(encoding="utf-8")
     except OSError as exc:
-        logger.error("Failed to read skill file", sigla=sigla_upper, error=str(exc))
+        logger.error("Failed to read skill file", sigla=canonical_sigla, error=str(exc))
         return None
 
     # --- Parse front-matter ---
@@ -267,10 +308,11 @@ def load_company_skill(
     if rules_match:
         rules = _parse_simple_yaml(rules_match.group(1))
 
-    empresa = fm.get("empresa", COMPANY_REGISTRY.get(sigla_upper, sigla_upper))
+    file_sigla = fm.get("sigla", sigla_raw)
+    empresa = fm.get("empresa", COMPANY_REGISTRY.get(canonical_sigla, COMPANY_REGISTRY.get(sigla_raw, sigla_raw)))
 
     skill = CompanySkill(
-        sigla=sigla_upper,
+        sigla=file_sigla,
         empresa=str(empresa),
         version=int(fm.get("version", 1)),
         estado=str(fm.get("estado", "borrador")),
@@ -287,7 +329,7 @@ def load_company_skill(
 
     logger.info(
         "Company skill loaded",
-        sigla=sigla_upper,
+        sigla=canonical_sigla,
         empresa=empresa,
         estado=skill.estado,
         kv_keys_count=len(skill.kv_keys),
@@ -421,13 +463,14 @@ def load_company_skill_merged(
     if company is None:
         # No company skill → return general skill relabelled with company identity
         sigla_upper = sigla.strip().upper()
-        empresa = COMPANY_REGISTRY.get(sigla_upper, sigla_upper)
+        canonical_sigla = HISTORICAL_ALIASES.get(sigla_upper, sigla_upper)
+        empresa = COMPANY_REGISTRY.get(canonical_sigla, sigla_upper)
         logger.warning(
             "No company skill found — using general skill only",
-            sigla=sigla_upper,
+            sigla=canonical_sigla,
         )
         return CompanySkill(
-            sigla=sigla_upper,
+            sigla=canonical_sigla,
             empresa=empresa,
             version=general.version,
             estado=general.estado,
@@ -444,14 +487,12 @@ def load_company_skill_merged(
 
     return merge_skills(general, company)
 
-    return merge_skills(general, company)
-
 
 def detect_company_from_path(folder: Path) -> str | None:
     """Infer the company sigla from a folder path under ``empresas/``.
 
     Checks if any component of ``folder`` is a known company sigla
-    (case-insensitive). The folder structure is expected to be::
+    or historical alias (case-insensitive). The folder structure is expected to be::
 
         empresas/<SIGLA>/...
 
@@ -461,16 +502,18 @@ def detect_company_from_path(folder: Path) -> str | None:
         folder: Path to inspect (can be absolute or relative).
 
     Returns:
-        Uppercase sigla string (e.g. "CRI"), or None if not detectable.
+        Canonical uppercase sigla string (e.g. "CRE", "BISA"), or None if not detectable.
 
     Examples:
+        >>> detect_company_from_path(Path("empresas/CRE"))
+        'CRE'
         >>> detect_company_from_path(Path("empresas/CRI"))
-        'CRI'
-        >>> detect_company_from_path(Path("c:/docengine/empresas/ali"))
-        'ALI'
+        'CRE'
     """
     parts = [p.upper() for p in folder.parts]
     for part in parts:
         if part in COMPANY_REGISTRY:
             return part
+        if part in HISTORICAL_ALIASES:
+            return HISTORICAL_ALIASES[part]
     return None

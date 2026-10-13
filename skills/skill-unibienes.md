@@ -1,5 +1,5 @@
 ﻿---
-sigla: UBI
+sigla: UNIBIENES
 empresa: UNIBIENES SEGUROS Y REASEGUROS
 version: 1
 estado: borrador

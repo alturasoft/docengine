@@ -326,6 +326,9 @@ class PgHybridSearchRepository:
             if filters.get("company_sigla"):
                 needs_policy_join = True
                 filter_parts.append("AND p.company_sigla = UPPER(%(company_sigla)s)")
+            if filters.get("id_cliente"):
+                needs_policy_join = True
+                filter_parts.append("AND p.id_cliente = %(id_cliente)s")
             if filters.get("tipo_documento"):
                 needs_policy_join = True
                 filter_parts.append("AND p.tipo_documento = UPPER(%(tipo_documento)s)")
@@ -353,6 +356,8 @@ class PgHybridSearchRepository:
                 params["envelope_id"] = filters["envelope_id"]
             if filters.get("company_sigla"):
                 params["company_sigla"] = filters["company_sigla"]
+            if filters.get("id_cliente"):
+                params["id_cliente"] = filters["id_cliente"]
             if filters.get("tipo_documento"):
                 params["tipo_documento"] = filters["tipo_documento"]
 

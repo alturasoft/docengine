@@ -1,0 +1,40 @@
+codigo,tipo,ramo
+9101,SEGUROS GENERALES,Incendio y Aliados
+9102,SEGUROS GENERALES,Robo
+9103,SEGUROS GENERALES,Transportes
+9104,SEGUROS GENERALES,Naves o Embarcaciones
+9105,SEGUROS GENERALES,Automotores
+9106,SEGUROS GENERALES,Aeronavegación
+9107,SEGUROS GENERALES,Ramos Técnicos
+9108,SEGUROS GENERALES,Responsabilidad Civil
+9109,SEGUROS GENERALES,Riesgos varios y misceláneos
+9110,SEGUROS GENERALES,Agropecuarios
+9111,SEGUROS GENERALES,Salud o enfermedad
+9112,SEGUROS GENERALES,Accidentes personales
+9127,SEGUROS GENERALES,Seguro comprensivo para deshonestidad destrucción y desaparición (3-D)
+9212,SEGUROS PERSONAS,Accidentes personales
+9221,SEGURO DE FIANZAS,Seriedad de Propuesta
+9222,SEGURO DE FIANZAS,Cumplimiento de obra
+9223,SEGURO DE FIANZAS,Buena ejecución de obra
+9224,SEGURO DE FIANZAS,Cumplimiento de servicios
+9225,SEGURO DE FIANZAS,Cumplimiento de suministros
+9226,SEGURO DE FIANZAS,Inversión de Anticipos
+9227,SEGURO DE FIANZAS,Fidelidad de Empleados
+9228,SEGURO DE FIANZAS,Créditos
+9229,SEGURO DE FIANZAS,Cumplimiento de obligaciones aduaneras
+9230,SEGURO DE FIANZAS,Cumplimiento de obligaciones legales y contractuales de telecomunicaciones
+9231,SEGURO DE FIANZAS,Garantía de funcionamiento de maquinaria y/o equipo para entidades públicas
+9341,SEGUROS PERSONAS,Vida Individual Largo Plazo
+9342,SEGUROS PERSONAS,Vida individual corto plazo
+9343,SEGUROS PERSONAS,Rentas
+9344,SEGUROS PERSONAS,Defunción o sepelio largo plazo
+9345,SEGUROS PERSONAS,Defunción o sepelio corto plazo
+9346,SEGUROS PERSONAS,Vida en grupo corto plazo
+9347,SEGUROS PERSONAS,Salud o enfermedad
+9348,SEGUROS PERSONAS,Desgravamen hipotecario largo plazo
+9349,SEGUROS PERSONAS,Desgravamen hipotecario corto plazo
+9350,SEGUROS PERSONAS,Accidentes personales
+9455,SEGUROS OBLIGATORIOS,Accidentes de tránsito
+9456,SEGUROS OBLIGATORIOS,Accidentes del trabajador
+9561,SEGUROS PERSONAS,Salud o enfermedad
+9562,SEGUROS PERSONAS,Defunción o sepelio

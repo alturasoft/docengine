@@ -1,14 +1,14 @@
-﻿---
-sigla: NVS
-empresa: NACIONAL SEGUROS VIDA Y SALUD S.A
+---
+sigla: ILLI
+empresa: SEGUROS ILLIMANI
 version: 1
 estado: borrador
-ultima_revision: 2026-07-30
+ultima_revision: 2026-10-13
 ---
 
 ## Descripción
 
-Reglas de extracción para pólizas de **NACIONAL SEGUROS VIDA Y SALUD S.A**.
+Reglas de extracción para pólizas de **Seguros Illimani**.
 
 Completar este skill a medida que se analicen documentos y se identifiquen patrones
 propios de esta aseguradora.
@@ -37,4 +37,4 @@ Agregar notas cada vez que se identifique un patrón nuevo, independientemente d
 
 | Versión | Fecha | Cambio |
 |---------|-------|--------|
-| 1 | 2026-07-30 | Creación de plantilla inicial |
+| 1 | 2026-10-13 | Creación de plantilla inicial |

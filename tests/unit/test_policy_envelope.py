@@ -268,6 +268,31 @@ class TestPolicyEnvelopeEndpoints:
         assert data["total"] == 1
         assert data["envelopes"][0]["numero_poliza"] == "POL-12345"
 
+    def test_get_envelopes_by_client_id_endpoint(self):
+        app = create_app()
+        mock_repo = MagicMock(spec=PgEnvelopeRepository)
+        mock_repo.get_envelopes_by_client_id.return_value = [
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "numero_poliza": "POL-12345",
+                "company_sigla": "CRI",
+                "ramo": "AUTOMOTOR",
+                "id_cliente": "10203040",
+                "created_at": "2026-09-24T10:00:00Z",
+                "updated_at": "2026-09-24T10:00:00Z",
+                "documents_count": 0,
+                "documents": [],
+            }
+        ]
+        app.dependency_overrides[get_envelope_repo] = lambda: mock_repo
+
+        client = TestClient(app)
+        response = client.get("/api/v1/policies/envelopes/by-client/10203040")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["envelopes"][0]["id_cliente"] == "10203040"
+
     def test_delete_envelope_endpoint_success(self):
         app = create_app()
         mock_repo = MagicMock(spec=PgEnvelopeRepository)
@@ -370,6 +395,7 @@ class TestPolicyEnvelopeEndpoints:
         client = TestClient(app)
         files = {"file": ("test.pdf", b"%PDF-1.4 dummy content", "application/pdf")}
         data = {
+            "id_cliente": "10203040",
             "company_sigla": "CRI",
             "numero_poliza": "POL-999",
             "ramo": "AUTOMOTOR",
@@ -519,6 +545,32 @@ class TestRagPipelineEnvelopeIntegration:
         _, kwargs = mock_repo.save_rag_policy_transactional.call_args
         assert kwargs["envelope_id"] == "env-auto-uuid"
         assert kwargs["tipo_documento"] == DocumentType.POLIZA_PRINCIPAL.value
+
+
+class TestFilenamePrefixInference:
+    """Test prefix inference of id_cliente and numero_poliza from filenames."""
+
+    def test_infer_both_client_and_policy(self):
+        from app.api.v1.extraction import _infer_client_and_policy
+
+        client, pol = _infer_client_and_policy("10203040_POL-999_Caratula.pdf")
+        assert client == "10203040"
+        assert pol == "POL-999"
+
+    def test_infer_client_only(self):
+        from app.api.v1.extraction import _infer_client_and_policy
+
+        client, pol = _infer_client_and_policy("10203040_Condicionado_General.pdf")
+        assert client == "10203040"
+        assert pol is None
+
+    def test_fallback_to_defaults(self):
+        from app.api.v1.extraction import _infer_client_and_policy
+
+        client, pol = _infer_client_and_policy("Condicionado_General.pdf", default_client="CLIENT-DEFAULT", default_pol="POL-DEFAULT")
+        assert client == "CLIENT-DEFAULT"
+        assert pol == "POL-DEFAULT"
+
 
 
 

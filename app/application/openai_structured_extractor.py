@@ -27,6 +27,7 @@ class DatosCabeceraSchema(BaseModel):
     asegurado: str | None = Field(default=None, description="Nombre completo de la persona o entidad asegurada (CRÍTICO)")
     documento_identidad: str | None = Field(default=None, description="CI o documento de identidad del asegurado")
     nit: str | None = Field(default=None, description="NIT del asegurado o tomador")
+    codigo_spvs: str | None = Field(default=None, description="Código SPVS exacto de la póliza o producto (dejar null si no figura)")
     direccion: str | None = Field(default=None, description="Dirección registrada del asegurado")
     zona: str | None = Field(default=None, description="Zona de ubicación o domicilio")
     barrio_distrito: str | None = Field(default=None, description="Barrio o distrito de ubicación")
@@ -91,8 +92,8 @@ class OpenAIStructuredExtractor:
         )
         return f"""INSTRUCCIONES CRÍTICAS:
 1. Extrae únicamente los campos especificados en la estructura JSON a continuación. No agregues claves adicionales.
-2. Es de máxima prioridad localizar y extraer con absoluta precisión el "numero_poliza", "poliza_anterior", nombre del "asegurado", "documento_identidad", "direccion", "zona", "barrio_distrito", "celular", "email" (correo electrónico) y datos del objeto/vehículo asegurado. Revisa detenidamente el texto para estos campos.
-3. Si un dato específico no se encuentra en el texto, asigna el valor null al campo correspondiente (no inventes ni infieras información que no esté explícita).
+2. Es de máxima prioridad localizar y extraer con absoluta precisión el "numero_poliza", "poliza_anterior", nombre del "asegurado", "documento_identidad", "nit", "codigo_spvs", "direccion", "zona", "barrio_distrito", "celular", "email" (correo electrónico) y datos del objeto/vehículo asegurado. Revisa detenidamente el texto para estos campos.
+3. Si un dato específico no se encuentra en el texto, asigna el valor null al campo correspondiente (no inventes ni infieras información que no esté explícita). El "codigo_spvs" debe ser exacto; en caso de no encontrarlo en el texto, dejar el campo como null.
 4. Devuelve ÚNICAMENTE el objeto JSON, sin texto introductorio, sin explicaciones y sin bloques de código Markdown (```json).
 {sigla_instruction}
 ESTRUCTURA JSON REQUERIDA:
@@ -103,6 +104,7 @@ ESTRUCTURA JSON REQUERIDA:
     "asegurado": "Nombre completo de la persona o entidad asegurada (CRÍTICO)",
     "documento_identidad": "CI o documento del asegurado",
     "nit": "NIT del asegurado o tomador",
+    "codigo_spvs": "Código SPVS exacto (si no se encuentra, null)",
     "direccion": "Dirección registrada del asegurado",
     "zona": "Zona de ubicación o domicilio",
     "barrio_distrito": "Barrio o distrito de ubicación",
@@ -240,6 +242,9 @@ ESTRUCTURA JSON REQUERIDA:
             "datos_cabecera": {
                 "numero_poliza": None,
                 "asegurado": None,
+                "documento_identidad": None,
+                "nit": None,
+                "codigo_spvs": None,
                 "tomador": None,
                 "aseguradora": None,
                 "sigla_empresa": sigla,

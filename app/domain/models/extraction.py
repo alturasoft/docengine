@@ -63,6 +63,7 @@ class ExtractionRequest:
     numero_poliza: str | None = None
     ramo: str | None = None
     tipo_documento: str | None = None
+    id_cliente: str | None = None
 
     @property
     def is_url(self) -> bool:

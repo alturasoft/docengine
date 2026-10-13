@@ -121,11 +121,11 @@
       align-items: center;
       gap: 0.65rem;
       flex: 1;
-      max-width: 620px;
+      max-width: 780px;
       justify-content: flex-end;
     }
 
-    /* Buscador de Póliza */
+    /* Buscador de Póliza e ID Cliente */
     .search-policy-box {
       display: flex;
       align-items: center;
@@ -134,8 +134,8 @@
       border-radius: var(--radius-md);
       padding: 0.25rem 0.35rem 0.25rem 0.75rem;
       flex: 1;
-      min-width: 220px;
-      max-width: 320px;
+      min-width: 160px;
+      max-width: 230px;
       transition: all 0.2s ease;
     }
 
@@ -714,20 +714,29 @@
 
         <!-- Acciones del Encabezado -->
         <div class="header-actions">
-          <!-- Campo para Ingresar Número de Póliza -->
-          <div class="search-policy-box">
-            <input type="text" id="policyInput" placeholder="N° de póliza a consultar..."
-              onkeydown="handleSearchKeyDown(event)">
-            <button class="btn-search-trigger" id="btnSearch" onclick="searchPolicy()" title="Buscar póliza">
+          <!-- Campo para Ingresar ID Cliente (CI o NIT) -->
+          <div class="search-policy-box" title="Buscar por ID Cliente (Carnet o NIT)">
+            <input type="text" id="clientInput" placeholder="ID Cliente (CI / NIT)..."
+              onkeydown="handleClientSearchKeyDown(event)">
+            <button class="btn-search-trigger" id="btnSearchClient" onclick="searchByClientId()" title="Buscar pólizas del cliente">
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
           </div>
 
-          <!-- Botón con Lista Desplegable de Últimas Pólizas -->
+          <!-- Campo para Ingresar Número de Póliza -->
+          <div class="search-policy-box" title="Buscar por Número de Póliza">
+            <input type="text" id="policyInput" placeholder="N° de póliza..."
+              onkeydown="handleSearchKeyDown(event)">
+            <button class="btn-search-trigger" id="btnSearchPolicy" onclick="searchPolicy()" title="Buscar póliza por número">
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+
+          <!-- Botón con Lista Desplegable de Pólizas -->
           <div class="dropdown-container">
             <button class="btn-dropdown-toggle" id="dropdownBtn" onclick="toggleDropdown()">
               <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i>
-              <span>Últimas Pólizas</span>
+              <span id="dropdownBtnText">Pólizas</span>
               <i class="fa-solid fa-chevron-down chevron"></i>
             </button>
             <div class="dropdown-menu-list" id="dropdownMenu">
@@ -791,6 +800,8 @@
     // Variables de estado
     let activePolicy = null;
     let recentPoliciesList = [];
+    let clientPoliciesList = [];
+    let isClientFiltered = false;
 
     // URL base de API
     function getApiUrl() {
@@ -820,7 +831,7 @@
       });
     });
 
-    // Control del desplegable de últimas pólizas
+    // Control del desplegable de pólizas
     function toggleDropdown() {
       const menu = document.getElementById('dropdownMenu');
       const btn = document.getElementById('dropdownBtn');
@@ -840,7 +851,7 @@
       if (btn) btn.classList.remove('active');
     }
 
-    // Cargar últimas pólizas digitalizadas
+    // Cargar pólizas digitalizadas
     async function loadRecentPolicies() {
       const menu = document.getElementById('dropdownMenu');
       try {
@@ -849,7 +860,7 @@
         if (response.ok) {
           const data = await response.json();
           recentPoliciesList = data.envelopes || [];
-          renderDropdownItems(recentPoliciesList, true);
+          renderDropdownItems(recentPoliciesList, true, false);
           return;
         }
 
@@ -858,26 +869,48 @@
         if (fallbackRes.ok) {
           const data = await fallbackRes.json();
           recentPoliciesList = data.policies || [];
-          renderDropdownItems(recentPoliciesList, false);
+          renderDropdownItems(recentPoliciesList, false, false);
         }
       } catch (err) {
-        console.error('Error cargando pólizas recientes:', err);
+        console.error('Error cargando pólizas:', err);
         if (menu) {
           menu.innerHTML = '<div class="dropdown-empty">No se pudieron cargar las pólizas</div>';
         }
       }
     }
 
-    function renderDropdownItems(list, isEnvelope) {
+    function resetToAllPolicies() {
+      isClientFiltered = false;
+      clientPoliciesList = [];
+      const btnText = document.getElementById('dropdownBtnText');
+      if (btnText) btnText.innerText = 'Pólizas';
+      renderDropdownItems(recentPoliciesList, true, false);
+      updateDropdownActiveItem();
+    }
+
+    function renderDropdownItems(list, isEnvelope, isClient = false) {
       const menu = document.getElementById('dropdownMenu');
       if (!menu) return;
 
       if (!list || list.length === 0) {
-        menu.innerHTML = '<div class="dropdown-empty">No hay pólizas digitalizadas recientes</div>';
+        menu.innerHTML = '<div class="dropdown-empty">No hay pólizas disponibles</div>';
         return;
       }
 
       menu.innerHTML = '';
+
+      if (isClient) {
+        const resetHeader = document.createElement('div');
+        resetHeader.className = 'dropdown-item';
+        resetHeader.style.cssText = "background: var(--primary-light); color: var(--primary-text); font-weight: 600; font-size: 0.78rem; display: flex; align-items: center; justify-content: space-between; border-left: 3px solid var(--primary);";
+        resetHeader.innerHTML = `<span><i class="fa-solid fa-users"></i> ${list.length} póliza(s) de cliente</span> <span style="text-decoration: underline; font-size: 0.73rem; cursor: pointer;"><i class="fa-solid fa-rotate-left"></i> Ver todas</span>`;
+        resetHeader.onclick = (e) => {
+          e.stopPropagation();
+          resetToAllPolicies();
+        };
+        menu.appendChild(resetHeader);
+      }
+
       list.forEach((item) => {
         const div = document.createElement('div');
         div.className = 'dropdown-item';
@@ -885,8 +918,11 @@
         const idVal = isEnvelope ? item.id : item.policy_id;
         const numPoliza = item.numero_poliza || 'Sin número';
         const sigla = item.company_sigla || 'PÓLIZA';
+        const clientText = item.id_cliente ? ` • CI/NIT: ${item.id_cliente}` : '';
         const ramoText = item.ramo ? ` • ${item.ramo}` : '';
         const aseguradoText = item.asegurado ? ` • ${item.asegurado}` : '';
+        const docsCount = item.documents_count !== undefined ? item.documents_count : (item.documents ? item.documents.length : null);
+        const docsBadge = docsCount ? ` (${docsCount} docs)` : '';
 
         div.dataset.policyNum = numPoliza;
         if (activePolicy && activePolicy.numero_poliza === numPoliza) {
@@ -895,10 +931,10 @@
 
         div.innerHTML = `
           <div class="item-top">
-            <span class="item-policy-num">N° ${escapeHtml(numPoliza)}</span>
+            <span class="item-policy-num">N° ${escapeHtml(numPoliza)}${escapeHtml(docsBadge)}</span>
             <span class="company-tag">${escapeHtml(sigla)}</span>
           </div>
-          <div class="item-sub">${escapeHtml(ramoText || aseguradoText || 'Documento indexado')}</div>
+          <div class="item-sub">${escapeHtml((clientText + ramoText) || aseguradoText || 'Documento indexado')}</div>
         `;
 
         div.onclick = () => {
@@ -931,6 +967,7 @@
         ...policyData,
         envelope_id: envelopeId,
         policy_id: policyId,
+        id_cliente: policyData.id_cliente || null,
         display_num: policyData.numero_poliza || 'Póliza seleccionada'
       };
 
@@ -944,22 +981,27 @@
       const bar = document.getElementById('activeContextBar');
       const text = document.getElementById('activePolicyText');
       const sigla = policyData.company_sigla ? `[${policyData.company_sigla}] ` : '';
+      const clienteText = policyData.id_cliente ? ` | CI/NIT: ${policyData.id_cliente}` : '';
       const ramo = policyData.ramo ? ` — ${policyData.ramo}` : '';
 
-      text.innerText = `${sigla}N° ${activePolicy.display_num}${ramo}`;
+      text.innerText = `${sigla}N° ${activePolicy.display_num}${clienteText}${ramo}`;
       bar.style.display = 'flex';
 
-      // 3. Sincronizar campo de búsqueda
+      // 3. Sincronizar campos de búsqueda
       const policyInput = document.getElementById('policyInput');
       if (policyInput && activePolicy.numero_poliza) {
         policyInput.value = activePolicy.numero_poliza;
+      }
+      const clientInput = document.getElementById('clientInput');
+      if (clientInput && activePolicy.id_cliente) {
+        clientInput.value = activePolicy.id_cliente;
       }
 
       // 4. Marcar póliza activa en la lista desplegable
       updateDropdownActiveItem();
 
       // 5. Mostrar mensaje inicial confirmando la póliza activa
-      appendAssistantMessage(`### 📋 Póliza Activa: ${sigla}N° ${escapeHtml(activePolicy.display_num)}${escapeHtml(ramo)}\n\nEl chat ha sido reiniciado. A partir de ahora, todas tus consultas se realizarán exclusivamente sobre este documento y sus anexos.\n\n¿Qué información deseas consultar o verificar sobre esta póliza?`);
+      appendAssistantMessage(`### 📋 Póliza Activa: ${sigla}N° ${escapeHtml(activePolicy.display_num)}${escapeHtml(ramo)}\n\nEl chat ha sido configurado para esta póliza. A partir de ahora, todas tus consultas se realizarán sobre este documento y sus anexos.\n\n¿Qué información deseas consultar o verificar?`);
     }
 
     // Desvincular póliza activa
@@ -968,8 +1010,14 @@
       const bar = document.getElementById('activeContextBar');
       if (bar) bar.style.display = 'none';
 
-      const input = document.getElementById('policyInput');
-      if (input) input.value = '';
+      const policyInput = document.getElementById('policyInput');
+      if (policyInput) policyInput.value = '';
+      const clientInput = document.getElementById('clientInput');
+      if (clientInput) clientInput.value = '';
+
+      if (isClientFiltered) {
+        resetToAllPolicies();
+      }
 
       updateDropdownActiveItem();
 
@@ -981,13 +1029,73 @@
       appendAssistantMessage('Se ha quitado la selección de póliza activa. El chat ha sido reiniciado y las próximas consultas se responderán de forma general entre todos los documentos digitalizados.');
     }
 
+    // Búsqueda por ID Cliente (CI o NIT)
+    async function searchByClientId() {
+      const input = document.getElementById('clientInput');
+      const query = input ? input.value.trim() : '';
+      if (!query) return;
+
+      const btn = document.getElementById('btnSearchClient');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      }
+
+      try {
+        const clientRes = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/by-client/${encodeURIComponent(query)}`);
+        if (clientRes.ok) {
+          const clientJson = await clientRes.json();
+          if (clientJson.total > 0 && clientJson.envelopes && clientJson.envelopes.length > 0) {
+            clientPoliciesList = clientJson.envelopes;
+            isClientFiltered = true;
+
+            // Poblar menú desplegable con las pólizas de este cliente
+            renderDropdownItems(clientPoliciesList, true, true);
+
+            // Actualizar etiqueta del botón del desplegable
+            const btnText = document.getElementById('dropdownBtnText');
+            if (btnText) {
+              btnText.innerText = `Pólizas (${clientJson.total})`;
+            }
+
+            // Auto-seleccionar la primera póliza
+            const firstEnv = clientPoliciesList[0];
+            selectPolicy(firstEnv, true);
+
+            // Si hay más de una póliza, notificar en el chat
+            if (clientJson.total > 1) {
+              appendAssistantMessage(`💡 **Cliente con múltiples pólizas:** Se encontraron **${clientJson.total} pólizas** asociadas al CI/NIT **${escapeHtml(query)}**.\n\nSe ha establecido como contexto activo la póliza **N° ${escapeHtml(firstEnv.numero_poliza)}**. Puedes abrir el menú **Pólizas (${clientJson.total})** en el encabezado para alternar a cualquiera de las otras.`);
+            }
+
+            return;
+          }
+        }
+
+        appendAssistantMessage(`No encontré ninguna póliza registrada con el ID Cliente (Carnet / NIT) **"${escapeHtml(query)}"**. Por favor verifica el número e intenta nuevamente.`);
+      } catch (err) {
+        appendAssistantMessage(`Ocurrió un error al buscar por ID Cliente: ${escapeHtml(err.message)}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
+        }
+      }
+    }
+
+    function handleClientSearchKeyDown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        searchByClientId();
+      }
+    }
+
     // Búsqueda de póliza por número
     async function searchPolicy() {
       const input = document.getElementById('policyInput');
       const query = input ? input.value.trim() : '';
       if (!query) return;
 
-      const btn = document.getElementById('btnSearch');
+      const btn = document.getElementById('btnSearchPolicy') || document.getElementById('btnSearch');
       if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
@@ -1019,16 +1127,19 @@
         }
 
         if (foundData) {
+          if (isClientFiltered && clientPoliciesList.length > 0 && !clientPoliciesList.some(p => p.id === foundData.id || p.numero_poliza === foundData.numero_poliza)) {
+            resetToAllPolicies();
+          }
           selectPolicy(foundData);
         } else {
-          appendAssistantMessage(`No encontré ninguna póliza registrada con el número **"${escapeHtml(query)}"**. Por favor verifica el número o selecciona una de las últimas pólizas digitalizadas.`);
+          appendAssistantMessage(`No encontré ninguna póliza registrada con el número **"${escapeHtml(query)}"**. Por favor verifica el número o selecciona una de las pólizas registradas.`);
         }
       } catch (err) {
         appendAssistantMessage(`Ocurrió un error al buscar la póliza: ${escapeHtml(err.message)}`);
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
+          btn.innerHTML = '<i class="fa-solid fa-arrow-right"></i>';
         }
       }
     }
@@ -1074,6 +1185,9 @@
           filters.envelope_id = activePolicy.envelope_id;
         } else if (activePolicy.policy_id) {
           filters.policy_id = activePolicy.policy_id;
+        }
+        if (activePolicy.id_cliente) {
+          filters.id_cliente = activePolicy.id_cliente;
         }
       }
 

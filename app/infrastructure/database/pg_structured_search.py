@@ -40,6 +40,9 @@ _SEARCH_BY_CANDIDATES_QUERY = """
     WHERE
         LOWER(REGEXP_REPLACE(psd.data->'datos_cabecera'->>'numero_poliza', '[^a-zA-Z0-9]', '', 'g')) = ANY(%s)
         OR psd.data->'datos_cabecera'->>'numero_poliza' ILIKE ANY(%s)
+        OR p.id_cliente = ANY(%s)
+        OR psd.data->'datos_cabecera'->>'documento_identidad' = ANY(%s)
+        OR psd.data->'datos_cabecera'->>'nit' = ANY(%s)
     LIMIT %s;
 """
 
@@ -49,7 +52,8 @@ _RECENT_POLICIES_QUERY = """
         p.file_name,
         p.company_sigla,
         p.created_at::text,
-        psd.data
+        psd.data,
+        p.id_cliente
     FROM policies p
     LEFT JOIN policy_structured_data psd ON p.id = psd.policy_id
     ORDER BY p.created_at DESC
@@ -62,7 +66,8 @@ _FIND_BASIC_QUERY = """
         p.file_name,
         p.company_sigla,
         p.created_at::text,
-        psd.data
+        psd.data,
+        p.id_cliente
     FROM policies p
     LEFT JOIN policy_structured_data psd ON p.id = psd.policy_id
     WHERE
@@ -71,6 +76,9 @@ _FIND_BASIC_QUERY = """
         OR psd.data->'datos_cabecera'->>'numero_poliza' ILIKE %s
         OR p.file_name ILIKE %s
         OR psd.data->'datos_cabecera'->>'asegurado' ILIKE %s
+        OR p.id_cliente = %s
+        OR psd.data->'datos_cabecera'->>'documento_identidad' = %s
+        OR psd.data->'datos_cabecera'->>'nit' = %s
     ORDER BY p.created_at DESC
     LIMIT 1;
 """
@@ -146,6 +154,8 @@ def extract_basic_info(record: dict[str, Any]) -> dict[str, Any]:
     else:
         prima_total = "No especificada"
 
+    id_cliente = record.get("id_cliente") or doc_identidad or nit
+
     return {
         "policy_id": record.get("policy_id", ""),
         "numero_poliza": num_poliza,
@@ -157,6 +167,7 @@ def extract_basic_info(record: dict[str, Any]) -> dict[str, Any]:
         "company_sigla": record.get("company_sigla"),
         "file_name": record.get("file_name"),
         "created_at": str(record.get("created_at", "")) if record.get("created_at") else None,
+        "id_cliente": str(id_cliente) if id_cliente else None,
     }
 
 
@@ -214,7 +225,9 @@ class PgStructuredSearchRepository:
         normalized_tokens = [re.sub(r"[^a-zA-Z0-9]", "", t).lower() for t in tokens if len(re.sub(r"[^a-zA-Z0-9]", "", t)) >= 3]
         like_patterns = [f"%{t.strip()}%" for t in tokens if len(t.strip()) >= 3]
 
-        if not normalized_tokens and not like_patterns:
+        raw_tokens = [t.strip() for t in tokens if len(t.strip()) >= 3]
+
+        if not normalized_tokens and not like_patterns and not raw_tokens:
             return []
 
         try:
@@ -222,7 +235,7 @@ class PgStructuredSearchRepository:
                 with conn.cursor() as cur:
                     cur.execute(
                         _SEARCH_BY_CANDIDATES_QUERY,
-                        (normalized_tokens, like_patterns, limit),
+                        (normalized_tokens, like_patterns, raw_tokens, raw_tokens, raw_tokens, limit),
                     )
                     rows = cur.fetchall()
                     results = []
@@ -388,6 +401,7 @@ class PgStructuredSearchRepository:
                             "company_sigla": row[2],
                             "created_at": row[3],
                             "data": row[4] if isinstance(row[4], dict) else {},
+                            "id_cliente": row[5] if len(row) > 5 else None,
                         }
                         results.append(extract_basic_info(record))
                     return results
@@ -416,7 +430,7 @@ class PgStructuredSearchRepository:
                 with conn.cursor() as cur:
                     cur.execute(
                         _FIND_BASIC_QUERY,
-                        (raw_q, norm_q, like_q, like_q, like_q),
+                        (raw_q, norm_q, like_q, like_q, like_q, raw_q, raw_q, raw_q),
                     )
                     row = cur.fetchone()
                     if row is None:
@@ -427,6 +441,7 @@ class PgStructuredSearchRepository:
                         "company_sigla": row[2],
                         "created_at": row[3],
                         "data": row[4] if isinstance(row[4], dict) else {},
+                        "id_cliente": row[5] if len(row) > 5 else None,
                     }
                     return extract_basic_info(record)
         except Exception as exc:

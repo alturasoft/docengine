@@ -1,5 +1,5 @@
 ---
-sigla: BIS
+sigla: BISA
 empresa: BISA SEGUROS Y REASEGUROS
 version: 2
 estado: activo

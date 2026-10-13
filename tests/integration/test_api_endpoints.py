@@ -45,11 +45,12 @@ class TestExtractionEndpoints:
     """Tests for /extract endpoints."""
 
     def test_extract_valid_pdf(self, test_client: TestClient) -> None:
-        """POST /extract with a valid PDF must return 200."""
+        """POST /extract with a valid PDF and id_cliente must return 200."""
         # Create a minimal fake PDF bytes
         fake_pdf = b"%PDF-1.4 fake content for testing"
         response = test_client.post(
             "/api/v1/extract",
+            data={"id_cliente": "10203040"},
             files={"file": ("test_poliza.pdf", io.BytesIO(fake_pdf), "application/pdf")},
         )
         assert response.status_code == 200
@@ -59,23 +60,51 @@ class TestExtractionEndpoints:
         assert "metadata" in data
         assert "markdown_preview" in data
 
+    def test_extract_rejects_missing_id_cliente(self, test_client: TestClient) -> None:
+        """POST /extract without id_cliente must return 422 Unprocessable Entity."""
+        fake_pdf = b"%PDF-1.4 fake content for testing"
+        response = test_client.post(
+            "/api/v1/extract",
+            files={"file": ("test_poliza.pdf", io.BytesIO(fake_pdf), "application/pdf")},
+        )
+        assert response.status_code == 422
+
+    def test_extract_rejects_empty_id_cliente(self, test_client: TestClient) -> None:
+        """POST /extract with blank id_cliente must return 400 Bad Request."""
+        fake_pdf = b"%PDF-1.4 fake content for testing"
+        response = test_client.post(
+            "/api/v1/extract",
+            data={"id_cliente": "   "},
+            files={"file": ("test_poliza.pdf", io.BytesIO(fake_pdf), "application/pdf")},
+        )
+        assert response.status_code == 400
+
     def test_extract_rejects_non_pdf(self, test_client: TestClient) -> None:
         """POST /extract with a non-PDF file must return 400."""
         response = test_client.post(
             "/api/v1/extract",
+            data={"id_cliente": "10203040"},
             files={"file": ("document.docx", io.BytesIO(b"not a pdf"), "application/octet-stream")},
         )
         assert response.status_code == 400
 
     def test_extract_url(self, test_client: TestClient) -> None:
-        """POST /extract/url with a PDF URL must return 200."""
+        """POST /extract/url with a PDF URL and id_cliente must return 200."""
         response = test_client.post(
             "/api/v1/extract/url",
-            json={"url": "https://example.com/poliza.pdf"},
+            json={"url": "https://example.com/poliza.pdf", "id_cliente": "10203040"},
         )
         assert response.status_code == 200
         data = response.json()
         assert "document_id" in data
+
+    def test_extract_url_missing_id_cliente(self, test_client: TestClient) -> None:
+        """POST /extract/url without id_cliente must return 422."""
+        response = test_client.post(
+            "/api/v1/extract/url",
+            json={"url": "https://example.com/poliza.pdf"},
+        )
+        assert response.status_code == 422
 
     def test_extract_folder_not_found(self, test_client: TestClient) -> None:
         """POST /extract/folder with non-existent folder must return 400."""
@@ -90,6 +119,7 @@ class TestExtractionEndpoints:
         fake_pdf = b"%PDF-1.4 test"
         response = test_client.post(
             "/api/v1/extract",
+            data={"id_cliente": "10203040"},
             files={"file": ("poliza.pdf", io.BytesIO(fake_pdf), "application/pdf")},
         )
         assert response.status_code == 200
@@ -147,11 +177,11 @@ class TestExtractionEndpoints:
         assert "DocEngine" in res_ui.text
 
     def test_extract_pdf_with_company_sigla(self, test_client: TestClient) -> None:
-        """POST /extract with company_sigla form field must return 200."""
+        """POST /extract with company_sigla and id_cliente form field must return 200."""
         fake_pdf = b"%PDF-1.4 test with company"
         response = test_client.post(
             "/api/v1/extract",
-            data={"company_sigla": "CRI"},
+            data={"company_sigla": "CRI", "id_cliente": "10203040"},
             files={"file": ("poliza_cri.pdf", io.BytesIO(fake_pdf), "application/pdf")},
         )
         assert response.status_code == 200

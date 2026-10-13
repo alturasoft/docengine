@@ -1,5 +1,5 @@
 ---
-sigla: CRI
+sigla: CRE
 empresa: CREDINFORM INTERNATIONAL S.A
 version: 5
 estado: activo

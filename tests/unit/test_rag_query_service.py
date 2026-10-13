@@ -161,3 +161,43 @@ class TestRAGQueryServicePipeline:
         assert response.chunks_used == 12
         assert response.answer == "Respuesta sobre sobre completo"
 
+    def test_query_retrieves_entire_client_when_id_cliente_filtered(self):
+        """When id_cliente is in filters, RAGQueryService fetches ALL chunks of the client."""
+        mock_embedder = MagicMock()
+        mock_embedder.generate_embeddings_for_chunks.return_value = [
+            MagicMock(embedding=[0.1] * 1024)
+        ]
+        mock_config = RAGQueryConfig()
+        mock_vector = MagicMock()
+
+        all_client_chunks = [
+            RetrievedChunk(
+                chunk_id=f"chunk-{i}",
+                policy_id=f"pol-cli-{i % 2}",
+                chunk_index=i,
+                chunk_content=f"Documento de cliente {i}",
+                metadata_json={"id_cliente": "10203040"},
+                similarity_score=1.0,
+            )
+            for i in range(8)
+        ]
+        mock_vector.get_all_chunks_for_client.return_value = all_client_chunks
+
+        service = RAGQueryService(
+            embedding_service=mock_embedder,
+            vector_search=mock_vector,
+            config=mock_config,
+        )
+
+        with patch.object(service, "_generate_answer", return_value="Respuesta para cliente"):
+            response = service.query(
+                question="¿Cuáles pólizas tiene el cliente 10203040?",
+                filters={"id_cliente": "10203040"},
+            )
+
+        mock_vector.get_all_chunks_for_client.assert_called_once_with("10203040")
+        assert len(response.sources) == 8
+        assert response.chunks_used == 8
+        assert response.answer == "Respuesta para cliente"
+
+

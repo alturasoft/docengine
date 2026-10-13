@@ -1,6 +1,6 @@
 ﻿---
-sigla: CRG
-empresa: CREDISEGURO S.A. SEGUROS GENERALES
+sigla: NAL-VIDA
+empresa: NACIONAL SEGUROS VIDA Y SALUD S.A
 version: 1
 estado: borrador
 ultima_revision: 2026-07-30
@@ -8,7 +8,7 @@ ultima_revision: 2026-07-30
 
 ## Descripción
 
-Reglas de extracción para pólizas de **CREDISEGURO S.A. SEGUROS GENERALES**.
+Reglas de extracción para pólizas de **NACIONAL SEGUROS VIDA Y SALUD S.A**.
 
 Completar este skill a medida que se analicen documentos y se identifiquen patrones
 propios de esta aseguradora.
