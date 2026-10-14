@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocEngine — Eliminación de Pólizas</title>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    :root {
+      --bg-page: #0f172a;
+      --bg-surface: #1e293b;
+      --bg-surface-elevated: #273549;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: #6366f1;
+      
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-light: rgba(99, 102, 241, 0.12);
+      
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --danger-light: rgba(239, 68, 68, 0.12);
+      --danger-border: rgba(239, 68, 68, 0.35);
+      
+      --success: #10b981;
+      --success-hover: #059669;
+      --success-light: rgba(16, 185, 129, 0.12);
+      --success-border: rgba(16, 185, 129, 0.35);
+
+      --warning: #f59e0b;
+      --warning-light: rgba(245, 158, 11, 0.12);
+      --warning-border: rgba(245, 158, 11, 0.35);
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+      
+      --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg-page);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(239, 68, 68, 0.06) 0px, transparent 50%);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      font-size: 15px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.85rem 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-content {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+    }
+
+    .brand-info h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    .brand-info p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.45rem 0.85rem;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+
+    .nav-link:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-color);
+    }
+
+    .nav-link.active {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.1);
+      border-color: var(--danger-border);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1000px;
+      width: 100%;
+      margin: 2rem auto;
+      padding: 0 1.25rem;
+    }
+
+    /* Hero / Search Section */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .card-subtitle {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+    }
+
+    .search-input-wrapper i {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .search-input {
+      width: 100%;
+      height: 48px;
+      padding: 0 1rem 0 2.85rem;
+      background: var(--bg-page);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0 1.35rem;
+      height: 48px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: var(--danger-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Alert Boxes */
+    .alert {
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .alert-danger {
+      background: var(--danger-light);
+      border: 1px solid var(--danger-border);
+      color: #fca5a5;
+    }
+
+    .alert-warning {
+      background: var(--warning-light);
+      border: 1px solid var(--warning-border);
+      color: #fcd34d;
+    }
+
+    .alert-success {
+      background: var(--success-light);
+      border: 1px solid var(--success-border);
+      color: #6ee7b7;
+    }
+
+    .alert i {
+      font-size: 1.15rem;
+      margin-top: 0.15rem;
+      flex-shrink: 0;
+    }
+
+    /* Envelope Info Panel */
+    .envelope-box {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: rgba(15, 23, 42, 0.5);
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .grid-props {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .prop-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .prop-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .prop-value {
+      font-size: 0.95rem;
+      color: var(--text-primary);
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    .prop-value.mono {
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+    }
+
+    .badge-sigla {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      background: rgba(99, 102, 241, 0.2);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      width: fit-content;
+    }
+
+    .badge-doc-type {
+      display: inline-block;
+      padding: 0.18rem 0.5rem;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #e2e8f0;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    /* Documents Table */
+    .docs-section-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .docs-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    thead {
+      background: rgba(30, 41, 59, 0.9);
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .col-mono {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    /* Actions Bar */
+    .actions-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border-color);
+      flex-wrap: wrap;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--danger);
+      cursor: pointer;
+    }
+
+    /* Summary Card (Post-Deletion) */
+    .summary-card {
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin: 1.25rem 0;
+    }
+
+    .metric-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f87171;
+      font-family: var(--font-mono);
+    }
+
+    .metric-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 0.25rem;
+    }
+
+    .verification-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      margin: 1.25rem 0;
+    }
+
+    .verification-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+    }
+
+    .verification-item.passed i {
+      color: var(--success);
+    }
+
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Modal de Confirmación */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--danger-border);
+      border-radius: var(--radius-lg);
+      max-width: 520px;
+      width: 100%;
+      padding: 2rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+      animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalScale {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: #f87171;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .modal-body {
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      margin-bottom: 1.75rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Encabezado de Navegación -->
+  <header>
+    <div class="header-content">
+      <a href="/ui/index.html" class="brand-area">
+        <div class="brand-icon">
+          <i class="fa-solid fa-trash-can"></i>
+        </div>
+        <div class="brand-info">
+          <h1>DocEngine</h1>
+          <p>Eliminación de Pólizas y Sobres</p>
+        </div>
+      </a>
+
+      <nav class="nav-links">
+        <a href="/ui/index.html" class="nav-link" title="Búsqueda de pólizas">
+          <i class="fa-solid fa-house"></i>
+          <span>Asistente</span>
+        </a>
+        <a href="/ui/ingesta.html" class="nav-link" title="Ingesta y extracción">
+          <i class="fa-solid fa-file-arrow-up"></i>
+          <span>Ingesta</span>
+        </a>
+        <a href="/ui/chat.html" class="nav-link" title="Chat RAG">
+          <i class="fa-solid fa-comments"></i>
+          <span>Chat</span>
+        </a>
+        <a href="/ui/eliminar.html" class="nav-link active" title="Eliminar sobre de póliza">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Eliminar</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Buscador de Póliza -->
+    <div class="card" id="searchCard">
+      <h2 class="card-title">
+        <i class="fa-solid fa-magnifying-glass" style="color: var(--primary);"></i>
+        Localizar Sobre de Póliza
+      </h2>
+      <p class="card-subtitle">
+        Ingresa el número de póliza para consultar su contenedor lógico (sobre) y los documentos digitalizados asociados antes de proceder con la purga total.
+      </p>
+
+      <form id="searchForm" onsubmit="event.preventDefault(); buscarPoliza();">
+        <div class="search-row">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-hashtag"></i>
+            <input 
+              type="text" 
+              id="policyInput" 
+              class="search-input" 
+              placeholder="Número de póliza (ej. ACPG-LPZ0000220, 1000030, etc.)" 
+              autofocus 
+              required
+            >
+          </div>
+          <button type="submit" id="btnBuscar" class="btn btn-primary">
+            <i class="fa-solid fa-search"></i>
+            <span>Buscar Sobre</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Contenedor de Estado / Mensajes -->
+    <div id="statusContainer"></div>
+
+    <!-- Vista de Detalle del Sobre (Pre-eliminación) -->
+    <div id="envelopeDetailCard" class="card" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem;">
+        <div>
+          <h2 class="card-title">
+            <i class="fa-solid fa-folder-open" style="color: #f59e0b;"></i>
+            Sobre Localizado
+          </h2>
+          <p class="card-subtitle" style="margin-bottom: 0;">
+            Revisa los detalles y los documentos vinculados antes de confirmar la eliminación.
+          </p>
+        </div>
+        <span class="badge-sigla" id="envBadgeCompany">MSC</span>
+      </div>
+
+      <!-- Resumen del Sobre -->
+      <div class="envelope-box">
+        <div class="grid-props">
+          <div class="prop-item">
+            <span class="prop-label">Número de Póliza</span>
+            <span class="prop-value" id="envNumPoliza">-</span>
+          </div>
+          <div class="prop-item">
+            <span class="prop-label">Aseguradora</span>
+            <span class="prop-value" id="envCompany">-</span>
+          </div>
+          <div class="prop-item">
+            <span class="prop-label">Ramo</span>
+            <span class="prop-value" id="envRamo">-</span>
+          </div>
+          <div class="prop-item">
+            <span class="prop-label">ID Cliente (Carnet/NIT)</span>
+            <span class="prop-value" id="envCliente">-</span>
+          </div>
+          <div class="prop-item" style="grid-column: 1 / -1;">
+            <span class="prop-label">UUID del Sobre (Envelope ID)</span>
+            <span class="prop-value mono" id="envId">-</span>
+          </div>
+        </div>
+
+        <!-- Documentos Asociados -->
+        <h3 class="docs-section-title">
+          <i class="fa-solid fa-file-lines"></i>
+          Documentos en el Sobre (<span id="docsCount">0</span>)
+        </h3>
+        <div class="docs-table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Archivo</th>
+                <th>Tipo</th>
+                <th>Páginas</th>
+                <th>Tamaño</th>
+                <th>Policy ID</th>
+              </tr>
+            </thead>
+            <tbody id="docsTableBody">
+              <!-- Se puebla dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Zona de Advertencia y Acción Destructiva -->
+      <div class="alert alert-danger" style="margin-bottom: 1.5rem;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>
+          <strong>Advertencia de Eliminación Atómica:</strong><br>
+          Esta acción eliminará de forma irreversible el sobre de póliza y purgará en cascada todos sus documentos en PostgreSQL, incluyendo:
+          fragmentos y embeddings vectoriales (1024d <code>policy_chunks</code>), contenido Markdown (<code>policy_raw_md</code>),
+          datos estructurados JSONB (<code>policy_structured_data</code>) y métricas de procesamiento (<code>policy_processing_stats</code>).
+        </div>
+      </div>
+
+      <div class="actions-bar">
+        <label class="checkbox-group">
+          <input type="checkbox" id="chkDeleteFiles" checked>
+          <span>Eliminar también carpetas y archivos generados en disco (<code>outputs/</code>)</span>
+        </label>
+        
+        <button type="button" id="btnIniciarEliminacion" class="btn btn-danger" onclick="abrirModalConfirmacion()">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Eliminar Póliza y Todo su Sobre</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Vista de Progreso / En Proceso -->
+    <div id="progressCard" class="card" style="display: none; text-align: center; padding: 3rem 2rem;">
+      <i class="fa-solid fa-spinner spinner" style="font-size: 2.5rem; color: var(--danger); margin-bottom: 1.25rem;"></i>
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem;" id="progressTitle">Procesando eliminación atómica...</h3>
+      <p style="color: var(--text-secondary); font-size: 0.9rem;" id="progressSubtitle">
+        Enviando solicitud DELETE a la API y purgando tablas relacionales y vectoriales.
+      </p>
+    </div>
+
+    <!-- Vista de Resumen de Acciones Realizadas (Post-eliminación) -->
+    <div id="summaryCard" class="card summary-card" style="display: none;">
+      <div class="alert alert-success">
+        <i class="fa-solid fa-circle-check"></i>
+        <div>
+          <strong>¡Sobre y Póliza Eliminados Exitosamente!</strong><br>
+          <span id="summarySuccessMsg">El sobre de póliza y todos sus documentos asociados fueron eliminados correctamente sin dejar datos huérfanos.</span>
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-box">
+          <div class="metric-value" id="metricDocsEliminados">0</div>
+          <div class="metric-label">Documentos Purgados</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" id="metricCarpetasDisco">0</div>
+          <div class="metric-label">Carpetas en Disco Limpiadas</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" style="color: var(--success); font-size: 1.35rem;" id="metricEstadoConsistencia">Limpio ✓</div>
+          <div class="metric-label">Consistencia BD</div>
+        </div>
+      </div>
+
+      <!-- Resumen Detallado -->
+      <div class="envelope-box">
+        <h3 class="docs-section-title">
+          <i class="fa-solid fa-clipboard-check"></i>
+          Resumen de Acciones Realizadas
+        </h3>
+        
+        <ul class="verification-list">
+          <li class="verification-item passed">
+            <i class="fa-solid fa-check-circle"></i>
+            <div>
+              <strong>Sobre Principal Eliminado:</strong>
+              <span id="sumEnvNumPoliza">-</span> (UUID: <span class="col-mono" id="sumEnvId">-</span>)
+            </div>
+          </li>
+          <li class="verification-item passed">
+            <i class="fa-solid fa-check-circle"></i>
+            <div>
+              <strong>Purgado en Cascada de Tablas Relacionales y Vectoriales:</strong>
+              Se eliminaron automáticamente todos los registros asociados en <code>policies</code>, <code>policy_chunks</code> (1024d embeddings), <code>policy_raw_md</code>, <code>policy_structured_data</code> y <code>policy_processing_stats</code>.
+            </div>
+          </li>
+          <li class="verification-item passed" id="sumVerifApiNum">
+            <i class="fa-solid fa-check-circle"></i>
+            <div>
+              <strong>Verificación de Consulta por Número:</strong>
+              <code>GET /envelopes/by-number/...</code> retornó 0 resultados coincidentes.
+            </div>
+          </li>
+          <li class="verification-item passed" id="sumVerifApiId">
+            <i class="fa-solid fa-check-circle"></i>
+            <div>
+              <strong>Verificación de Consulta por UUID:</strong>
+              <code>GET /envelopes/{id}</code> confirmó <code>404 Not Found</code>.
+            </div>
+          </li>
+        </ul>
+
+        <!-- Detalle de documentos eliminados -->
+        <h4 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; margin: 1rem 0 0.5rem 0;">
+          Documentos eliminados de la base de datos:
+        </h4>
+        <div class="docs-table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Archivo</th>
+                <th>Policy ID</th>
+                <th>Aseguradora</th>
+                <th>Hash SHA-256</th>
+              </tr>
+            </thead>
+            <tbody id="summaryDocsTableBody">
+              <!-- Se puebla dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
+        <button type="button" class="btn btn-secondary" onclick="reiniciarFormulario()">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>Eliminar otra póliza</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal de Confirmación -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>¿Confirmar eliminación definitiva?</span>
+      </div>
+      <div class="modal-body">
+        Estás a punto de eliminar la póliza <strong id="modalPolicyNum" style="color: #f87171;">-</strong> y su sobre completo con <strong id="modalDocCount" style="color: white;">0</strong> documento(s) asociado(s).
+        <br><br>
+        Esta operación es <strong>definitiva e irreversible</strong>. No se puede deshacer.
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="cerrarModalConfirmacion()">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnEjecutarDelete" onclick="ejecutarEliminacion()">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Sí, Eliminar Todo</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuración base de la API
+    function getApiUrl() {
+      return window.location.origin;
+    }
+
+    // Estado en memoria
+    let currentEnvelope = null;
+
+    // Buscar Póliza
+    async function buscarPoliza() {
+      const input = document.getElementById('policyInput');
+      const query = input.value.trim();
+      if (!query) return;
+
+      const btnBuscar = document.getElementById('btnBuscar');
+      const statusContainer = document.getElementById('statusContainer');
+      const envelopeDetailCard = document.getElementById('envelopeDetailCard');
+      const summaryCard = document.getElementById('summaryCard');
+
+      // Limpiar vistas previas
+      statusContainer.innerHTML = '';
+      envelopeDetailCard.style.display = 'none';
+      summaryCard.style.display = 'none';
+
+      btnBuscar.disabled = true;
+      btnBuscar.innerHTML = '<i class="fa-solid fa-spinner spinner"></i> Buscando...';
+
+      try {
+        const resp = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/by-number/${encodeURIComponent(query)}`);
+        if (!resp.ok) {
+          throw new Error(`Error en el servidor: ${resp.status} ${resp.statusText}`);
+        }
+
+        const data = await resp.json();
+        if (!data || data.total === 0 || !data.envelopes || data.envelopes.length === 0) {
+          statusContainer.innerHTML = `
+            <div class="alert alert-warning">
+              <i class="fa-solid fa-circle-exclamation"></i>
+              <div>
+                <strong>No se encontró ningún sobre:</strong> No existen registros ni sobres vinculados a la póliza <strong>${escapeHtml(query)}</strong>.
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        // Tomar el primer sobre coincidente
+        currentEnvelope = data.envelopes[0];
+        mostrarDetalleSobre(currentEnvelope);
+
+      } catch (err) {
+        statusContainer.innerHTML = `
+          <div class="alert alert-danger">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <div>
+              <strong>Error al consultar el sobre:</strong> ${escapeHtml(err.message)}
+            </div>
+          </div>
+        `;
+      } finally {
+        btnBuscar.disabled = false;
+        btnBuscar.innerHTML = '<i class="fa-solid fa-search"></i> Buscar Sobre';
+      }
+    }
+
+    // Mostrar Detalle del Sobre en la UI
+    function mostrarDetalleSobre(env) {
+      document.getElementById('envNumPoliza').textContent = env.numero_poliza || 'N/A';
+      document.getElementById('envCompany').textContent = env.company_sigla || 'N/A';
+      document.getElementById('envRamo').textContent = env.ramo || 'N/A';
+      document.getElementById('envCliente').textContent = env.id_cliente || 'N/A';
+      document.getElementById('envId').textContent = env.id;
+      document.getElementById('envBadgeCompany').textContent = env.company_sigla || 'SOBRE';
+
+      const docs = env.documents || [];
+      document.getElementById('docsCount').textContent = docs.length;
+
+      const tbody = document.getElementById('docsTableBody');
+      tbody.innerHTML = '';
+
+      if (docs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">El sobre no contiene documentos vinculados.</td></tr>';
+      } else {
+        docs.forEach(doc => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>
+              <i class="fa-solid fa-file-pdf" style="color: #f87171; margin-right: 0.35rem;"></i>
+              <strong>${escapeHtml(doc.file_name || 'Sin nombre')}</strong>
+            </td>
+            <td><span class="badge-doc-type">${escapeHtml(doc.tipo_documento || 'DESCONOCIDO')}</span></td>
+            <td>${doc.total_pages || 0} págs</td>
+            <td>${formatBytes(doc.file_size_bytes)}</td>
+            <td class="col-mono" title="${doc.policy_id}">${(doc.policy_id || '').substring(0, 8)}...</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      document.getElementById('envelopeDetailCard').style.display = 'block';
+    }
+
+    // Modal de Confirmación
+    function abrirModalConfirmacion() {
+      if (!currentEnvelope) return;
+      document.getElementById('modalPolicyNum').textContent = currentEnvelope.numero_poliza || 'N/A';
+      document.getElementById('modalDocCount').textContent = (currentEnvelope.documents || []).length;
+      document.getElementById('confirmModal').classList.add('active');
+    }
+
+    function cerrarModalConfirmacion() {
+      document.getElementById('confirmModal').classList.remove('active');
+    }
+
+    // Ejecutar Eliminación (Método 1 - REST API)
+    async function ejecutarEliminacion() {
+      cerrarModalConfirmacion();
+      if (!currentEnvelope) return;
+
+      const envelopeId = currentEnvelope.id;
+      const policyNumber = currentEnvelope.numero_poliza;
+      const deleteFiles = document.getElementById('chkDeleteFiles').checked;
+
+      const envelopeDetailCard = document.getElementById('envelopeDetailCard');
+      const progressCard = document.getElementById('progressCard');
+      const summaryCard = document.getElementById('summaryCard');
+      const statusContainer = document.getElementById('statusContainer');
+
+      envelopeDetailCard.style.display = 'none';
+      progressCard.style.display = 'block';
+      statusContainer.innerHTML = '';
+
+      try {
+        // 1. Ejecutar DELETE en el endpoint
+        document.getElementById('progressTitle').textContent = 'Eliminando sobre y documentos...';
+        document.getElementById('progressSubtitle').textContent = `DELETE /api/v1/policies/envelopes/${envelopeId}?delete_files=${deleteFiles}`;
+
+        const deleteResp = await fetch(
+          `${getApiUrl()}/api/v1/policies/envelopes/${envelopeId}?delete_files=${deleteFiles}`,
+          { method: 'DELETE' }
+        );
+
+        if (!deleteResp.ok) {
+          const errData = await deleteResp.json().catch(() => ({}));
+          throw new Error(errData.detail || `Error del servidor: ${deleteResp.status} ${deleteResp.statusText}`);
+        }
+
+        const deleteData = await deleteResp.json();
+
+        // 2. Ejecutar Verificación Post-Eliminación (Exactamente como se verificó antes)
+        document.getElementById('progressTitle').textContent = 'Verificando ausencia de huérfanos e integridad...';
+        document.getElementById('progressSubtitle').textContent = 'Consultando estado final del sobre en PostgreSQL...';
+
+        let verifNumOk = false;
+        let verifIdOk = false;
+
+        try {
+          const checkNumResp = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/by-number/${encodeURIComponent(policyNumber)}`);
+          if (checkNumResp.ok) {
+            const checkNumData = await checkNumResp.json();
+            verifNumOk = (checkNumData.total === 0 || !checkNumData.envelopes || checkNumData.envelopes.length === 0);
+          }
+        } catch (_) {}
+
+        try {
+          const checkIdResp = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/${envelopeId}`);
+          if (checkIdResp.status === 404) {
+            verifIdOk = true;
+          }
+        } catch (_) {}
+
+        // 3. Renderizar Resumen de Resultados
+        progressCard.style.display = 'none';
+        renderizarResumen(deleteData, verifNumOk, verifIdOk);
+
+      } catch (err) {
+        progressCard.style.display = 'none';
+        envelopeDetailCard.style.display = 'block';
+        statusContainer.innerHTML = `
+          <div class="alert alert-danger">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <div>
+              <strong>Error durante la eliminación:</strong> ${escapeHtml(err.message)}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // Renderizar Resumen Post-Eliminación
+    function renderizarResumen(deleteData, verifNumOk, verifIdOk) {
+      document.getElementById('metricDocsEliminados').textContent = deleteData.deleted_documents_count || 0;
+      document.getElementById('metricCarpetasDisco').textContent = (deleteData.deleted_disk_dirs || []).length;
+      document.getElementById('metricEstadoConsistencia').textContent = (verifNumOk && verifIdOk) ? 'Limpio ✓' : 'Advertencia ⚠';
+      document.getElementById('metricEstadoConsistencia').style.color = (verifNumOk && verifIdOk) ? 'var(--success)' : 'var(--warning)';
+
+      document.getElementById('summarySuccessMsg').textContent = deleteData.message || 'Sobre de póliza y documentos eliminados exitosamente.';
+      document.getElementById('sumEnvNumPoliza').textContent = deleteData.numero_poliza || 'N/A';
+      document.getElementById('sumEnvId').textContent = deleteData.envelope_id || 'N/A';
+
+      // Actualizar texto de verificaciones
+      const liNum = document.getElementById('sumVerifApiNum');
+      if (verifNumOk) {
+        liNum.innerHTML = `
+          <i class="fa-solid fa-check-circle" style="color: var(--success);"></i>
+          <div>
+            <strong>Verificación por Número de Póliza:</strong>
+            <code>GET /envelopes/by-number/${escapeHtml(deleteData.numero_poliza)}</code> confirmó <strong>0 registros</strong> (Limpio).
+          </div>
+        `;
+      } else {
+        liNum.innerHTML = `
+          <i class="fa-solid fa-circle-exclamation" style="color: var(--warning);"></i>
+          <div>
+            <strong>Verificación por Número:</strong> El endpoint aún retornó resultados.
+          </div>
+        `;
+      }
+
+      const liId = document.getElementById('sumVerifApiId');
+      if (verifIdOk) {
+        liId.innerHTML = `
+          <i class="fa-solid fa-check-circle" style="color: var(--success);"></i>
+          <div>
+            <strong>Verificación por UUID de Sobre:</strong>
+            <code>GET /envelopes/${escapeHtml(deleteData.envelope_id)}</code> confirmó <strong>404 Not Found</strong> (Purga confirmada).
+          </div>
+        `;
+      } else {
+        liId.innerHTML = `
+          <i class="fa-solid fa-circle-exclamation" style="color: var(--warning);"></i>
+          <div>
+            <strong>Verificación por UUID:</strong> No retornó 404 Not Found.
+          </div>
+        `;
+      }
+
+      // Tabla de documentos eliminados
+      const tbody = document.getElementById('summaryDocsTableBody');
+      tbody.innerHTML = '';
+      const docs = deleteData.deleted_documents || [];
+
+      if (docs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">No había documentos en este sobre.</td></tr>';
+      } else {
+        docs.forEach(doc => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>
+              <i class="fa-solid fa-file-pdf" style="color: #f87171; margin-right: 0.35rem;"></i>
+              ${escapeHtml(doc.file_name || 'N/A')}
+            </td>
+            <td class="col-mono">${escapeHtml(doc.policy_id || 'N/A')}</td>
+            <td><span class="badge-sigla">${escapeHtml(doc.company_sigla || 'N/A')}</span></td>
+            <td class="col-mono" title="${doc.file_hash || ''}">${doc.file_hash ? doc.file_hash.substring(0, 16) + '...' : 'N/A'}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      document.getElementById('summaryCard').style.display = 'block';
+    }
+
+    // Reiniciar Formulario
+    function reiniciarFormulario() {
+      currentEnvelope = null;
+      document.getElementById('policyInput').value = '';
+      document.getElementById('statusContainer').innerHTML = '';
+      document.getElementById('envelopeDetailCard').style.display = 'none';
+      document.getElementById('progressCard').style.display = 'none';
+      document.getElementById('summaryCard').style.display = 'none';
+      document.getElementById('policyInput').focus();
+    }
+
+    // Utilidades
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+  </script>
+</body>
+</html>

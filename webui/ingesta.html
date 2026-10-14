@@ -1048,8 +1048,11 @@
           </div>
 
           <div>
-            <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
-              <i class="fa-solid fa-file-contract" style="font-size: 0.68rem;"></i> Tipo de Documento
+            <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+              <span><i class="fa-solid fa-file-contract" style="font-size: 0.68rem;"></i> Tipo de Documento</span>
+              <span id="tipoDocAutoBadge" style="display: none; font-size: 0.68rem; color: #f59e0b; font-weight: 600;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-detectar activo para lote
+              </span>
             </label>
             <select id="envelopeTipoDocumento" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;">
               <option value="">-- No especificado (Auto-detectar) --</option>
@@ -1077,25 +1080,26 @@
         <div id="tabUpload" class="tab-content active">
           <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
             <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-            <p>Arrastra tu póliza PDF aquí o haz clic para seleccionar</p>
-            <span>Archivos soportados: .pdf (Máx 200MB)</span>
-            <input type="file" id="fileInput" class="file-input" accept=".pdf">
+            <p>Arrastra uno o varios PDF aquí o haz clic para seleccionar</p>
+            <span>Archivos soportados: .pdf (Máx 200MB por archivo) — Selección múltiple habilitada</span>
+            <input type="file" id="fileInput" class="file-input" accept=".pdf" multiple>
           </div>
 
-          <div id="selectedFileInfo" class="selected-file-info" style="display: none;">
-            <div class="file-details">
-              <i class="fa-solid fa-file-pdf" style="color: #ef4444; font-size: 1.2rem;"></i>
-              <div>
-                <div class="file-name" id="selectedFileName">documento.pdf</div>
-                <div style="font-size: 0.72rem; color: var(--text-dim);" id="selectedFileSize">0 KB</div>
-              </div>
+          <div id="selectedFilesContainer" style="display: none; margin-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+              <span id="selectedFilesSummary" style="font-size: 0.78rem; font-weight: 600; color: var(--accent-primary);">0 archivos seleccionados</span>
+              <button type="button" class="btn-chip" onclick="clearSelectedFiles()" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">
+                <i class="fa-solid fa-trash-can"></i> Limpiar lista
+              </button>
             </div>
-            <button class="btn-chip" onclick="clearSelectedFile()"><i class="fa-solid fa-xmark"></i></button>
+            <div id="selectedFilesList" style="max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.2rem;">
+              <!-- Tarjetas dinámicas de archivos seleccionados -->
+            </div>
           </div>
 
           <div style="margin-top: 1.25rem;">
             <button class="btn-primary" id="btnExtractFile" onclick="processFileUpload()" disabled>
-              <i class="fa-solid fa-bolt"></i> Extraer PDF
+              <i class="fa-solid fa-bolt"></i> <span id="btnExtractFileText">Extraer PDF</span>
             </button>
           </div>
         </div>
@@ -1168,6 +1172,7 @@
           <div class="panel-header">
             <div class="panel-title"><i class="fa-solid fa-square-poll-vertical"></i> Resultado & Visualización</div>
             <div id="resultActions" style="display: none; gap: 0.5rem;">
+              <button class="btn-secondary" id="btnBackToBatch" style="display: none;" onclick="returnToBatchView()"><i class="fa-solid fa-list-check"></i> <span>Volver al Lote</span></button>
               <button class="btn-secondary" onclick="toggleRawView()"><i class="fa-solid fa-code"></i> <span id="rawBtnText">Ver Raw</span></button>
               <button class="btn-secondary" onclick="copyMarkdown()"><i class="fa-solid fa-copy"></i> Copiar</button>
               <button class="btn-secondary" style="background: var(--accent-primary); border-color: var(--accent-primary);" onclick="downloadMarkdownFile()">
@@ -1296,7 +1301,9 @@
   <script>
     // Global State
     let currentResult = null;
+    let selectedFiles = [];
     let selectedFile = null;
+    let lastBatchData = null;
     let isRawView = false;
     let healthInterval = null;
 
@@ -1305,10 +1312,13 @@
     const healthText = document.getElementById('healthText');
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
-    const selectedFileInfo = document.getElementById('selectedFileInfo');
-    const selectedFileName = document.getElementById('selectedFileName');
-    const selectedFileSize = document.getElementById('selectedFileSize');
+    const selectedFilesContainer = document.getElementById('selectedFilesContainer');
+    const selectedFilesSummary = document.getElementById('selectedFilesSummary');
+    const selectedFilesList = document.getElementById('selectedFilesList');
     const btnExtractFile = document.getElementById('btnExtractFile');
+    const btnExtractFileText = document.getElementById('btnExtractFileText');
+    const envelopeTipoDocumento = document.getElementById('envelopeTipoDocumento');
+    const tipoDocAutoBadge = document.getElementById('tipoDocAutoBadge');
     const loader = document.getElementById('loader');
 
     // Theme Toggle (Dark/Light)
@@ -1454,34 +1464,121 @@
       });
 
       dropZone.addEventListener('drop', (e) => {
-        const files = e.dataTransfer.files;
-        if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
-          handleFileSelected(files[0]);
+        const rawFiles = Array.from(e.dataTransfer.files || []);
+        const pdfFiles = rawFiles.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+        if (pdfFiles.length > 0) {
+          addSelectedFiles(pdfFiles);
         } else {
-          alert('Por favor selecciona un archivo en formato PDF.');
+          alert('Por favor selecciona o arrastra archivos en formato PDF.');
         }
       });
 
       fileInput.addEventListener('change', (e) => {
-        if (fileInput.files.length > 0) {
-          handleFileSelected(fileInput.files[0]);
+        const rawFiles = Array.from(fileInput.files || []);
+        if (rawFiles.length > 0) {
+          addSelectedFiles(rawFiles);
         }
       });
     }
 
-    function handleFileSelected(file) {
-      selectedFile = file;
-      selectedFileName.innerText = file.name;
-      selectedFileSize.innerText = formatBytes(file.size);
-      selectedFileInfo.style.display = 'flex';
-      btnExtractFile.disabled = false;
+    function addSelectedFiles(newFiles) {
+      newFiles.forEach(newFile => {
+        // Evitar duplicados exactos (mismo nombre y mismo tamaño)
+        const exists = selectedFiles.some(f => f.name === newFile.name && f.size === newFile.size);
+        if (!exists) {
+          selectedFiles.push(newFile);
+        }
+      });
+      renderSelectedFiles();
     }
 
+    function removeSelectedFile(index) {
+      if (index >= 0 && index < selectedFiles.length) {
+        selectedFiles.splice(index, 1);
+        renderSelectedFiles();
+      }
+    }
+
+    function clearSelectedFiles() {
+      selectedFiles = [];
+      if (fileInput) fileInput.value = '';
+      renderSelectedFiles();
+    }
+
+    // Alias para compatibilidad
     function clearSelectedFile() {
-      selectedFile = null;
-      fileInput.value = '';
-      selectedFileInfo.style.display = 'none';
-      btnExtractFile.disabled = true;
+      clearSelectedFiles();
+    }
+
+    function renderSelectedFiles() {
+      selectedFile = selectedFiles.length > 0 ? selectedFiles[0] : null;
+
+      if (!selectedFilesContainer || !selectedFilesList) return;
+
+      if (selectedFiles.length === 0) {
+        selectedFilesContainer.style.display = 'none';
+        selectedFilesList.innerHTML = '';
+        if (btnExtractFile) btnExtractFile.disabled = true;
+        if (btnExtractFileText) btnExtractFileText.innerText = 'Extraer PDF';
+
+        // Restaurar estado de Tipo de Documento
+        if (envelopeTipoDocumento) {
+          envelopeTipoDocumento.disabled = false;
+        }
+        if (tipoDocAutoBadge) {
+          tipoDocAutoBadge.style.display = 'none';
+        }
+        return;
+      }
+
+      // Si hay archivos seleccionados
+      selectedFilesContainer.style.display = 'block';
+      if (btnExtractFile) btnExtractFile.disabled = false;
+
+      const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+
+      if (selectedFiles.length === 1) {
+        if (btnExtractFileText) btnExtractFileText.innerText = 'Extraer PDF (1 archivo)';
+        if (selectedFilesSummary) {
+          selectedFilesSummary.innerText = `1 archivo seleccionado (${formatBytes(totalBytes)})`;
+        }
+        // Permitir editar Tipo de Documento si es un solo archivo
+        if (envelopeTipoDocumento) {
+          envelopeTipoDocumento.disabled = false;
+        }
+        if (tipoDocAutoBadge) {
+          tipoDocAutoBadge.style.display = 'none';
+        }
+      } else {
+        if (btnExtractFileText) btnExtractFileText.innerText = `Extraer PDFs (${selectedFiles.length} archivos)`;
+        if (selectedFilesSummary) {
+          selectedFilesSummary.innerText = `${selectedFiles.length} archivos seleccionados (${formatBytes(totalBytes)})`;
+        }
+        // Cuando son múltiples archivos, forzar y bloquear Auto-detectar
+        if (envelopeTipoDocumento) {
+          envelopeTipoDocumento.value = '';
+          envelopeTipoDocumento.disabled = true;
+        }
+        if (tipoDocAutoBadge) {
+          tipoDocAutoBadge.style.display = 'inline-flex';
+        }
+      }
+
+      // Renderizar listado de archivos
+      selectedFilesList.innerHTML = selectedFiles.map((f, idx) => `
+        <div class="selected-file-info" style="margin-top: 0; padding: 0.45rem 0.75rem; background: rgba(15, 23, 42, 0.55); border-radius: var(--radius-sm); border: 1px solid var(--bg-card-border); display: flex; align-items: center; justify-content: space-between;">
+          <div class="file-details" style="display: flex; align-items: center; gap: 0.6rem; min-width: 0; overflow: hidden;">
+            <i class="fa-solid fa-file-pdf" style="color: #ef4444; font-size: 1.1rem; flex-shrink: 0;"></i>
+            <div style="min-width: 0; overflow: hidden;">
+              <div class="file-name" style="font-size: 0.8rem; font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+              <div style="font-size: 0.68rem; color: var(--text-dim);">${formatBytes(f.size)}</div>
+            </div>
+          </div>
+          <button type="button" class="btn-chip" style="padding: 0.2rem 0.45rem; margin-left: 0.5rem; flex-shrink: 0;" onclick="removeSelectedFile(${idx})" title="Quitar archivo">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      `).join('');
     }
 
     function formatBytes(bytes) {
@@ -1613,9 +1710,9 @@
       alert(msg);
     }
 
-    // 1. File Upload Processing
+    // 1. File Upload Processing (Individual & Lote Múltiple)
     async function processFileUpload() {
-      if (!selectedFile) return;
+      if (!selectedFiles || selectedFiles.length === 0) return;
 
       const sigla = getSelectedCompany();
       if (!sigla) return;
@@ -1633,45 +1730,132 @@
       const idInput = document.getElementById('envelopeIdCliente');
       if (idInput) idInput.style.borderColor = 'rgba(99, 102, 241, 0.45)';
 
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('id_cliente', idCliente);
-      formData.append('company_sigla', sigla);
-
       const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
       const ramo = document.getElementById('envelopeRamo')?.value?.trim();
-      const tipoDoc = document.getElementById('envelopeTipoDocumento')?.value?.trim();
+      const totalFiles = selectedFiles.length;
 
-      if (numPoliza) formData.append('numero_poliza', numPoliza);
-      if (ramo) formData.append('ramo', ramo);
-      if (tipoDoc) formData.append('tipo_documento', tipoDoc);
+      // FLUJO A: Un solo archivo
+      if (totalFiles === 1) {
+        lastBatchData = null;
+        const file = selectedFiles[0];
+        const tipoDoc = document.getElementById('envelopeTipoDocumento')?.value?.trim();
 
-      const extraInfo = numPoliza ? ` [Cliente: ${idCliente} | Póliza: ${numPoliza}]` : ` [Cliente: ${idCliente}]`;
-      showLoader(`Extrayendo "${selectedFile.name}" con Skill [${sigla}]${extraInfo}...`);
-      startProgressSimulation();
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('id_cliente', idCliente);
+        formData.append('company_sigla', sigla);
+        if (numPoliza) formData.append('numero_poliza', numPoliza);
+        if (ramo) formData.append('ramo', ramo);
+        if (tipoDoc) formData.append('tipo_documento', tipoDoc);
+
+        const extraInfo = numPoliza ? ` [Cliente: ${idCliente} | Póliza: ${numPoliza}]` : ` [Cliente: ${idCliente}]`;
+        showLoader(`Extrayendo "${file.name}" con Skill [${sigla}]${extraInfo}...`);
+        startProgressSimulation();
+        startExtractionLogPolling();
+
+        try {
+          const res = await fetch(`${getApiUrl()}/api/v1/extract`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Error en la extracción' }));
+            throw new Error(err.detail || 'Error en la extracción');
+          }
+
+          const data = await res.json();
+          await completeProgressSimulation();
+          await displaySingleResult(data);
+          fetchMetrics();
+        } catch (err) {
+          await handleExtractionError(err);
+        } finally {
+          stopExtractionLogPolling();
+          hideLoader();
+        }
+        return;
+      }
+
+      // FLUJO B: Múltiples archivos (Lote con Auto-Detección obligatoria)
+      const batchResults = [];
+      let successCount = 0;
+      let failedCount = 0;
+
+      showLoader(`Iniciando extracción por lote de ${totalFiles} archivos...`);
       startExtractionLogPolling();
 
-      try {
-        const res = await fetch(`${getApiUrl()}/api/v1/extract`, {
-          method: 'POST',
-          body: formData
-        });
+      for (let i = 0; i < totalFiles; i++) {
+        const file = selectedFiles[i];
+        const extraPol = numPoliza ? ` | Póliza: ${numPoliza}` : '';
+        const stepTitle = `Lote [${i + 1}/${totalFiles}]: Extrayendo "${file.name}" con Skill [${sigla}] [Cliente: ${idCliente}${extraPol}]...`;
+        
+        const loaderTitleEl = document.getElementById('loaderTitle');
+        if (loaderTitleEl) loaderTitleEl.innerText = stepTitle;
 
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || 'Error en la extracción');
+        startProgressSimulation();
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('id_cliente', idCliente);
+        formData.append('company_sigla', sigla);
+        if (numPoliza) formData.append('numero_poliza', numPoliza);
+        if (ramo) formData.append('ramo', ramo);
+        // tipo_documento se omite o va vacío para activar Auto-Detectar
+
+        try {
+          const res = await fetch(`${getApiUrl()}/api/v1/extract`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: `Error HTTP ${res.status}` }));
+            throw new Error(err.detail || `Error en servidor (HTTP ${res.status})`);
+          }
+
+          const data = await res.json();
+          if (!data.status) data.status = 'success';
+          successCount++;
+          batchResults.push(data);
+        } catch (err) {
+          console.error(`Error procesando archivo ${file.name}:`, err);
+          failedCount++;
+          batchResults.push({
+            document_id: 'err-' + (i + 1),
+            status: 'failed',
+            metadata: {
+              filename: file.name,
+              page_count: 0,
+              tables_detected: 0,
+              headers_removed: 0,
+              footers_removed: 0,
+              markdown_size_bytes: 0,
+              extraction_time_seconds: 0,
+              company_sigla: sigla,
+              tipo_documento: 'Error',
+              envelope_id: null
+            },
+            markdown_preview: `Error al procesar: ${err.message || 'Error de extracción'}`,
+            error: err.message || 'Error de extracción'
+          });
         }
-
-        const data = await res.json();
-        await completeProgressSimulation();
-        await displaySingleResult(data);
-        fetchMetrics();
-      } catch (err) {
-        await handleExtractionError(err);
-      } finally {
-        stopExtractionLogPolling();
-        hideLoader();
       }
+
+      await completeProgressSimulation();
+      stopExtractionLogPolling();
+      hideLoader();
+
+      const consolidatedBatch = {
+        total_documents: totalFiles,
+        successful: successCount,
+        failed: failedCount,
+        results: batchResults
+      };
+
+      lastBatchData = consolidatedBatch;
+      displayBatchResult(consolidatedBatch);
+      fetchMetrics();
     }
 
     // 2. URL Processing
@@ -1785,7 +1969,12 @@
       document.getElementById('singleResultContainer').style.display = 'block';
       document.getElementById('resultActions').style.display = 'flex';
 
-      const meta = resultData.metadata;
+      const backBtn = document.getElementById('btnBackToBatch');
+      if (backBtn) {
+        backBtn.style.display = lastBatchData ? 'inline-flex' : 'none';
+      }
+
+      const meta = resultData.metadata || {};
 
       // Status badge color
       let statusBadge = `<span class="badge-status badge-success"><i class="fa-solid fa-check"></i> ${resultData.status}</span>`;
@@ -1821,17 +2010,17 @@
         <div class="meta-item"><div class="label">Empresa / Skill</div><div class="val" style="color: #a5b4fc;"><i class="fa-solid fa-building"></i> ${meta.company_sigla || 'General'}</div></div>
         <div class="meta-item"><div class="label">Sobre / Póliza</div><div class="val">${envelopeBadge}</div></div>
         <div class="meta-item"><div class="label">Tipo Documento</div><div class="val">${tipoDocBadge}</div></div>
-        <div class="meta-item"><div class="label">Archivo</div><div class="val" title="${meta.filename}">${meta.filename}</div></div>
-        <div class="meta-item"><div class="label">Páginas</div><div class="val">${meta.page_count}</div></div>
-        <div class="meta-item"><div class="label">Tiempo</div><div class="val">${meta.extraction_time_seconds.toFixed(2)}s</div></div>
-        <div class="meta-item"><div class="label">Tablas</div><div class="val">${meta.tables_detected}</div></div>
-        <div class="meta-item"><div class="label">Encabezados Eliminados</div><div class="val">${meta.headers_removed}</div></div>
-        <div class="meta-item"><div class="label">Pies Eliminados</div><div class="val">${meta.footers_removed}</div></div>
-        <div class="meta-item"><div class="label">Tamaño MD</div><div class="val">${formatBytes(meta.markdown_size_bytes)}</div></div>
+        <div class="meta-item"><div class="label">Archivo</div><div class="val" title="${meta.filename || ''}">${meta.filename || 'Documento'}</div></div>
+        <div class="meta-item"><div class="label">Páginas</div><div class="val">${meta.page_count ?? 0}</div></div>
+        <div class="meta-item"><div class="label">Tiempo</div><div class="val">${(meta.extraction_time_seconds ?? 0).toFixed(2)}s</div></div>
+        <div class="meta-item"><div class="label">Tablas</div><div class="val">${meta.tables_detected ?? 0}</div></div>
+        <div class="meta-item"><div class="label">Encabezados Eliminados</div><div class="val">${meta.headers_removed ?? 0}</div></div>
+        <div class="meta-item"><div class="label">Pies Eliminados</div><div class="val">${meta.footers_removed ?? 0}</div></div>
+        <div class="meta-item"><div class="label">Tamaño MD</div><div class="val">${formatBytes(meta.markdown_size_bytes ?? 0)}</div></div>
       `;
 
       // Fetch Full Markdown from API
-      let fullMarkdown = resultData.markdown_preview;
+      let fullMarkdown = resultData.markdown_preview || '';
       const mdPath = resultData.output_paths?.md || '';
 
       try {
@@ -1860,6 +2049,7 @@
 
     // Display Batch Result Table
     function displayBatchResult(batchData) {
+      lastBatchData = batchData;
       document.getElementById('emptyResult').style.display = 'none';
       document.getElementById('singleResultContainer').style.display = 'none';
       document.getElementById('resultActions').style.display = 'none';
@@ -1872,17 +2062,17 @@
       tbody.innerHTML = '';
 
       batchData.results.forEach(res => {
-        const m = res.metadata;
+        const m = res.metadata || {};
         let badge = `<span class="badge-status badge-success">${res.status}</span>`;
         if (res.status !== 'success') badge = `<span class="badge-status badge-danger">${res.status}</span>`;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${badge}</td>
-          <td style="font-weight: 500;">${m.filename}</td>
-          <td>${m.page_count}</td>
-          <td>${m.tables_detected}</td>
-          <td>${m.extraction_time_seconds.toFixed(1)}s</td>
+          <td style="font-weight: 500;">${escapeHtml(m.filename || 'Archivo')}</td>
+          <td>${m.page_count ?? 0}</td>
+          <td>${m.tables_detected ?? 0}</td>
+          <td>${(m.extraction_time_seconds ?? 0).toFixed(1)}s</td>
           <td>
             <button class="btn-chip" onclick='viewBatchItem(${JSON.stringify(res).replace(/'/g, "&apos;")})'>
               <i class="fa-solid fa-eye"></i> Ver
@@ -1895,6 +2085,12 @@
 
     function viewBatchItem(itemResult) {
       displaySingleResult(itemResult);
+    }
+
+    function returnToBatchView() {
+      if (lastBatchData) {
+        displayBatchResult(lastBatchData);
+      }
     }
 
     // View Toggles & Copy/Download

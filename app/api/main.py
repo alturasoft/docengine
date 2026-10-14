@@ -228,6 +228,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         async def root_to_ingesta() -> FileResponse:
             return FileResponse(webui_dir / "ingesta.html")
 
+        @app.get("/eliminar", include_in_schema=False)
+        @app.get("/eliminar.html", include_in_schema=False)
+        async def root_to_eliminar() -> FileResponse:
+            return FileResponse(webui_dir / "eliminar.html")
+
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
