@@ -316,6 +316,8 @@ class PgHybridSearchRepository:
         # Build filter clauses
         filter_parts: list[str] = []
         needs_policy_join = False
+        needs_envelope_join = False
+        needs_structured_join = False
 
         if filters:
             if filters.get("policy_id"):
@@ -332,9 +334,28 @@ class PgHybridSearchRepository:
             if filters.get("tipo_documento"):
                 needs_policy_join = True
                 filter_parts.append("AND p.tipo_documento = UPPER(%(tipo_documento)s)")
+            if filters.get("numero_poliza"):
+                needs_policy_join = True
+                needs_envelope_join = True
+                filter_parts.append("AND pe.numero_poliza ILIKE %(numero_poliza)s")
+            if filters.get("ramo"):
+                needs_policy_join = True
+                needs_envelope_join = True
+                filter_parts.append("AND pe.ramo ILIKE %(ramo)s")
+            if filters.get("vigencia_fecha"):
+                needs_structured_join = True
+                filter_parts.append("AND (psd.data->'datos_cabecera'->>'vigencia_desde' <= %(vigencia_fecha)s AND psd.data->'datos_cabecera'->>'vigencia_hasta' >= %(vigencia_fecha)s OR psd.data->'datos_cabecera'->>'vigencia_desde' IS NULL)")
 
         filter_clause = " ".join(filter_parts)
-        join_clause = "JOIN policies p ON pc.policy_id = p.id" if needs_policy_join else ""
+
+        join_parts: list[str] = []
+        if needs_policy_join:
+            join_parts.append("JOIN policies p ON pc.policy_id = p.id")
+        if needs_envelope_join:
+            join_parts.append("LEFT JOIN policy_envelopes pe ON p.envelope_id = pe.id")
+        if needs_structured_join:
+            join_parts.append("LEFT JOIN policy_structured_data psd ON pc.policy_id = psd.policy_id")
+        join_clause = " ".join(join_parts)
 
         sql = _HYBRID_RRF_QUERY.format(
             filter_clause=filter_clause,
@@ -360,6 +381,12 @@ class PgHybridSearchRepository:
                 params["id_cliente"] = filters["id_cliente"]
             if filters.get("tipo_documento"):
                 params["tipo_documento"] = filters["tipo_documento"]
+            if filters.get("numero_poliza"):
+                params["numero_poliza"] = f"%{filters['numero_poliza'].strip()}%"
+            if filters.get("ramo"):
+                params["ramo"] = f"%{filters['ramo'].strip()}%"
+            if filters.get("vigencia_fecha"):
+                params["vigencia_fecha"] = filters["vigencia_fecha"].strip()
 
         logger.debug(
             "Executing hybrid RRF search",

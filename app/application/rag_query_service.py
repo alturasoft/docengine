@@ -316,6 +316,69 @@ class RAGQueryService:
             no_context_found=False,
         )
 
+    def search_chunks(
+        self,
+        question: str,
+        top_k: int | None = None,
+        similarity_threshold: float | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> list[RetrievedChunk]:
+        """Execute retrieval and re-ranking only, returning pure chunks with scores and metadata.
+
+        Does NOT call OpenAI or generate LLM answers. Designed for external agents
+        and downstream consumers that supply their own reasoning models.
+
+        Args:
+            question: Search query or natural language question.
+            top_k: Maximum chunks to return. Defaults to config.top_k.
+            similarity_threshold: Minimum similarity threshold.
+            filters: Optional pre-filter parameters (company_sigla, numero_poliza, ramo, tipo_documento, id_cliente).
+
+        Returns:
+            List of RetrievedChunk instances with similarity_score and metadata.
+        """
+        question = question.strip()
+        if not question:
+            raise ValueError("The search query must not be empty.")
+
+        resolved_top_k = top_k if top_k is not None else self._config.top_k
+        resolved_threshold = (
+            similarity_threshold
+            if similarity_threshold is not None
+            else self._config.similarity_threshold
+        )
+        effective_filters = dict(filters) if filters else {}
+
+        # Embed query
+        query_vector = self._embed_query(question)
+
+        # Retrieve and rerank
+        if self._hybrid_search is not None:
+            retrieved_chunks = self._retrieve_and_rerank(
+                query_vector=query_vector,
+                query_text=question,
+                top_k=resolved_top_k,
+                filters=effective_filters,
+            )
+        else:
+            retrieved_chunks = self._retrieve_chunks(
+                query_vector=query_vector,
+                top_k=resolved_top_k,
+                threshold=resolved_threshold,
+                filters=effective_filters,
+            )
+
+        # If similarity threshold is explicitly passed, apply filter
+        if similarity_threshold is not None:
+            filtered_chunks = [
+                c for c in retrieved_chunks
+                if c.similarity_score >= resolved_threshold
+            ]
+        else:
+            filtered_chunks = retrieved_chunks
+
+        return filtered_chunks[:resolved_top_k]
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

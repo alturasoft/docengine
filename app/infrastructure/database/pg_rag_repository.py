@@ -124,6 +124,47 @@ class PgRagRepository:
                 cur.execute(query, (status, error_message, policy_id, job_id))
             conn.commit()
 
+    def get_job_status(self, job_id: str) -> dict[str, Any] | None:
+        """Retrieve job status, timestamps, and outcome from processing_jobs.
+
+        Args:
+            job_id: UUID string of the job.
+
+        Returns:
+            Dict with job metadata or None if not found.
+        """
+        query = """
+            SELECT
+                job_id::text,
+                file_name,
+                status,
+                error_message,
+                policy_id::text,
+                created_at::text,
+                updated_at::text
+            FROM processing_jobs
+            WHERE job_id = %s::uuid;
+        """
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (job_id,))
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+                    return {
+                        "job_id": row[0],
+                        "file_name": row[1],
+                        "status": row[2],
+                        "error_message": row[3],
+                        "policy_id": row[4],
+                        "created_at": row[5],
+                        "updated_at": row[6],
+                    }
+        except Exception as exc:
+            logger.error("Failed to fetch job status", job_id=job_id, error=str(exc))
+            return None
+
     def save_rag_policy_transactional(
         self,
         file_name: str,

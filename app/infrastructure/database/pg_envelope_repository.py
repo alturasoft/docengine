@@ -549,3 +549,54 @@ class PgEnvelopeRepository:
             except Exception:
                 conn.rollback()
                 raise
+
+    def delete_document(self, policy_id: str) -> dict[str, Any] | None:
+        """Atomically delete a single policy document from PostgreSQL.
+
+        Due to ON DELETE CASCADE on associated tables (chunks, structured data,
+        markdown, stats), deleting the document record from `policies` automatically
+        removes all vector embeddings, atomized data, and cached files.
+
+        Args:
+            policy_id: UUID string of the document in the policies table.
+
+        Returns:
+            Dictionary with document details or None if not found.
+        """
+        with self._db.get_connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id::text, file_name, file_hash, company_sigla, envelope_id::text
+                        FROM policies
+                        WHERE id = %s::uuid;
+                        """,
+                        (policy_id,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+
+                    doc_info: dict[str, Any] = {
+                        "policy_id": str(row[0]),
+                        "file_name": row[1],
+                        "file_hash": row[2],
+                        "company_sigla": row[3],
+                        "envelope_id": str(row[4]) if row[4] else None,
+                    }
+
+                    cur.execute(
+                        """
+                        DELETE FROM policies
+                        WHERE id = %s::uuid;
+                        """,
+                        (policy_id,),
+                    )
+
+                conn.commit()
+                return doc_info
+            except Exception:
+                conn.rollback()
+                raise
+

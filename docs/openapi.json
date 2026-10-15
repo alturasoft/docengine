@@ -1,0 +1,3527 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DocEngine — Motor de Extracción Documental",
+    "description": "### Motor de Extracción Documental y Pipeline RAG para Pólizas de Seguros\n\nDocEngine procesa documentos de pólizas de seguro en formato PDF para extraer texto estructurado, tablas complejas y metadatos clave con alta fidelidad utilizando el motor Docling (IBM Research). El contenido resultante es indexado en un almacén vectorial para permitir consultas en lenguaje natural mediante arquitecturas RAG (*Retrieval-Augmented Generation*).\n\n**Módulos de la API:**\n- **Extraction:** Ingesta y extracción documental (archivo, URL o carpeta) a formatos Markdown y JSON.\n- **RAG Query:** Consultas en lenguaje natural con citas de fuentes verificadas.\n- **Policies:** Consulta estructurada y búsqueda de pólizas registradas.\n- **System:** Monitoreo de estado operativo, métricas y registros del proceso.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Verificación de estado del servicio",
+        "description": "Retorna el estado de operatividad del servicio, entorno de ejecución y tiempo de actividad acumulado (uptime).",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Información de versiones",
+        "description": "Retorna las versiones instaladas de la aplicación DocEngine, del motor Docling y de Python.",
+        "operationId": "get_version_api_v1_version_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Métricas de extracción",
+        "description": "Retorna estadísticas agregadas de extracción (documentos procesados, exitosos, fallidos, páginas, tablas y tiempos), sincronizadas con la base de datos.",
+        "operationId": "get_metrics_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logs": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Consultar registros del proceso",
+        "description": "Retorna las entradas recientes de log desde el búfer circular en memoria del servidor.",
+        "operationId": "get_logs_api_v1_logs_get",
+        "parameters": [
+          {
+            "name": "lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "description": "Cantidad de líneas de log a recuperar (1 a 1000)",
+              "default": 200,
+              "title": "Lines"
+            },
+            "description": "Cantidad de líneas de log a recuperar (1 a 1000)"
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtro opcional por nivel de severidad (INFO, WARNING, ERROR)",
+              "title": "Level"
+            },
+            "description": "Filtro opcional por nivel de severidad (INFO, WARNING, ERROR)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Logs Api V1 Logs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logs/clear": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Limpiar registros del proceso",
+        "description": "Limpia todas las entradas de log almacenadas en el búfer circular en memoria del servidor.",
+        "operationId": "clear_logs_api_v1_logs_clear_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Clear Logs Api V1 Logs Clear Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics/reset": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Restablecer métricas del servicio",
+        "description": "Restablece a cero los contadores de métricas de extracción tanto en memoria como en disco.",
+        "operationId": "reset_metrics_api_v1_metrics_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Reset Metrics Api V1 Metrics Reset Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalogs/companies": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Listar catálogo de empresas aseguradoras",
+        "description": "Retorna el catálogo completo con IDs oficiales, nombres y siglas vigentes.",
+        "operationId": "get_companies_catalog_api_v1_catalogs_companies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CompanyCatalogResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Companies Catalog Api V1 Catalogs Companies Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalogs/document-types": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Listar catálogo de tipos de documento",
+        "description": "Retorna la clasificación normativa de tipos de documento de pólizas.",
+        "operationId": "get_document_types_catalog_api_v1_catalogs_document_types_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentTypeCatalogResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Document Types Catalog Api V1 Catalogs Document Types Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalogs/ramos": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Listar catálogo plano de ramos de seguros (APS)",
+        "description": "Retorna todos los ramos codificados según la normativa de la APS.",
+        "operationId": "get_ramos_catalog_api_v1_catalogs_ramos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RamoCatalogResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Ramos Catalog Api V1 Catalogs Ramos Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalogs/ramos/grouped": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Listar ramos agrupados por tipo de seguro",
+        "description": "Retorna los ramos estructurados jerárquicamente por categoría (Generales, Personas, Fianzas, etc.).",
+        "operationId": "get_ramos_grouped_api_v1_catalogs_ramos_grouped_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object",
+                  "title": "Response Get Ramos Grouped Api V1 Catalogs Ramos Grouped Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/extract": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "summary": "Extraer documento PDF (subida de archivo)",
+        "description": "Carga un archivo PDF de póliza y extrae su contenido transformándolo en Markdown estructurado y JSON. El archivo se procesa de forma segura aplicando las reglas especializadas de la aseguradora si se especifica su sigla. Si async_mode=True, el endpoint responde de inmediato HTTP 202 Accepted y procesa en segundo plano.",
+        "operationId": "extract_file_api_v1_extract_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_file_api_v1_extract_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Extracción completada de forma síncrona.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractionResultSchema"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Documento recibido y encolado para procesamiento en segundo plano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncExtractResponseSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Archivo inválido, id_cliente vacío o estructura PDF corrupta."
+          },
+          "413": {
+            "description": "El archivo excede el tamaño máximo permitido en MB."
+          },
+          "422": {
+            "description": "El documento excede el límite máximo permitido de páginas."
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/extract/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "summary": "Consultar estado de trabajo de extracción",
+        "description": "Permite consultar el estado de procesamiento en segundo plano de un documento a partir de su job_id.",
+        "operationId": "get_job_status_endpoint_api_v1_extract_jobs__job_id__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/extract/url": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "summary": "Extraer documento PDF desde URL",
+        "description": "Descarga y procesa un documento PDF accesible a través de una URL pública proporcionada.",
+        "operationId": "extract_url_api_v1_extract_url_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UrlExtractionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractionResultSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/extract/folder": {
+      "post": {
+        "tags": [
+          "Extraction"
+        ],
+        "summary": "Extraer todos los PDFs de una carpeta",
+        "description": "Procesa de forma recursiva todos los archivos PDF encontrados en un directorio del servidor. Permite asociar id_cliente a toda la carpeta o inferirlo mediante prefijos en los nombres de archivo. Retorna un reporte consolidado por lote con el estado individual de cada documento procesado.",
+        "operationId": "extract_folder_api_v1_extract_folder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FolderExtractionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchExtractionResultSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/extract/{document_id}/markdown": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "summary": "Obtener contenido Markdown de una extracción",
+        "description": "Recupera el contenido completo en texto Markdown generado a partir de una extracción previa, identificado por document_id o ruta de archivo.",
+        "operationId": "get_extraction_markdown_api_v1_extract__document_id__markdown_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ruta de archivo relativa o absoluta opcional hacia el archivo .md",
+              "title": "Path"
+            },
+            "description": "Ruta de archivo relativa o absoluta opcional hacia el archivo .md"
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Si es True, incluye cabeceras para forzar la descarga del archivo (Content-Disposition: attachment)",
+              "default": false,
+              "title": "Download"
+            },
+            "description": "Si es True, incluye cabeceras para forzar la descarga del archivo (Content-Disposition: attachment)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/companies": {
+      "get": {
+        "tags": [
+          "Extraction"
+        ],
+        "summary": "Listar compañías aseguradoras registradas",
+        "description": "Retorna el catálogo completo de compañías aseguradoras soportadas con sus siglas oficiales y nombres completos.",
+        "operationId": "get_companies_api_v1_companies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Get Companies Api V1 Companies Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/query": {
+      "post": {
+        "tags": [
+          "RAG Query"
+        ],
+        "summary": "Consultar documentos con lenguaje natural (RAG)",
+        "description": "Envía una consulta en lenguaje natural sobre las pólizas de seguro indexadas. DocEngine recupera los fragmentos semánticos más relevantes mediante similitud vectorial y sintetiza una respuesta precisa, veraz y fundamentada con citas textuales a través de OpenAI, evitando alucinaciones.",
+        "operationId": "query_documents_api_v1_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/query/search": {
+      "post": {
+        "tags": [
+          "RAG Query"
+        ],
+        "summary": "Búsqueda vectorial e híbrida de fragmentos relevantes (Retrieval Only)",
+        "description": "Recupera fragmentos documentales ordenados por relevancia semántica mediante búsqueda híbrida (vectorial BGE-M3 + léxica BM25) y reordenamiento con Cross-Encoder. Devuelve los fragmentos con su contenido íntegro, metadatos y puntaje de similitud, sin sintetizar respuesta con LLM, permitiendo a agentes externos consumir el contexto puro.",
+        "operationId": "search_documents_api_v1_query_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuerySearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuerySearchResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/query/health": {
+      "get": {
+        "tags": [
+          "RAG Query"
+        ],
+        "summary": "Verificación de estado del servicio RAG Query",
+        "description": "Retorna el estado de disponibilidad y operatividad del servicio de consultas semánticas RAG y su conexión con el almacén vectorial.",
+        "operationId": "query_health_api_v1_query_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Query Health Api V1 Query Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/recent": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Listar pólizas digitalizadas recientes",
+        "description": "Retorna las pólizas digitalizadas más recientes almacenadas e indexadas en la base de datos con su información básica.",
+        "operationId": "get_recent_policies_api_v1_policies_recent_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Cantidad máxima de pólizas a retornar (por defecto 20, máximo 50)",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Cantidad máxima de pólizas a retornar (por defecto 20, máximo 50)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentPoliciesResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/search": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Buscar póliza por número o palabra clave",
+        "description": "Busca una póliza en la base de datos por su número de póliza, identificador UUID o palabra clave, y retorna su información básica.",
+        "operationId": "search_policy_api_v1_policies_search_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Número de póliza, identificador UUID o palabra clave a buscar",
+              "title": "Q"
+            },
+            "description": "Número de póliza, identificador UUID o palabra clave a buscar"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicySearchResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/envelopes": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Listar sobres de póliza digitalizados",
+        "description": "Retorna el listado de pólizas (sobres) indexadas, incluyendo la cantidad y detalles de documentos vinculados.",
+        "operationId": "list_envelopes_api_v1_policies_envelopes_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Cantidad máxima de pólizas a retornar",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Cantidad máxima de pólizas a retornar"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset para paginación",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset para paginación"
+          },
+          {
+            "name": "company_sigla",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtro opcional por sigla de compañía",
+              "title": "Company Sigla"
+            },
+            "description": "Filtro opcional por sigla de compañía"
+          },
+          {
+            "name": "id_cliente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtro opcional por identificador de cliente (Carnet o NIT)",
+              "title": "Id Cliente"
+            },
+            "description": "Filtro opcional por identificador de cliente (Carnet o NIT)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyEnvelopeSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/envelopes/by-client/{id_cliente}": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Buscar sobres de póliza por cliente (Carnet o NIT)",
+        "description": "Retorna todas las pólizas (sobres) y documentos vinculados pertenecientes a un cliente específico.",
+        "operationId": "get_envelopes_by_client_api_v1_policies_envelopes_by_client__id_cliente__get",
+        "parameters": [
+          {
+            "name": "id_cliente",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id Cliente"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Cantidad máxima de pólizas a retornar",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Cantidad máxima de pólizas a retornar"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset para paginación",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset para paginación"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyEnvelopeSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/envelopes/by-number/{numero_poliza}": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Buscar sobres de póliza por número de póliza",
+        "description": "Busca y retorna los contenedores de póliza que coincidan con el número proporcionado, junto con todos los documentos asociados a cada uno.",
+        "operationId": "get_envelopes_by_number_api_v1_policies_envelopes_by_number__numero_poliza__get",
+        "parameters": [
+          {
+            "name": "numero_poliza",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Numero Poliza"
+            }
+          },
+          {
+            "name": "company_sigla",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtro opcional por sigla de compañía aseguradora",
+              "title": "Company Sigla"
+            },
+            "description": "Filtro opcional por sigla de compañía aseguradora"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyEnvelopeSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/envelopes/{envelope_id}": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Obtener sobre de póliza y sus documentos por ID",
+        "description": "Retorna el contenedor o sobre de póliza con todos los documentos vinculados.",
+        "operationId": "get_envelope_by_id_api_v1_policies_envelopes__envelope_id__get",
+        "parameters": [
+          {
+            "name": "envelope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Envelope Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyEnvelopeSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Eliminar sobre de póliza completo y todos sus documentos",
+        "description": "Elimina de forma atómica y completa un sobre de póliza (envelope) junto con todos los documentos asociados a él en PostgreSQL (incluyendo chunks vectoriales, datos estructurados, markdown y estadísticas). Opcionalmente elimina las carpetas de salida en disco.",
+        "operationId": "delete_envelope_api_v1_policies_envelopes__envelope_id__delete",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "envelope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Envelope Id"
+            }
+          },
+          {
+            "name": "delete_files",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Si es True, elimina también del sistema de archivos las carpetas generadas en outputs/",
+              "default": true,
+              "title": "Delete Files"
+            },
+            "description": "Si es True, elimina también del sistema de archivos las carpetas generadas en outputs/"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEnvelopeResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/{policy_id}": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Obtener información básica de póliza por ID",
+        "description": "Retorna los detalles estándar básicos de una póliza registrada a partir de su identificador único UUID.",
+        "operationId": "get_policy_by_id_api_v1_policies__policy_id__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyBasicInfoSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Eliminar documento individual de póliza (Reemplazo de documento)",
+        "description": "Elimina de forma atómica un documento específico de la base de datos a partir de su UUID en la tabla policies (incluyendo sus fragmentos vectoriales, datos estructurados, markdown y estadísticas). Permite volver a subir una versión corregida del documento sin duplicidad ni inconsistencias. Opcionalmente elimina sus carpetas de salida en disco.",
+        "operationId": "delete_single_document_api_v1_policies__policy_id__delete",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          },
+          {
+            "name": "delete_files",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Si es True, elimina también del sistema de archivos las carpetas generadas en outputs/",
+              "default": true,
+              "title": "Delete Files"
+            },
+            "description": "Si es True, elimina también del sistema de archivos las carpetas generadas en outputs/"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteDocumentResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/{policy_id}/structured": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Obtener datos estructurados completos de póliza (Coberturas, límites, deducibles, vigencias)",
+        "description": "Retorna la representación estructurada y atomizada completa de la póliza de seguros: datos contractuales de cabecera, especificaciones del objeto/vehículo asegurado, catálogo de coberturas con sumas, deducibles y límites, y cláusulas o condiciones especiales.",
+        "operationId": "get_policy_structured_api_v1_policies__policy_id__structured_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyStructuredDataResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AsyncExtractResponseSchema": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "UUID del trabajo encolado"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Estado inicial del trabajo",
+            "default": "PROCESSING"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Mensaje indicativo del procesamiento en segundo plano"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "message"
+        ],
+        "title": "AsyncExtractResponseSchema",
+        "description": "Respuesta a la solicitud de carga asíncrona (202 Accepted)."
+      },
+      "BatchExtractionResultSchema": {
+        "properties": {
+          "total_documents": {
+            "type": "integer",
+            "title": "Total Documents",
+            "description": "Cantidad total de documentos PDF procesados"
+          },
+          "successful": {
+            "type": "integer",
+            "title": "Successful",
+            "description": "Cantidad de extracciones exitosas"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "description": "Cantidad de extracciones fallidas"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractionResultSchema"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Lista de resultados detallados de cada documento procesado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_documents",
+          "successful",
+          "failed",
+          "results"
+        ],
+        "title": "BatchExtractionResultSchema",
+        "description": "Respuesta de la API para la extracción por lote de una carpeta de documentos."
+      },
+      "Body_extract_file_api_v1_extract_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "id_cliente": {
+            "type": "string",
+            "title": "Id Cliente",
+            "description": "Carnet de Identidad o NIT del cliente (REQUERIDO)"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla identificadora de la compañía aseguradora (ej. CRI, LBC, ALI) para aplicar reglas especializadas"
+          },
+          "numero_poliza": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Poliza",
+            "description": "Número de póliza para vincular el documento a un sobre de póliza (envelope)"
+          },
+          "ramo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ramo",
+            "description": "Ramo del seguro (ej. AUTOMOTOR, INCENDIO, SALUD)"
+          },
+          "tipo_documento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Documento",
+            "description": "Clasificación o tipo de documento (ej. CONDICIONADO_GENERAL, CONDICIONADO_PARTICULAR, LIQUIDACION_PAGOS)"
+          },
+          "async_mode": {
+            "type": "boolean",
+            "title": "Async Mode",
+            "description": "Si es True, procesa el documento en segundo plano y responde 202 Accepted de inmediato",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "id_cliente"
+        ],
+        "title": "Body_extract_file_api_v1_extract_post"
+      },
+      "CoberturaItemResponseSchema": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre",
+            "description": "Nombre o descripción de la cobertura"
+          },
+          "suma_asegurada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suma Asegurada",
+            "description": "Monto asegurado"
+          },
+          "deducible": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deducible",
+            "description": "Condiciones del deducible o franquicia"
+          },
+          "limite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limite",
+            "description": "Límite indemnizatorio o sublímite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "title": "CoberturaItemResponseSchema",
+        "description": "Detalle de una cobertura individual."
+      },
+      "CompanyCatalogResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "ID oficial de la aseguradora"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre",
+            "description": "Razón social completa"
+          },
+          "sigla": {
+            "type": "string",
+            "title": "Sigla",
+            "description": "Sigla oficial actual"
+          },
+          "sigla_anterior": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigla Anterior",
+            "description": "Sigla histórica previa (si aplica)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "sigla"
+        ],
+        "title": "CompanyCatalogResponse"
+      },
+      "DatosCabeceraResponseSchema": {
+        "properties": {
+          "numero_poliza": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Poliza"
+          },
+          "poliza_anterior": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poliza Anterior"
+          },
+          "asegurado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asegurado"
+          },
+          "documento_identidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documento Identidad"
+          },
+          "nit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nit"
+          },
+          "codigo_spvs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Spvs"
+          },
+          "direccion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direccion"
+          },
+          "zona": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zona"
+          },
+          "barrio_distrito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barrio Distrito"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "celular": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Celular"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "actividad_economica": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actividad Economica"
+          },
+          "tomador": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tomador"
+          },
+          "aseguradora": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aseguradora"
+          },
+          "sigla_empresa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigla Empresa"
+          },
+          "vigencia_desde": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigencia Desde"
+          },
+          "vigencia_hasta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigencia Hasta"
+          },
+          "moneda": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moneda"
+          },
+          "prima_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prima Total"
+          }
+        },
+        "type": "object",
+        "title": "DatosCabeceraResponseSchema",
+        "description": "Datos de cabecera contractual de la póliza."
+      },
+      "DeleteDocumentResponseSchema": {
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id",
+            "description": "UUID del documento eliminado"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name",
+            "description": "Nombre del archivo del documento"
+          },
+          "envelope_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envelope Id",
+            "description": "UUID del sobre al que pertenecía"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la aseguradora"
+          },
+          "deleted_disk_dirs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Deleted Disk Dirs",
+            "description": "Directorios de disco eliminados"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Mensaje confirmando la eliminación"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_id",
+          "file_name",
+          "message"
+        ],
+        "title": "DeleteDocumentResponseSchema",
+        "description": "Respuesta a la eliminación de un documento individual."
+      },
+      "DeleteEnvelopeResponseSchema": {
+        "properties": {
+          "envelope_id": {
+            "type": "string",
+            "title": "Envelope Id",
+            "description": "UUID del sobre de póliza eliminado"
+          },
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza",
+            "description": "Número de póliza del sobre"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la compañía aseguradora"
+          },
+          "ramo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ramo",
+            "description": "Ramo del seguro"
+          },
+          "deleted_documents_count": {
+            "type": "integer",
+            "title": "Deleted Documents Count",
+            "description": "Cantidad de documentos eliminados"
+          },
+          "deleted_documents": {
+            "items": {
+              "$ref": "#/components/schemas/DeletedDocumentInfoSchema"
+            },
+            "type": "array",
+            "title": "Deleted Documents",
+            "description": "Lista de documentos asociados que fueron eliminados"
+          },
+          "deleted_disk_dirs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Deleted Disk Dirs",
+            "description": "Directorios de salida en disco eliminados"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Mensaje informativo del resultado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "envelope_id",
+          "numero_poliza",
+          "deleted_documents_count",
+          "message"
+        ],
+        "title": "DeleteEnvelopeResponseSchema",
+        "description": "Respuesta a la eliminación de un sobre de póliza completo."
+      },
+      "DeletedDocumentInfoSchema": {
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id",
+            "description": "UUID del documento en la tabla policies"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name",
+            "description": "Nombre del archivo original"
+          },
+          "file_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Hash",
+            "description": "Hash SHA-256 del documento"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la aseguradora"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_id",
+          "file_name"
+        ],
+        "title": "DeletedDocumentInfoSchema",
+        "description": "Información básica de un documento eliminado del sobre."
+      },
+      "DocumentSummarySchema": {
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id",
+            "description": "UUID de la fila en la tabla policies"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name",
+            "description": "Nombre del archivo original"
+          },
+          "file_hash": {
+            "type": "string",
+            "title": "File Hash",
+            "description": "Hash SHA-256 del archivo"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la aseguradora"
+          },
+          "tipo_documento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Documento",
+            "description": "Tipo de documento"
+          },
+          "total_pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Pages",
+            "description": "Total de páginas"
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size Bytes",
+            "description": "Tamaño del archivo en bytes"
+          },
+          "id_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet o NIT)"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Fecha de creación"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_id",
+          "file_name",
+          "file_hash"
+        ],
+        "title": "DocumentSummarySchema",
+        "description": "Resumen de un documento adjunto a un sobre de póliza."
+      },
+      "DocumentTypeCatalogResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "ID normativo del tipo de documento"
+          },
+          "documento": {
+            "type": "string",
+            "title": "Documento",
+            "description": "Descripción normativa"
+          },
+          "codigo_normalizado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Normalizado",
+            "description": "Identificador en mayúsculas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "documento"
+        ],
+        "title": "DocumentTypeCatalogResponse"
+      },
+      "ExtractionResultSchema": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Identificador único de la extracción"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Estado de la extracción: 'success' | 'partial' | 'failed'"
+          },
+          "markdown_preview": {
+            "type": "string",
+            "title": "Markdown Preview",
+            "description": "Primeros 500 caracteres de previsualización del Markdown generado"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MetadataSchema",
+            "description": "Metadatos técnicos y estadísticas del documento extraído"
+          },
+          "output_paths": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Paths",
+            "description": "Diccionario de formatos generados y sus rutas de almacenamiento en el servidor"
+          },
+          "rag_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RagReportSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resultado de persistencia RAG en PostgreSQL"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Fecha y hora de registro de la extracción"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "status",
+          "markdown_preview",
+          "metadata",
+          "output_paths",
+          "created_at"
+        ],
+        "title": "ExtractionResultSchema",
+        "description": "Respuesta de la API para la extracción de un documento individual."
+      },
+      "FolderExtractionRequest": {
+        "properties": {
+          "folder_path": {
+            "type": "string",
+            "title": "Folder Path",
+            "description": "Ruta del directorio en el servidor que contiene los archivos PDF"
+          },
+          "output_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Output Formats",
+            "description": "Formatos de salida a generar: 'md', 'json', 'all'",
+            "default": [
+              "all"
+            ]
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"
+          },
+          "id_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet o NIT) para la carpeta, o inferible por prefijo de archivo/subcarpeta"
+          },
+          "numero_poliza": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Poliza",
+            "description": "Número de póliza opcional para vincular todos los documentos del lote a un Sobre Digital"
+          },
+          "ramo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ramo",
+            "description": "Línea o ramo de seguro opcional para el Sobre Digital (ej. AUTOMOTORES, VIDA)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder_path"
+        ],
+        "title": "FolderExtractionRequest",
+        "description": "Cuerpo de la petición para extracción por lote de carpetas en el servidor."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Estado operativo del servicio ('ok')",
+            "default": "ok"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "description": "Entorno de ejecución actual (ej. 'development', 'production')"
+          },
+          "uptime_seconds": {
+            "type": "number",
+            "title": "Uptime Seconds",
+            "description": "Segundos transcurridos desde el inicio del servidor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environment",
+          "uptime_seconds"
+        ],
+        "title": "HealthResponse",
+        "description": "Cuerpo de respuesta para la verificación de salud del servicio (GET /health)."
+      },
+      "JobStatusResponseSchema": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "UUID del trabajo de extracción"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Estado del trabajo: PROCESSING, COMPLETED, FAILED, SKIPPED"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name",
+            "description": "Nombre del archivo procesado"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id",
+            "description": "UUID de la póliza resultante si completó"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message",
+            "description": "Detalle del error en caso de fallo"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Fecha de creación del trabajo"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Fecha de última actualización"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "file_name"
+        ],
+        "title": "JobStatusResponseSchema",
+        "description": "Estado de un trabajo de procesamiento en segundo plano (GET /api/v1/extract/jobs/{job_id})."
+      },
+      "MetadataSchema": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "Nombre del archivo original procesado"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256",
+            "description": "Hash SHA-256 del contenido del archivo original"
+          },
+          "page_count": {
+            "type": "integer",
+            "title": "Page Count",
+            "description": "Cantidad total de páginas procesadas del documento"
+          },
+          "extraction_time_seconds": {
+            "type": "number",
+            "title": "Extraction Time Seconds",
+            "description": "Tiempo total empleado en la extracción (segundos)"
+          },
+          "docling_version": {
+            "type": "string",
+            "title": "Docling Version",
+            "description": "Versión del motor Docling utilizada"
+          },
+          "tables_detected": {
+            "type": "integer",
+            "title": "Tables Detected",
+            "description": "Cantidad total de tablas estructuradas detectadas"
+          },
+          "figures_detected": {
+            "type": "integer",
+            "title": "Figures Detected",
+            "description": "Cantidad de figuras o imágenes detectadas"
+          },
+          "headers_removed": {
+            "type": "integer",
+            "title": "Headers Removed",
+            "description": "Cantidad de encabezados repetitivos eliminados"
+          },
+          "footers_removed": {
+            "type": "integer",
+            "title": "Footers Removed",
+            "description": "Cantidad de pies de página repetitivos eliminados"
+          },
+          "ocr_used": {
+            "type": "boolean",
+            "title": "Ocr Used",
+            "description": "Indica si se aplicó reconocimiento óptico de caracteres (OCR)"
+          },
+          "has_multi_column": {
+            "type": "boolean",
+            "title": "Has Multi Column",
+            "description": "Indica si se detectó un diseño de múltiples columnas"
+          },
+          "markdown_size_bytes": {
+            "type": "integer",
+            "title": "Markdown Size Bytes",
+            "description": "Tamaño del contenido Markdown generado en bytes"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Lista de errores no críticos ocurridos durante la extracción"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "description": "Lista de advertencias generadas durante el procesamiento"
+          },
+          "extracted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Extracted At",
+            "description": "Fecha y hora de finalización de la extracción"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la empresa aseguradora"
+          },
+          "pdf_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Type",
+            "description": "Tipo de PDF detectado: 'digital' | 'scanned' | 'hybrid' | 'unknown'"
+          },
+          "scanned_page_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanned Page Ratio",
+            "description": "Fracción de páginas escaneadas detectadas (0.0–1.0)"
+          },
+          "pdf_detection_time_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Detection Time Seconds",
+            "description": "Tiempo empleado en la clasificación previa del PDF (segundos)"
+          },
+          "envelope_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envelope Id",
+            "description": "UUID del sobre de póliza (envelope) al que se vinculó el documento"
+          },
+          "tipo_documento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Documento",
+            "description": "Clasificación del tipo de documento (ej. 'CONDICIONADO_GENERAL', 'CONDICIONADO_PARTICULAR')"
+          },
+          "id_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet de Identidad o NIT)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "sha256",
+          "page_count",
+          "extraction_time_seconds",
+          "docling_version",
+          "tables_detected",
+          "figures_detected",
+          "headers_removed",
+          "footers_removed",
+          "ocr_used",
+          "has_multi_column",
+          "markdown_size_bytes",
+          "extracted_at"
+        ],
+        "title": "MetadataSchema",
+        "description": "Metadatos técnicos y estadísticas del documento extraído para respuestas de la API."
+      },
+      "MetricsResponse": {
+        "properties": {
+          "total_extractions": {
+            "type": "integer",
+            "title": "Total Extractions",
+            "description": "Total acumulado de extracciones solicitadas"
+          },
+          "successful_extractions": {
+            "type": "integer",
+            "title": "Successful Extractions",
+            "description": "Cantidad de extracciones finalizadas exitosamente"
+          },
+          "failed_extractions": {
+            "type": "integer",
+            "title": "Failed Extractions",
+            "description": "Cantidad de extracciones que resultaron en fallo"
+          },
+          "total_pages_processed": {
+            "type": "integer",
+            "title": "Total Pages Processed",
+            "description": "Total acumulado de páginas PDF procesadas"
+          },
+          "total_tables_detected": {
+            "type": "integer",
+            "title": "Total Tables Detected",
+            "description": "Total acumulado de tablas detectadas y estructuradas"
+          },
+          "avg_extraction_time_seconds": {
+            "type": "number",
+            "title": "Avg Extraction Time Seconds",
+            "description": "Tiempo promedio de procesamiento por documento en segundos"
+          },
+          "memory_usage_mb": {
+            "type": "number",
+            "title": "Memory Usage Mb",
+            "description": "Consumo de memoria RAM del proceso del servidor en megabytes (MB)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_extractions",
+          "successful_extractions",
+          "failed_extractions",
+          "total_pages_processed",
+          "total_tables_detected",
+          "avg_extraction_time_seconds",
+          "memory_usage_mb"
+        ],
+        "title": "MetricsResponse",
+        "description": "Cuerpo de respuesta para las métricas acumuladas del servicio (GET /metrics)."
+      },
+      "ObjetoAseguradoResponseSchema": {
+        "properties": {
+          "tipo_bien": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Bien"
+          },
+          "marca": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marca"
+          },
+          "modelo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelo"
+          },
+          "ano": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ano"
+          },
+          "placa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placa"
+          },
+          "motor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motor"
+          },
+          "chasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chasis"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "uso_servicio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uso Servicio"
+          },
+          "valor_declarado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor Declarado"
+          },
+          "alcance_territorial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alcance Territorial"
+          }
+        },
+        "type": "object",
+        "title": "ObjetoAseguradoResponseSchema",
+        "description": "Datos del bien o vehículo asegurado."
+      },
+      "PolicyBasicInfoSchema": {
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id",
+            "description": "UUID del documento de póliza."
+          },
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza",
+            "description": "Número de póliza."
+          },
+          "ramo": {
+            "type": "string",
+            "title": "Ramo",
+            "description": "Ramo de la póliza."
+          },
+          "asegurado": {
+            "type": "string",
+            "title": "Asegurado",
+            "description": "Nombre del asegurado o tomador."
+          },
+          "numero_documento": {
+            "type": "string",
+            "title": "Numero Documento",
+            "description": "Documento de identidad (CI / NIT)."
+          },
+          "vigencia": {
+            "type": "string",
+            "title": "Vigencia",
+            "description": "Período de vigencia (Desde - Hasta)."
+          },
+          "prima_total": {
+            "type": "string",
+            "title": "Prima Total",
+            "description": "Prima total y moneda."
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la aseguradora."
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name",
+            "description": "Nombre del archivo original."
+          },
+          "id_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet o NIT)."
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Fecha de registro en la base de datos."
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_id",
+          "numero_poliza",
+          "ramo",
+          "asegurado",
+          "numero_documento",
+          "vigencia",
+          "prima_total"
+        ],
+        "title": "PolicyBasicInfoSchema",
+        "description": "Información básica estructurada de una póliza de seguro."
+      },
+      "PolicyEnvelopeSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "UUID único del envelope"
+          },
+          "numero_poliza": {
+            "type": "string",
+            "title": "Numero Poliza",
+            "description": "Número de póliza"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la aseguradora"
+          },
+          "ramo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ramo",
+            "description": "Ramo de la póliza"
+          },
+          "id_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet o NIT)"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Fecha de registro"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Última actualización"
+          },
+          "documents_count": {
+            "type": "integer",
+            "title": "Documents Count",
+            "description": "Cantidad de documentos vinculados",
+            "default": 0
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentSummarySchema"
+            },
+            "type": "array",
+            "title": "Documents",
+            "description": "Listado de documentos vinculados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "numero_poliza"
+        ],
+        "title": "PolicyEnvelopeSchema",
+        "description": "Sobre o contenedor lógico que agrupa todos los documentos de una misma póliza."
+      },
+      "PolicyEnvelopeSearchResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Cantidad de envelopes encontrados"
+          },
+          "envelopes": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyEnvelopeSchema"
+            },
+            "type": "array",
+            "title": "Envelopes",
+            "description": "Lista de envelopes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "PolicyEnvelopeSearchResponse",
+        "description": "Respuesta a la búsqueda de envelopes de póliza."
+      },
+      "PolicySearchResponseSchema": {
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "title": "Found",
+            "description": "Indica si se encontró la póliza."
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyBasicInfoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Datos básicos de la póliza encontrada."
+          }
+        },
+        "type": "object",
+        "required": [
+          "found"
+        ],
+        "title": "PolicySearchResponseSchema",
+        "description": "Cuerpo de respuesta para la búsqueda de pólizas (GET /api/v1/policies/search)."
+      },
+      "PolicyStructuredDataResponseSchema": {
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id",
+            "description": "UUID de la póliza"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name",
+            "description": "Nombre del archivo original"
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la compañía aseguradora"
+          },
+          "id_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet o NIT)"
+          },
+          "datos_cabecera": {
+            "$ref": "#/components/schemas/DatosCabeceraResponseSchema",
+            "description": "Metadatos de cabecera contractual (número, asegurado, vigencias, prima)"
+          },
+          "objeto_asegurado": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjetoAseguradoResponseSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Datos del bien o vehículo asegurado"
+          },
+          "coberturas": {
+            "items": {
+              "$ref": "#/components/schemas/CoberturaItemResponseSchema"
+            },
+            "type": "array",
+            "title": "Coberturas",
+            "description": "Lista de coberturas, sumas aseguradas, deducibles y límites"
+          },
+          "condiciones_especiales": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Condiciones Especiales",
+            "description": "Lista de condiciones o cláusulas especiales"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_id"
+        ],
+        "title": "PolicyStructuredDataResponseSchema",
+        "description": "Datos estructurados completos de una póliza (GET /api/v1/policies/{policy_id}/structured)."
+      },
+      "QueryRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Question",
+            "description": "Pregunta en lenguaje natural a responder a partir del contexto documental indexado."
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K",
+            "description": "Cantidad máxima de fragmentos relevantes a recuperar (1–50). Por defecto toma el valor configurado en el servicio."
+          },
+          "similarity_threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Similarity Threshold",
+            "description": "Puntuación mínima de similitud de coseno para incluir un fragmento (0.0–1.0). Por defecto toma el valor configurado en el servicio."
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filters",
+            "description": "Filtros opcionales de metadatos. Claves soportadas: 'policy_id' (str UUID), 'envelope_id' (str UUID), 'company_sigla' (str, ej. 'CRI'), 'id_cliente' (str, ej. '10203040')."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "QueryRequest",
+        "description": "Cuerpo de la petición para consulta semántica con lenguaje natural (POST /api/v1/query)."
+      },
+      "QueryResponseSchema": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "description": "Respuesta generada por el LLM basada exclusivamente en los fragmentos de documentos recuperados. Retorna la frase de contingencia si no se encontró contexto relevante."
+          },
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "La pregunta formulada originalmente por el usuario"
+          },
+          "chunks_used": {
+            "type": "integer",
+            "title": "Chunks Used",
+            "description": "Cantidad de fragmentos de documento incluidos en el contexto del prompt"
+          },
+          "model_used": {
+            "type": "string",
+            "title": "Model Used",
+            "description": "Identificador del modelo OpenAI utilizado para generar la respuesta"
+          },
+          "no_context_found": {
+            "type": "boolean",
+            "title": "No Context Found",
+            "description": "True cuando ningún fragmento superó el umbral mínimo de similitud requerido.",
+            "default": false
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceChunkSchema"
+            },
+            "type": "array",
+            "title": "Sources",
+            "description": "Lista ordenada de fragmentos fuente utilizados (del más relevante al menor)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Marca de tiempo UTC de generación de la respuesta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "query",
+          "chunks_used",
+          "model_used",
+          "created_at"
+        ],
+        "title": "QueryResponseSchema",
+        "description": "Cuerpo de respuesta para la consulta semántica con lenguaje natural (POST /api/v1/query)."
+      },
+      "QuerySearchRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Question",
+            "description": "Consulta o pregunta en lenguaje natural para recuperar fragmentos relevantes."
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K",
+            "description": "Cantidad máxima de fragmentos relevantes a recuperar (1–50)."
+          },
+          "similarity_threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Similarity Threshold",
+            "description": "Puntuación mínima de similitud de coseno (0.0–1.0)."
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filters",
+            "description": "Filtros de metadatos (company_sigla, numero_poliza, ramo, tipo_documento, id_cliente, vigencia_fecha)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "QuerySearchRequest",
+        "description": "Cuerpo de la petición para búsqueda vectorial/híbrida pura sin generación LLM (POST /api/v1/query/search)."
+      },
+      "QuerySearchResponseSchema": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Pregunta o texto de consulta ejecutado"
+          },
+          "total_results": {
+            "type": "integer",
+            "title": "Total Results",
+            "description": "Cantidad de fragmentos relevantes recuperados"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SourceChunkSchema"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Listado de fragmentos con su puntaje de similitud, contenido y metadatos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "total_results"
+        ],
+        "title": "QuerySearchResponseSchema",
+        "description": "Respuesta a la búsqueda pura de fragmentos (POST /api/v1/query/search)."
+      },
+      "RagReportSchema": {
+        "properties": {
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id",
+            "description": "UUID asignado a la póliza en la base de datos"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "UUID del trabajo de procesamiento"
+          },
+          "skipped_duplicate": {
+            "type": "boolean",
+            "title": "Skipped Duplicate",
+            "description": "Indica si se omitió por ser un documento duplicado ya existente",
+            "default": false
+          },
+          "chunks_created": {
+            "type": "integer",
+            "title": "Chunks Created",
+            "description": "Cantidad de fragmentos semánticos creados e indexados",
+            "default": 0
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Lista de errores ocurridos durante el proceso RAG"
+          },
+          "envelope_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envelope Id",
+            "description": "UUID del sobre de póliza vinculado en PostgreSQL"
+          },
+          "tipo_documento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Documento",
+            "description": "Tipo de documento asignado"
+          }
+        },
+        "type": "object",
+        "title": "RagReportSchema",
+        "description": "Reporte de persistencia e indexación del pipeline RAG en PostgreSQL."
+      },
+      "RamoCatalogResponse": {
+        "properties": {
+          "codigo": {
+            "type": "integer",
+            "title": "Codigo",
+            "description": "Código oficial APS"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo",
+            "description": "Categoría o tipo de seguro"
+          },
+          "ramo": {
+            "type": "string",
+            "title": "Ramo",
+            "description": "Nombre del ramo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "tipo",
+          "ramo"
+        ],
+        "title": "RamoCatalogResponse"
+      },
+      "RecentPoliciesResponseSchema": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Cantidad de pólizas retornadas."
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyBasicInfoSchema"
+            },
+            "type": "array",
+            "title": "Policies",
+            "description": "Listado de pólizas recientes."
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "policies"
+        ],
+        "title": "RecentPoliciesResponseSchema",
+        "description": "Cuerpo de respuesta para la consulta de pólizas recientes (GET /api/v1/policies/recent)."
+      },
+      "SourceChunkSchema": {
+        "properties": {
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id",
+            "description": "UUID de clave primaria en la tabla policy_chunks"
+          },
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id",
+            "description": "UUID de la póliza principal a la que pertenece el fragmento"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index",
+            "description": "Posición del fragmento dentro del documento original"
+          },
+          "similarity_score": {
+            "type": "number",
+            "title": "Similarity Score",
+            "description": "Puntuación de similitud de coseno calculada (0.0–1.0)"
+          },
+          "document_label": {
+            "type": "string",
+            "title": "Document Label",
+            "description": "Etiqueta legible del documento citado como fuente"
+          },
+          "chunk_content": {
+            "type": "string",
+            "title": "Chunk Content",
+            "description": "Contenido textual sin procesar del fragmento recuperado"
+          },
+          "metadata_json": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata Json",
+            "description": "Metadatos adicionales del fragmento (sección, página, etc.)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "policy_id",
+          "chunk_index",
+          "similarity_score",
+          "document_label",
+          "chunk_content"
+        ],
+        "title": "SourceChunkSchema",
+        "description": "Representación de un fragmento de texto recuperado utilizado como fuente de la respuesta."
+      },
+      "UrlExtractionRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "URL pública que apunta al documento PDF a procesar"
+          },
+          "id_cliente": {
+            "type": "string",
+            "title": "Id Cliente",
+            "description": "Identificador del cliente (Carnet de Identidad o NIT) (REQUERIDO)"
+          },
+          "output_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Output Formats",
+            "description": "Formatos de salida a generar: 'md', 'json', 'all'",
+            "default": [
+              "all"
+            ]
+          },
+          "company_sigla": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Sigla",
+            "description": "Sigla de la empresa aseguradora (ej. CRI, LBC, ALI)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "id_cliente"
+        ],
+        "title": "UrlExtractionRequest",
+        "description": "Cuerpo de la petición para extracción basada en URL remota."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VersionResponse": {
+        "properties": {
+          "app_version": {
+            "type": "string",
+            "title": "App Version",
+            "description": "Versión instalada de la aplicación DocEngine"
+          },
+          "docling_version": {
+            "type": "string",
+            "title": "Docling Version",
+            "description": "Versión del motor Docling instalada"
+          },
+          "python_version": {
+            "type": "string",
+            "title": "Python Version",
+            "description": "Versión del entorno Python en ejecución"
+          }
+        },
+        "type": "object",
+        "required": [
+          "app_version",
+          "docling_version",
+          "python_version"
+        ],
+        "title": "VersionResponse",
+        "description": "Cuerpo de respuesta para la consulta de versiones del servicio (GET /version)."
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Extraction",
+      "description": "Operaciones de ingesta y extracción documental de pólizas de seguro en formato PDF. Permite procesar archivos mediante carga directa (`multipart/form-data`), descarga desde URL o escaneo recursivo por lotes en carpetas del servidor. Genera representaciones estructuradas en Markdown y JSON."
+    },
+    {
+      "name": "RAG Query",
+      "description": "Búsqueda semántica y generación aumentada por recuperación (RAG). Permite realizar consultas en lenguaje natural sobre las pólizas digitalizadas, recuperando fragmentos vectoriales relevantes y generando respuestas fundamentadas con citas textuales."
+    },
+    {
+      "name": "Policies",
+      "description": "Búsqueda y consulta de pólizas indexadas en la base de datos PostgreSQL. Permite consultar pólizas digitalizadas recientes, buscar por número o palabra clave, y obtener información detallada por identificador único."
+    },
+    {
+      "name": "System",
+      "description": "Endpoints de monitoreo operativo y diagnóstico del sistema. Incluye verificación de salud (`health check`), información de versiones de componentes, métricas estadísticas acumuladas y visualización del búfer de registros (`logs`)."
+    }
+  ]
+}

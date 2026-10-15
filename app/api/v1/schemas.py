@@ -352,3 +352,168 @@ class DeleteEnvelopeResponseSchema(BaseModel):
     )
     message: str = Field(description="Mensaje informativo del resultado")
 
+
+# ---------------------------------------------------------------------------
+# Nuevos Esquemas Aditivos (Fases 1 y 2)
+# ---------------------------------------------------------------------------
+
+
+class SearchFiltersSchema(BaseModel):
+    """Filtros tipados para consultas y búsquedas RAG."""
+
+    company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora (ej. LBC, CRE, BISA)")
+    numero_poliza: str | None = Field(default=None, description="Número de póliza")
+    ramo: str | None = Field(default=None, description="Ramo del seguro (ej. AUTOMOTOR, INCENDIO, SALUD)")
+    tipo_documento: str | None = Field(default=None, description="Tipo de documento (ej. CONDICIONADO_GENERAL, CONDICIONADO_PARTICULAR)")
+    vigencia_fecha: str | None = Field(default=None, description="Fecha de vigencia a comprobar (YYYY-MM-DD o DD/MM/YYYY)")
+    id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet de Identidad o NIT)")
+    policy_id: str | None = Field(default=None, description="UUID del documento de póliza")
+    envelope_id: str | None = Field(default=None, description="UUID del sobre de póliza")
+
+
+class QuerySearchRequest(BaseModel):
+    """Cuerpo de la petición para búsqueda vectorial/híbrida pura sin generación LLM (POST /api/v1/query/search)."""
+
+    question: str = Field(
+        description="Consulta o pregunta en lenguaje natural para recuperar fragmentos relevantes.",
+        min_length=3,
+        max_length=2000,
+    )
+    top_k: int | None = Field(
+        default=None,
+        description="Cantidad máxima de fragmentos relevantes a recuperar (1–50).",
+        ge=1,
+        le=50,
+    )
+    similarity_threshold: float | None = Field(
+        default=None,
+        description="Puntuación mínima de similitud de coseno (0.0–1.0).",
+        ge=0.0,
+        le=1.0,
+    )
+    filters: dict | None = Field(
+        default=None,
+        description="Filtros de metadatos (company_sigla, numero_poliza, ramo, tipo_documento, id_cliente, vigencia_fecha).",
+    )
+
+
+class QuerySearchResponseSchema(BaseModel):
+    """Respuesta a la búsqueda pura de fragmentos (POST /api/v1/query/search)."""
+
+    query: str = Field(description="Pregunta o texto de consulta ejecutado")
+    total_results: int = Field(description="Cantidad de fragmentos relevantes recuperados")
+    results: list[SourceChunkSchema] = Field(
+        default_factory=list,
+        description="Listado de fragmentos con su puntaje de similitud, contenido y metadatos",
+    )
+
+
+class DatosCabeceraResponseSchema(BaseModel):
+    """Datos de cabecera contractual de la póliza."""
+
+    numero_poliza: str | None = None
+    poliza_anterior: str | None = None
+    asegurado: str | None = None
+    documento_identidad: str | None = None
+    nit: str | None = None
+    codigo_spvs: str | None = None
+    direccion: str | None = None
+    zona: str | None = None
+    barrio_distrito: str | None = None
+    telefono: str | None = None
+    celular: str | None = None
+    email: str | None = None
+    actividad_economica: str | None = None
+    tomador: str | None = None
+    aseguradora: str | None = None
+    sigla_empresa: str | None = None
+    vigencia_desde: str | None = None
+    vigencia_hasta: str | None = None
+    moneda: str | None = None
+    prima_total: str | None = None
+
+
+class ObjetoAseguradoResponseSchema(BaseModel):
+    """Datos del bien o vehículo asegurado."""
+
+    tipo_bien: str | None = None
+    marca: str | None = None
+    modelo: str | None = None
+    ano: str | None = None
+    placa: str | None = None
+    motor: str | None = None
+    chasis: str | None = None
+    color: str | None = None
+    uso_servicio: str | None = None
+    valor_declarado: str | None = None
+    alcance_territorial: str | None = None
+
+
+class CoberturaItemResponseSchema(BaseModel):
+    """Detalle de una cobertura individual."""
+
+    nombre: str = Field(description="Nombre o descripción de la cobertura")
+    suma_asegurada: str | None = Field(default=None, description="Monto asegurado")
+    deducible: str | None = Field(default=None, description="Condiciones del deducible o franquicia")
+    limite: str | None = Field(default=None, description="Límite indemnizatorio o sublímite")
+
+
+class PolicyStructuredDataResponseSchema(BaseModel):
+    """Datos estructurados completos de una póliza (GET /api/v1/policies/{policy_id}/structured)."""
+
+    policy_id: str = Field(description="UUID de la póliza")
+    file_name: str | None = Field(default=None, description="Nombre del archivo original")
+    company_sigla: str | None = Field(default=None, description="Sigla de la compañía aseguradora")
+    id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet o NIT)")
+    datos_cabecera: DatosCabeceraResponseSchema = Field(
+        default_factory=DatosCabeceraResponseSchema,
+        description="Metadatos de cabecera contractual (número, asegurado, vigencias, prima)",
+    )
+    objeto_asegurado: ObjetoAseguradoResponseSchema | None = Field(
+        default=None, description="Datos del bien o vehículo asegurado"
+    )
+    coberturas: list[CoberturaItemResponseSchema] = Field(
+        default_factory=list, description="Lista de coberturas, sumas aseguradas, deducibles y límites"
+    )
+    condiciones_especiales: list[str] = Field(
+        default_factory=list, description="Lista de condiciones o cláusulas especiales"
+    )
+
+
+class JobStatusResponseSchema(BaseModel):
+    """Estado de un trabajo de procesamiento en segundo plano (GET /api/v1/extract/jobs/{job_id})."""
+
+    job_id: str = Field(description="UUID del trabajo de extracción")
+    status: str = Field(description="Estado del trabajo: PROCESSING, COMPLETED, FAILED, SKIPPED")
+    file_name: str = Field(description="Nombre del archivo procesado")
+    policy_id: str | None = Field(default=None, description="UUID de la póliza resultante si completó")
+    error_message: str | None = Field(default=None, description="Detalle del error en caso de fallo")
+    created_at: str | None = Field(default=None, description="Fecha de creación del trabajo")
+    updated_at: str | None = Field(default=None, description="Fecha de última actualización")
+
+
+class AsyncExtractResponseSchema(BaseModel):
+    """Respuesta a la solicitud de carga asíncrona (202 Accepted)."""
+
+    job_id: str = Field(description="UUID del trabajo encolado")
+    status: str = Field(default="PROCESSING", description="Estado inicial del trabajo")
+    message: str = Field(description="Mensaje indicativo del procesamiento en segundo plano")
+
+
+class DeleteDocumentResponseSchema(BaseModel):
+    """Respuesta a la eliminación de un documento individual."""
+
+    policy_id: str = Field(description="UUID del documento eliminado")
+    file_name: str = Field(description="Nombre del archivo del documento")
+    envelope_id: str | None = Field(default=None, description="UUID del sobre al que pertenecía")
+    company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora")
+    deleted_disk_dirs: list[str] = Field(default_factory=list, description="Directorios de disco eliminados")
+    message: str = Field(description="Mensaje confirmando la eliminación")
+
+
+class ErrorDetailSchema(BaseModel):
+    """Detalle de error estándar para documentación OpenAPI."""
+
+    detail: str = Field(description="Descripción del error")
+
+

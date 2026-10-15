@@ -355,6 +355,9 @@ class PerformanceConfig(BaseSettings):
     memory_warning_threshold_mb: int = Field(
         default=2048, description="Memory warning threshold in MB"
     )
+    max_pages_per_file: int = Field(
+        default=500, description="Max pages allowed per single file", ge=1, le=10000
+    )
 
 
 class MarkdownConfig(BaseSettings):

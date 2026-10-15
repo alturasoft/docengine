@@ -10,10 +10,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies import RagQueryServiceDep
-from app.api.v1.schemas import QueryRequest, QueryResponseSchema, SourceChunkSchema
+from app.api.security import require_role
+from app.api.v1.schemas import (
+    QueryRequest,
+    QueryResponseSchema,
+    QuerySearchRequest,
+    QuerySearchResponseSchema,
+    SourceChunkSchema,
+)
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +37,7 @@ router = APIRouter(prefix="/query", tags=["RAG Query"])
         "DocEngine recupera los fragmentos semánticos más relevantes mediante similitud vectorial "
         "y sintetiza una respuesta precisa, veraz y fundamentada con citas textuales a través de OpenAI, evitando alucinaciones."
     ),
+    dependencies=[Depends(require_role("readonly"))],
 )
 def query_documents(
     body: QueryRequest,
@@ -85,6 +93,92 @@ def query_documents(
         ) from exc
 
     return _to_response_schema(response)
+
+
+@router.post(
+    "/search",
+    response_model=QuerySearchResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Búsqueda vectorial e híbrida de fragmentos relevantes (Retrieval Only)",
+    description=(
+        "Recupera fragmentos documentales ordenados por relevancia semántica mediante búsqueda híbrida "
+        "(vectorial BGE-M3 + léxica BM25) y reordenamiento con Cross-Encoder. "
+        "Devuelve los fragmentos con su contenido íntegro, metadatos y puntaje de similitud, "
+        "sin sintetizar respuesta con LLM, permitiendo a agentes externos consumir el contexto puro."
+    ),
+    dependencies=[Depends(require_role("readonly"))],
+)
+def search_documents(
+    body: QuerySearchRequest,
+    rag_query_service: RagQueryServiceDep,
+) -> QuerySearchResponseSchema:
+    """Retrieve matching chunks without LLM synthesis.
+
+    Args:
+        body: QuerySearchRequest with question, top_k, similarity_threshold, and filters.
+        rag_query_service: Injected RAGQueryService.
+
+    Returns:
+        QuerySearchResponseSchema with retrieved chunks and scores.
+    """
+    if rag_query_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "RAG Query Service is not available. "
+                "Check server logs for initialization errors."
+            ),
+        )
+
+    try:
+        # Resolve filters if passed as Pydantic model
+        filters_dict = (
+            body.filters.model_dump(exclude_none=True)
+            if hasattr(body.filters, "model_dump")
+            else body.filters
+        )
+        chunks = rag_query_service.search_chunks(
+            question=body.question,
+            top_k=body.top_k,
+            similarity_threshold=body.similarity_threshold,
+            filters=filters_dict,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except RuntimeError as exc:
+        logger.error("Search query service error", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.error("Unexpected error in search endpoint", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Search failed: {exc}",
+        ) from exc
+
+    source_schemas = [
+        SourceChunkSchema(
+            chunk_id=chunk.chunk_id,
+            policy_id=chunk.policy_id,
+            chunk_index=chunk.chunk_index,
+            similarity_score=round(chunk.similarity_score, 4),
+            document_label=chunk.document_label,
+            chunk_content=chunk.chunk_content,
+            metadata_json=chunk.metadata_json,
+        )
+        for chunk in chunks
+    ]
+
+    return QuerySearchResponseSchema(
+        query=body.question,
+        total_results=len(source_schemas),
+        results=source_schemas,
+    )
 
 
 @router.get(

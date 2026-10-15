@@ -16,7 +16,7 @@ def build_html_content() -> str:
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>DocEngine — Especificación Técnica de Endpoints y APIs (v1)</title>
+<title>DocEngine — Especificación Técnica de Endpoints y APIs (v1.1)</title>
 <style>
     @page {
         size: letter;
@@ -28,7 +28,7 @@ def build_html_content() -> str:
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         @bottom-left {
-            content: "DocEngine v1.0 — Especificación Técnica de APIs";
+            content: "DocEngine v1.1 — Especificación Técnica de APIs";
             font-size: 8pt;
             color: #64748b;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -99,18 +99,17 @@ def build_html_content() -> str:
     .cover-meta table {
         width: 100%;
         border-collapse: collapse;
-        margin: 0;
     }
 
     .cover-meta td {
+        padding: 5px 0;
+        vertical-align: top;
         border: none;
-        padding: 4px 8px 4px 0;
-        background: transparent !important;
     }
 
     .cover-meta td.label {
         font-weight: 700;
-        color: #1e293b;
+        color: #0f172a;
         width: 170px;
     }
 
@@ -204,7 +203,7 @@ def build_html_content() -> str:
         margin: 14px 0 18px 0;
         padding: 12px 14px;
         page-break-inside: avoid;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
     .endpoint-header {
@@ -361,11 +360,11 @@ def build_html_content() -> str:
 <!-- PORTADA -->
 <!-- ==================================================================== -->
 <div class="cover-page">
-    <div class="cover-badge">DOCENGINE REST API &bull; ESPECIFICACIÓN TÉCNICA v1.0</div>
+    <div class="cover-badge">DOCENGINE REST API &bull; ESPECIFICACIÓN TÉCNICA v1.1</div>
     <div class="cover-title">DocEngine — Especificación Técnica de Endpoints y APIs</div>
     <div class="cover-subtitle">
         Manual integral de integración y arquitectura para analistas y desarrolladores.<br>
-        Ingesta documental, motor de sobres, persistencia vectorial y consultas semánticas RAG.
+        Ingesta documental, motor de sobres, persistencia vectorial, consultas semánticas RAG, extracción estructurada JSON y control de acceso RBAC.
     </div>
     <div class="cover-meta">
         <table>
@@ -375,7 +374,7 @@ def build_html_content() -> str:
             </tr>
             <tr>
                 <td class="label">Versión de la API:</td>
-                <td>v1.0.0 (Prefijo global: <code>/api/v1</code>)</td>
+                <td>v1.1.0 (Prefijo global: <code>/api/v1</code>)</td>
             </tr>
             <tr>
                 <td class="label">Formatos de Datos:</td>
@@ -387,7 +386,7 @@ def build_html_content() -> str:
             </tr>
             <tr>
                 <td class="label">Estado del Documento:</td>
-                <td>Especificación Técnica Oficial y Operativa</td>
+                <td>Especificación Técnica Oficial y Operativa (9 Endpoints y Requerimientos Integrados)</td>
             </tr>
         </table>
     </div>
@@ -400,20 +399,20 @@ def build_html_content() -> str:
     <div class="toc-title">Índice del Contenido</div>
     <ul>
         <li><strong>1. Visión General:</strong> Propósito, formatos de intercambio y arquitectura de sobres.</li>
-        <li><strong>2. Entornos y URLs Base:</strong> Direcciones por ciclo de vida (Desarrollo, Staging, Producción).</li>
-        <li><strong>3. Autenticación y Autorización:</strong> Mecanismos de seguridad y cabeceras.</li>
-        <li><strong>4. Convención Global de Errores y Respuestas:</strong> Estructura estándar JSON y códigos HTTP.</li>
-        <li><strong>5. Paginación, Filtros y Orden:</strong> Reglas de consulta masiva y navegación.</li>
+        <li><strong>2. Entornos y URLs Base:</strong> Direcciones por ciclo de vida (Desarrollo, Staging, Producción) y OpenAPI.</li>
+        <li><strong>3. Autenticación y Autorización (RBAC):</strong> Mecanismos de seguridad, cabecera <code>X-API-Key</code> y roles de usuario.</li>
+        <li><strong>4. Convención Global de Errores y Respuestas:</strong> Estructura estándar <code>ErrorDetailSchema</code> y códigos HTTP admitidos.</li>
+        <li><strong>5. Paginación y Filtros Avanzados:</strong> Reglas de consulta por aseguradora, ramo, número de póliza, tipo de documento y vigencia.</li>
         <li><strong>6. Catálogo Detallado de Endpoints:</strong>
             <ul>
-                <li>&bull; <em>6.1 Módulo Extraction:</em> Ingesta y extracción de PDFs (archivo, URL, carpeta y catálogo de aseguradoras).</li>
-                <li>&bull; <em>6.2 Módulo Policies & Envelopes:</em> Búsqueda, consulta y <strong>eliminación limpia de sobres</strong>.</li>
-                <li>&bull; <em>6.3 Módulo RAG Query:</em> Consultas en lenguaje natural con citas textuales y diagnóstico.</li>
-                <li>&bull; <em>6.4 Módulo System & Health:</em> Monitoreo de latido, métricas y buffer de logs.</li>
+                <li>&bull; <em>6.1 Módulo Extraction:</em> Ingesta síncrona/asíncrona (<code>async_mode</code>), consulta de jobs, límites y catálogo de aseguradoras.</li>
+                <li>&bull; <em>6.2 Módulo Policies & Envelopes:</em> Datos estructurados de póliza (Cláusula 2da), reemplazo de documentos sueltos y gestión de sobres.</li>
+                <li>&bull; <em>6.3 Módulo RAG Query:</em> Búsqueda pura de fragmentos y score (sin LLM) y consultas semánticas con síntesis.</li>
+                <li>&bull; <em>6.4 Módulo System & Health:</em> Monitoreo de latido, métricas de rendimiento y buffer de logs.</li>
             </ul>
         </li>
-        <li><strong>7. Límites de Tasa (Rate Limiting) y Rendimiento:</strong> Capacidad de procesamiento y memoria.</li>
-        <li><strong>8. Procesamiento Asíncrono e Idempotencia:</strong> Hashing SHA-256 y ciclo de vida de jobs.</li>
+        <li><strong>7. Límites Técnicos por Archivo y Rendimiento:</strong> Restricciones de tamaño (200 MB), páginas (500 págs) y validación de PDF.</li>
+        <li><strong>8. Procesamiento Asíncrono, Idempotencia y Reintentos:</strong> Hashing SHA-256, ciclo de vida de jobs y condicionados generales.</li>
     </ul>
 </div>
 
@@ -437,6 +436,7 @@ def build_html_content() -> str:
     <li><strong>Formato Estándar:</strong> Todas las peticiones y respuestas estructuradas utilizan <strong>JSON</strong> codificado en <strong>UTF-8</strong> (salvo la carga de archivos binarios vía <code>multipart/form-data</code>).</li>
     <li><strong>Idempotencia Nativa:</strong> Toda ingesta documental verifica el hash criptográfico SHA-256 del archivo; si el documento ya fue procesado, no se reprocesa innecesariamente, evitando costos de cómputo y duplicación de vectores.</li>
     <li><strong>Arquitectura de Sobres (Policy Envelopes):</strong> Los documentos no existen aislados; se agrupan lógicamente en "sobres" que representan la póliza completa (agrupando carátula, condicionados generales, condicionados particulares, liquidaciones y anexos).</li>
+    <li><strong>Aislamiento Multi-Inquilino (id_cliente):</strong> Cada operación de ingesta y consulta puede aislarse por identificador de cliente, garantizando la privacidad de los datos.</li>
 </ul>
 
 <!-- ==================================================================== -->
@@ -479,39 +479,63 @@ def build_html_content() -> str:
 </table>
 
 <div class="callout callout-info">
-    <div class="callout-title">Documentación Interactiva OpenAPI</div>
-    DocEngine expone la especificación OpenAPI estándar en <code>/openapi.json</code> y provee interfaces interactivas para pruebas en <code>/docs</code> (Swagger UI) y <code>/redoc</code> (ReDoc).
+    <div class="callout-title">Documentación Interactiva y OpenAPI Versionado</div>
+    DocEngine expone la especificación OpenAPI v3 estándar en <code>/openapi.json</code> y provee interfaces interactivas para pruebas en <code>/docs</code> (Swagger UI) y <code>/redoc</code> (ReDoc). La especificación exportada se mantiene sincronizada y versionada en <code>docs/openapi.json</code> bajo la política de versionado <code>docs/API_VERSIONING_POLICY.md</code>.
 </div>
 
 <!-- ==================================================================== -->
-<!-- 3. AUTENTICACIÓN Y AUTORIZACIÓN -->
+<!-- 3. AUTENTICACIÓN Y AUTORIZACIÓN (RBAC) -->
 <!-- ==================================================================== -->
-<h1>3. Autenticación y Autorización</h1>
+<h1>3. Autenticación y Autorización (RBAC)</h1>
 <p>
-    En la fase actual de despliegue para redes internas protegidas (VPC corporativa), los endpoints operan sin restricción de tokens públicos. 
-    Para despliegues expuestos a internet o consumo por aplicaciones de terceros, la convención estándar adoptada por la arquitectura es:
+    DocEngine implementa un esquema de seguridad basado en claves de API (<code>X-API-Key</code>) con control de acceso basado en roles (<strong>RBAC</strong>).
+    El sistema puede operar en modo abierto (para redes internas/desarrollo local) o en modo autenticado estricto mediante la variable de entorno <code>DOCENGINE_SECURITY_ENABLED=true</code>.
 </p>
-<ul>
-    <li><strong>Encabezado HTTP:</strong> <code>Authorization: Bearer &lt;TOKEN_JWT&gt;</code> o <code>X-API-Key: &lt;SECRET_KEY&gt;</code>.</li>
-    <li><strong>Manejo de Errores de Acceso:</strong>
-        <ul>
-            <li><code>401 Unauthorized</code>: Ausencia de token o token caducado/inválido.</li>
-            <li><code>403 Forbidden</code>: Credencial válida pero sin privilegios suficientes para la operación (ej. permisos de solo lectura intentando ejecutar <code>DELETE</code>).</li>
-        </ul>
-    </li>
-</ul>
+
+<h3>Cabecera HTTP de Autenticación</h3>
+<pre><code>X-API-Key: &lt;TU_API_KEY_SECRETA&gt;</code></pre>
+
+<h3>Perfiles de Acceso (Roles)</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Rol</th>
+            <th>Permisos Otorgados</th>
+            <th>Endpoints Habilitados</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>readonly</code></td>
+            <td>Lectura y búsqueda</td>
+            <td><code>POST /api/v1/query/search</code>, <code>POST /api/v1/query</code>, <code>GET /api/v1/policies/*</code> (incluye datos estructurados), <code>GET /api/v1/health/*</code>.</td>
+        </tr>
+        <tr>
+            <td><code>writer</code></td>
+            <td>Lectura + Ingesta documental</td>
+            <td>Todos los permisos de <code>readonly</code> más <code>POST /api/v1/extract/*</code> y <code>GET /api/v1/extract/jobs/*</code>.</td>
+        </tr>
+        <tr>
+            <td><code>admin</code></td>
+            <td>Control total</td>
+            <td>Todos los permisos anteriores más <code>DELETE /api/v1/policies/{policy_id}</code> y <code>DELETE /api/v1/policies/envelopes/{envelope_id}</code>.</td>
+        </tr>
+    </tbody>
+</table>
 
 <!-- ==================================================================== -->
 <!-- 4. CONVENCIÓN GLOBAL DE ERRORES Y RESPUESTAS -->
 <!-- ==================================================================== -->
 <h1>4. Convención Global de Errores y Respuestas</h1>
 <p>
-    DocEngine se adhiere a las mejores prácticas de diseño RESTful y convenciones estándar de FastAPI/Starlette.
+    DocEngine se adhiere a las mejores prácticas de diseño RESTful y convenciones estándar de FastAPI/Starlette con esquemas de error estandarizados.
 </p>
 
-<h3>Estructura Estándar de Error JSON</h3>
+<h3>Estructura Estándar de Error JSON (ErrorDetailSchema)</h3>
 <pre><code>{
-  "detail": "Descripción precisa y legible del motivo del error o validación"
+  "detail": "Descripción precisa y legible del motivo del error o validación",
+  "error_code": "INVALID_PAGE_COUNT",
+  "timestamp": "2026-10-14T18:00:00Z"
 }</code></pre>
 
 <h3>Códigos de Estado HTTP Admitidos</h3>
@@ -526,77 +550,112 @@ def build_html_content() -> str:
     <tbody>
         <tr>
             <td><strong>200 OK</strong></td>
-            <td>Éxito</td>
+            <td>Éxito síncrono</td>
             <td>La petición se procesó exitosamente y se retorna la información solicitada.</td>
+        </tr>
+        <tr>
+            <td><strong>202 Accepted</strong></td>
+            <td>Procesamiento asíncrono</td>
+            <td>La carga fue validada y puesta en cola en segundo plano; incluye <code>job_id</code> para consulta de estado.</td>
         </tr>
         <tr>
             <td><strong>400 Bad Request</strong></td>
             <td>Petición inválida</td>
-            <td>Parámetros incorrectos, archivo con formato no admitido (solo se admite PDF) o payload malformado.</td>
+            <td>Parámetros incorrectos, archivo con formato no admitido (solo PDF) o archivo PDF corrupto/dañado.</td>
+        </tr>
+        <tr>
+            <td><strong>401 Unauthorized</strong></td>
+            <td>No autenticado</td>
+            <td>Falta la cabecera <code>X-API-Key</code> o la clave provista es inválida.</td>
+        </tr>
+        <tr>
+            <td><strong>403 Forbidden</strong></td>
+            <td>Acceso denegado</td>
+            <td>La clave tiene rol insuficiente para la operación solicitada (ej. rol <code>readonly</code> intentando eliminar).</td>
         </tr>
         <tr>
             <td><strong>404 Not Found</strong></td>
             <td>No encontrado</td>
-            <td>El sobre (<code>envelope_id</code>), documento (<code>policy_id</code>) o recurso solicitado no existe en la base de datos.</td>
+            <td>El sobre (<code>envelope_id</code>), documento (<code>policy_id</code>) o trabajo (<code>job_id</code>) no existe.</td>
         </tr>
         <tr>
-            <td><strong>422 Unprocessable Entity</strong></td>
-            <td>Error de validación</td>
-            <td>Error de validación de tipos o restricciones Pydantic en los datos enviados.</td>
+            <td><strong>413 Content Too Large</strong></td>
+            <td>Archivo excedido</td>
+            <td>El tamaño del archivo supera el límite configurado (por defecto <strong>200 MB</strong>).</td>
         </tr>
         <tr>
-            <td><strong>500 Internal Server Error</strong></td>
-            <td>Error interno</td>
+            <td><strong>422 Unprocessable Content</strong></td>
+            <td>Validación / Límite páginas</td>
+            <td>Error en formato de datos Pydantic o el PDF supera el límite máximo permitido de <strong>500 páginas</strong>.</td>
+        </tr>
+        <tr>
+            <td><strong>500 Internal Error</strong></td>
+            <td>Fallo de servidor</td>
             <td>Excepción no controlada en el motor de extracción Docling o en PostgreSQL.</td>
         </tr>
         <tr>
             <td><strong>503 Service Unavailable</strong></td>
             <td>Servicio no disponible</td>
-            <td>El servicio de consultas RAG o la base de datos se encuentran en proceso de inicialización o fuera de línea.</td>
+            <td>El motor vectorial o la base de datos se encuentran fuera de línea o en inicialización.</td>
         </tr>
     </tbody>
 </table>
 
 <!-- ==================================================================== -->
-<!-- 5. PAGINACIÓN, FILTROS Y ORDEN -->
+<!-- 5. PAGINACIÓN Y FILTROS AVANZADOS -->
 <!-- ==================================================================== -->
-<h1>5. Paginación, Filtros y Orden</h1>
+<h1>5. Paginación y Filtros Avanzados</h1>
 <p>
-    Para evitar sobrecargar la memoria y el ancho de banda al listar colecciones de datos, los endpoints de consulta masiva implementan parámetros de paginación por desplazamiento:
+    Tanto los endpoints de búsqueda vectorial (<code>/query/search</code>) como los de gestión de sobres admiten filtros estructurados combinables mediante el objeto <code>SearchFiltersSchema</code>:
 </p>
 <table>
     <thead>
         <tr>
-            <th>Parámetro</th>
+            <th>Filtro</th>
             <th>Tipo</th>
-            <th>Por Defecto</th>
             <th>Descripción</th>
+            <th>Ejemplo</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td><code>limit</code></td>
-            <td>integer</td>
-            <td>20 / 50</td>
-            <td>Cantidad máxima de registros a retornar por página (máximo permitido: 100).</td>
-        </tr>
-        <tr>
-            <td><code>offset</code></td>
-            <td>integer</td>
-            <td>0</td>
-            <td>Cantidad de registros a omitir desde el inicio del conjunto de resultados.</td>
-        </tr>
-        <tr>
-            <td><code>company_sigla</code></td>
+            <td><code>id_cliente</code></td>
             <td>string</td>
-            <td>null</td>
-            <td>Filtro opcional por sigla oficial de la aseguradora (ej. <code>CRI</code>, <code>ALI</code>, <code>LBC</code>).</td>
+            <td>Aislamiento multi-inquilino estricto por cliente.</td>
+            <td><code>"CLI-001"</code></td>
+        </tr>
+        <tr>
+            <td><code>sigla_aseguradora</code></td>
+            <td>string</td>
+            <td>Sigla oficial normalizada contra el catálogo maestro (18 aseguradoras).</td>
+            <td><code>"BISA"</code>, <code>"CRI"</code></td>
+        </tr>
+        <tr>
+            <td><code>ramo</code></td>
+            <td>string</td>
+            <td>Ramo de seguro técnico normalizado.</td>
+            <td><code>"AUTOMOTOR"</code>, <code>"INCENDIO"</code></td>
+        </tr>
+        <tr>
+            <td><code>numero_poliza</code></td>
+            <td>string</td>
+            <td>Búsqueda exacta o parcial sobre el número de póliza.</td>
+            <td><code>"POL-2024-9988"</code></td>
+        </tr>
+        <tr>
+            <td><code>tipo_documento</code></td>
+            <td>string</td>
+            <td>Tipo documental: <code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>, etc.</td>
+            <td><code>"CONDICIONADO_GENERAL"</code></td>
+        </tr>
+        <tr>
+            <td><code>vigencia_fecha</code></td>
+            <td>string (ISO)</td>
+            <td>Filtra documentos cuya vigencia abarque la fecha especificada (<code>YYYY-MM-DD</code>).</td>
+            <td><code>"2024-06-15"</code></td>
         </tr>
     </tbody>
 </table>
-<p>
-    <strong>Ordenamiento:</strong> Los resultados se devuelven por defecto ordenados descendentemente por fecha de actualización/creación (<code>updated_at DESC, created_at DESC</code>).
-</p>
 
 <!-- ==================================================================== -->
 <!-- 6. CATÁLOGO DETALLADO DE ENDPOINTS -->
@@ -609,9 +668,9 @@ def build_html_content() -> str:
 <div class="endpoint-card">
     <div class="endpoint-header">
         <span class="badge-post">POST</span>
-        <span class="endpoint-path">/api/v1/extract</span>
+        <span class="endpoint-path">/api/v1/extract/file</span>
     </div>
-    <p><strong>Propósito:</strong> Carga un archivo PDF binario para su extracción documental, generación de Markdown, atomización de coberturas, generación de embeddings (BGE-M3) y persistencia en PostgreSQL.</p>
+    <p><strong>Propósito:</strong> Carga un archivo PDF binario para extracción, chunking y vectorización. Soporta ejecución síncrona inmediata o asíncrona mediante el parámetro <code>async_mode=true</code>.</p>
     <p><strong>Content-Type:</strong> <code>multipart/form-data</code></p>
     <table>
         <thead>
@@ -625,86 +684,79 @@ def build_html_content() -> str:
         <tbody>
             <tr>
                 <td><code>file</code></td>
-                <td>Binary</td>
+                <td>Binary (PDF)</td>
                 <td><strong>Sí</strong></td>
-                <td>Archivo PDF de la póliza de seguro.</td>
+                <td>Archivo PDF (máximo 200 MB y 500 páginas).</td>
+            </tr>
+            <tr>
+                <td><code>id_cliente</code></td>
+                <td>string</td>
+                <td>No</td>
+                <td>Identificador único del cliente para aislamiento multi-tenant.</td>
             </tr>
             <tr>
                 <td><code>company_sigla</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Sigla de la aseguradora (ej. <code>CRI</code>, <code>ALI</code>, <code>LBC</code>) para aplicar reglas especializadas.</td>
+                <td>Sigla oficial de la aseguradora (ej. <code>BISA</code>, <code>CRI</code>, <code>ALI</code>).</td>
             </tr>
             <tr>
                 <td><code>numero_poliza</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Número de póliza para vincular el documento a un sobre lógico existente o crear uno nuevo.</td>
+                <td>Número de póliza para vinculación en sobre.</td>
             </tr>
             <tr>
                 <td><code>ramo</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Ramo de seguro (ej. <code>AUTOMOTOR</code>, <code>INCENDIO</code>, <code>SALUD</code>).</td>
+                <td>Ramo de la póliza (ej. <code>AUTOMOTOR</code>).</td>
             </tr>
             <tr>
                 <td><code>tipo_documento</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Clasificación documental (<code>POLIZA_PRINCIPAL</code>, <code>CONDICIONADO_GENERAL</code>, <code>CONDICIONADO_PARTICULAR</code>, <code>LIQUIDACION_PAGOS</code>, <code>ANEXO</code>).</td>
+                <td>Tipo de documento (ej. <code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>).</td>
+            </tr>
+            <tr>
+                <td><code>async_mode</code></td>
+                <td>boolean</td>
+                <td>No (def: false)</td>
+                <td>Si es <code>true</code>, encola la tarea en background y retorna <code>202 Accepted</code> con un <code>job_id</code>.</td>
             </tr>
         </tbody>
     </table>
+
+    <p><strong>Respuesta Asíncrona (202 Accepted):</strong></p>
+<pre><code>{
+  "job_id": "d8e3b1c4-9a1f-4b12-a7e8-c51d9e2a4f00",
+  "status": "PENDING",
+  "message": "Extracción iniciada en segundo plano...",
+  "check_status_url": "/api/v1/extract/jobs/d8e3b1c4-9a1f-4b12-a7e8-c51d9e2a4f00"
+}</code></pre>
+</div>
+
+<div class="endpoint-card">
+    <div class="endpoint-header">
+        <span class="badge-get">GET</span>
+        <span class="endpoint-path">/api/v1/extract/jobs/{job_id}</span>
+    </div>
+    <p><strong>Propósito:</strong> Consulta el estado de procesamiento de una carga asíncrona para documentos grandes o procesamiento por lotes.</p>
+    <p><strong>Parámetro Path:</strong> <code>job_id</code> (string, UUID del trabajo).</p>
     <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
 <pre><code>{
-  "document_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
-  "status": "success",
-  "markdown_preview": "# PÓLIZA DE SEGURO AUTOMOTOR\\n\\n## CONDICIONES PARTICULARES...",
-  "metadata": {
-    "filename": "poliza_automotor.pdf",
-    "sha256": "c5d1b7a956d43e882a1738be78...",
-    "page_count": 12,
-    "extraction_time_seconds": 3.84,
-    "company_sigla": "CRI",
-    "envelope_id": "b3e0c091-6fa7-4f68-9bf9-a9a7a9354060",
-    "tipo_documento": "CONDICIONADO_PARTICULAR"
-  },
-  "rag_report": {
-    "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
-    "chunks_created": 24,
-    "skipped_duplicate": false,
-    "envelope_id": "b3e0c091-6fa7-4f68-9bf9-a9a7a9354060",
-    "tipo_documento": "CONDICIONADO_PARTICULAR"
+  "job_id": "d8e3b1c4-9a1f-4b12-a7e8-c51d9e2a4f00",
+  "status": "COMPLETED",
+  "progress_pct": 100,
+  "created_at": "2026-10-14T17:30:00Z",
+  "updated_at": "2026-10-14T17:30:25Z",
+  "error_message": null,
+  "result": {
+    "policy_id": "POL-2024-9988",
+    "id_cliente": "CLI-001",
+    "chunks_indexed": 38,
+    "total_pages": 45
   }
-}</code></pre>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-post">POST</span>
-        <span class="endpoint-path">/api/v1/extract/url</span>
-    </div>
-    <p><strong>Propósito:</strong> Descarga y procesa un documento PDF accesible a través de una URL pública.</p>
-    <p><strong>Content-Type:</strong> <code>application/json</code></p>
-<pre><code>// Body de Petición:
-{
-  "url": "https://storage.ejemplo.com/polizas/2026/poliza_9988.pdf",
-  "company_sigla": "ALI"
-}</code></pre>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-post">POST</span>
-        <span class="endpoint-path">/api/v1/extract/folder</span>
-    </div>
-    <p><strong>Propósito:</strong> Procesa de forma recursiva por lotes todos los archivos PDF presentes en una carpeta del servidor local.</p>
-    <p><strong>Content-Type:</strong> <code>application/json</code></p>
-<pre><code>// Body de Petición:
-{
-  "folder_path": "C:/datos/polizas_ingesta/lote_enero",
-  "company_sigla": "LBC",
-  "recursive": true
 }</code></pre>
 </div>
 
@@ -713,66 +765,71 @@ def build_html_content() -> str:
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/extract/companies</span>
     </div>
-    <p><strong>Propósito:</strong> Retorna el catálogo oficial de siglas y nombres completos de las 16 compañías aseguradoras bolivianas soportadas por el motor.</p>
-    <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
-<pre><code>{
-  "ALI": "ALIANZA COMPAÑIA DE SEGUROS Y REASEGUROS S.A.",
-  "BIS": "BISA SEGUROS Y REASEGUROS S.A.",
-  "CRI": "CREDINFORM INTERNATIONAL S.A. DE SEGUROS",
-  "FOR": "FORTALEZA SEGUROS Y REASEGUROS S.A.",
-  "LBC": "LA BOLIVIANA CIACRUZ DE SEGUROS Y REASEGUROS S.A.",
-  "MSC": "NACIONAL SEGUROS PATRIMONIALES Y FIANZAS S.A."
-}</code></pre>
+    <p><strong>Propósito:</strong> Retorna el catálogo oficial de siglas y nombres completos de las compañías aseguradoras bolivianas soportadas por el motor.</p>
 </div>
 
 <!-- 6.2 POLICIES & ENVELOPES -->
 <h2>6.2 Módulo de Pólizas y Gestión de Sobres (Policies & Envelopes)</h2>
 
-<div class="endpoint-card">
+<div class="endpoint-card" style="border-left: 4px solid #2563eb;">
     <div class="endpoint-header">
         <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/policies/envelopes</span>
+        <span class="endpoint-path">/api/v1/policies/{policy_id}/structured</span>
     </div>
-    <p><strong>Propósito:</strong> Lista los sobres de pólizas indexados, paginados y con el resumen de documentos vinculados.</p>
-    <table>
-        <thead>
-            <tr>
-                <th>Parámetro Query</th>
-                <th>Tipo</th>
-                <th>Por Defecto</th>
-                <th>Descripción</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>limit</code></td>
-                <td>integer</td>
-                <td>50</td>
-                <td>Máximo de sobres a devolver (1 - 100).</td>
-            </tr>
-            <tr>
-                <td><code>offset</code></td>
-                <td>integer</td>
-                <td>0</td>
-                <td>Desplazamiento para paginación.</td>
-            </tr>
-            <tr>
-                <td><code>company_sigla</code></td>
-                <td>string</td>
-                <td>null</td>
-                <td>Filtro opcional por sigla de aseguradora (ej. <code>CRI</code>).</td>
-            </tr>
-        </tbody>
-    </table>
+    <p><strong>Propósito:</strong> Retorna el esquema JSON con los datos estructurados extraídos de la póliza (coberturas, límites, deducibles, valores asegurados y vigencias), correspondiente al objeto del contrato (Cláusula Segunda, incisos a y c).</p>
+    <p><strong>Parámetro Path:</strong> <code>policy_id</code> (string, UUID del documento).</p>
+    <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
+<pre><code>{
+  "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
+  "id_cliente": "CLI-001",
+  "aseguradora": "BISA SEGUROS Y REASEGUROS S.A.",
+  "ramo": "AUTOMOTOR",
+  "numero_poliza": "POL-2024-9988",
+  "objeto_asegurado": "Vehículo Toyota Hilux 2023, Placa 4589-KLL",
+  "coberturas": [
+    {
+      "nombre": "Responsabilidad Civil Extracontractual",
+      "limite": "USD 20,000.00 por evento",
+      "deducible": "10% de la pérdida, mín. USD 150.00"
+    },
+    {
+      "nombre": "Pérdida Total por Accidente o Robo",
+      "limite": "Valor Comercial Pactado (USD 35,000.00)",
+      "deducible": "USD 200.00 fijo"
+    }
+  ],
+  "deducibles": [
+    {"cobertura": "Daños Propios", "monto": "USD 150.00"}
+  ],
+  "limites": [
+    {"concepto": "Límite Máximo Agregado Anual", "monto": "USD 55,000.00"}
+  ],
+  "valores_asegurados": [
+    {"item": "Vehículo Base", "monto": "USD 35,000.00", "moneda": "USD"}
+  ],
+  "vigencias": {
+    "desde": "2024-01-01T00:00:00",
+    "hasta": "2025-01-01T00:00:00"
+  },
+  "reglas_aplicadas": ["skill-bisa.md", "skill-general.md"]
+}</code></pre>
 </div>
 
-<div class="endpoint-card">
+<div class="endpoint-card" style="border-left: 4px solid #dc2626;">
     <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/policies/envelopes/by-number/{numero_poliza}</span>
+        <span class="badge-delete">DELETE</span>
+        <span class="endpoint-path">/api/v1/policies/{policy_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Busca y devuelve los sobres y documentos que coincidan con el número de póliza especificado.</p>
-    <p><strong>Parámetros:</strong> <code>numero_poliza</code> (Path, string), <code>company_sigla</code> (Query, opcional).</p>
+    <p><strong>Propósito:</strong> Elimina un documento individual suelto (por ejemplo, para reemplazar un anexo o condicionado erróneo sin eliminar la póliza completa). Desvincula el documento del sobre, elimina sus fragmentos vectoriales en cascada y limpia los archivos derivados en disco.</p>
+    <p><strong>Parámetro Path:</strong> <code>policy_id</code> (string, UUID del documento a eliminar).</p>
+    <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
+<pre><code>{
+  "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
+  "deleted": true,
+  "deleted_chunks": 24,
+  "envelope_updated": true,
+  "message": "Documento eliminado exitosamente de la base de datos y del disco."
+}</code></pre>
 </div>
 
 <div class="endpoint-card">
@@ -780,154 +837,33 @@ def build_html_content() -> str:
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/policies/envelopes/{envelope_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Retorna el detalle completo de un sobre y todos sus documentos asociados a partir de su UUID único.</p>
-    <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
-<pre><code>{
-  "id": "b3e0c091-6fa7-4f68-9bf9-a9a7a9354060",
-  "numero_poliza": "POL-AUTO-998877",
-  "company_sigla": "CRI",
-  "ramo": "AUTOMOTOR",
-  "created_at": "2026-10-01T14:20:00Z",
-  "updated_at": "2026-10-01T14:22:15Z",
-  "documents_count": 2,
-  "documents": [
-    {
-      "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
-      "file_name": "caratula_y_condiciones.pdf",
-      "file_hash": "c5d1b7a956d43e882a1738be78...",
-      "company_sigla": "CRI",
-      "tipo_documento": "CONDICIONADO_PARTICULAR",
-      "total_pages": 8,
-      "file_size_bytes": 1045230,
-      "created_at": "2026-10-01T14:20:10Z"
-    },
-    {
-      "policy_id": "9d182741-22aa-4c55-b8dd-1a2b3c4d5e6f",
-      "file_name": "plan_pagos.pdf",
-      "file_hash": "a1b2c3d4e5f6...",
-      "company_sigla": "CRI",
-      "tipo_documento": "LIQUIDACION_PAGOS",
-      "total_pages": 2,
-      "file_size_bytes": 312450,
-      "created_at": "2026-10-01T14:22:15Z"
-    }
-  ]
-}</code></pre>
+    <p><strong>Propósito:</strong> Retorna el detalle completo de un sobre y todos sus documentos asociados.</p>
 </div>
 
-<!-- DELETE ENVELOPE -->
 <div class="endpoint-card" style="border-left: 4px solid #dc2626;">
     <div class="endpoint-header">
         <span class="badge-delete">DELETE</span>
         <span class="endpoint-path">/api/v1/policies/envelopes/{envelope_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Elimina de forma atómica y completa una póliza entera (sobre) y todos los documentos que contiene en la base de datos y opcionalmente en el disco local.</p>
-    
-    <div class="callout callout-warning">
-        <div class="callout-title">Comportamiento en Cascada y Limpieza Transaccional</div>
-        Al invocar este endpoint, la base de datos elimina en cascada todas las tablas hijas asociadas a cada documento:
-        <code>policy_chunks</code> (vectores), <code>policy_raw_md</code> (markdown), <code>policy_structured_data</code> (JSON de coberturas) 
-        y <code>policy_processing_stats</code> (telemetría). Al eliminarse los registros en <code>policies</code>, 
-        los hashes criptográficos quedan liberados, permitiendo volver a subir los documentos corregidos inmediatamente sin conflicto de idempotencia.
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Parámetro</th>
-                <th>Ubicación</th>
-                <th>Tipo</th>
-                <th>Por Defecto</th>
-                <th>Descripción</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>envelope_id</code></td>
-                <td>Path</td>
-                <td>string (UUID)</td>
-                <td><strong>Requerido</strong></td>
-                <td>Identificador único del sobre a eliminar.</td>
-            </tr>
-            <tr>
-                <td><code>delete_files</code></td>
-                <td>Query</td>
-                <td>boolean</td>
-                <td><code>true</code></td>
-                <td>Si es <code>true</code>, busca y elimina también del disco los subdirectorios en <code>outputs/{SIGLA}/{filename_stem}</code>.</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
-<pre><code>{
-  "envelope_id": "b3e0c091-6fa7-4f68-9bf9-a9a7a9354060",
-  "numero_poliza": "POL-AUTO-998877",
-  "company_sigla": "CRI",
-  "ramo": "AUTOMOTOR",
-  "deleted_documents_count": 2,
-  "deleted_documents": [
-    {
-      "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
-      "file_name": "caratula_y_condiciones.pdf",
-      "file_hash": "c5d1b7a956d43e882a1738be78...",
-      "company_sigla": "CRI"
-    },
-    {
-      "policy_id": "9d182741-22aa-4c55-b8dd-1a2b3c4d5e6f",
-      "file_name": "plan_pagos.pdf",
-      "file_hash": "a1b2c3d4e5f6...",
-      "company_sigla": "CRI"
-    }
-  ],
-  "deleted_disk_dirs": [
-    "outputs\\CRI\\caratula_y_condiciones",
-    "outputs\\CRI\\plan_pagos"
-  ],
-  "message": "Sobre de póliza y todos sus documentos asociados fueron eliminados exitosamente."
-}</code></pre>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/policies/recent</span>
-    </div>
-    <p><strong>Propósito:</strong> Retorna las pólizas más recientes con sus 6 campos canónicos normalizados (número de póliza, asegurado, ramo, documento, vigencia, prima total). Parámetro: <code>limit</code> (Query, defecto 20).</p>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/policies/search</span>
-    </div>
-    <p><strong>Propósito:</strong> Búsqueda rápida por número de póliza, UUID o palabra clave. Parámetro: <code>q</code> (Query, string requerido).</p>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/policies/{policy_id}</span>
-    </div>
-    <p><strong>Propósito:</strong> Obtiene la información básica de un documento específico de póliza a través de su UUID.</p>
+    <p><strong>Propósito:</strong> Elimina de forma atómica y completa una póliza entera (sobre) y todos sus documentos asociados.</p>
 </div>
 
 <!-- 6.3 RAG QUERY -->
 <h2>6.3 Módulo de Consultas Semánticas RAG (RAG Query)</h2>
 
-<div class="endpoint-card">
+<div class="endpoint-card" style="border-left: 4px solid #059669;">
     <div class="endpoint-header">
         <span class="badge-post">POST</span>
-        <span class="endpoint-path">/api/v1/query</span>
+        <span class="endpoint-path">/api/v1/query/search</span>
     </div>
-    <p><strong>Propósito:</strong> Responde preguntas formuladas en lenguaje natural sobre las pólizas digitalizadas, sintetizando una respuesta fundamentada con citas textuales a partir de fragmentos semánticos recuperados en pgvector.</p>
+    <p><strong>Propósito:</strong> Endpoint de búsqueda pura que devuelve los fragmentos relevantes recuperados por similitud híbrida (denso + recíproco FTS) con sus metadatos y puntaje, <strong>sin generar respuesta con LLM</strong>. Permite que cada agente o sistema externo utilice su propio modelo de lenguaje para la síntesis.</p>
     <p><strong>Content-Type:</strong> <code>application/json</code></p>
     <table>
         <thead>
             <tr>
                 <th>Campo JSON</th>
                 <th>Tipo</th>
-                <th>Por Defecto</th>
+                <th>Requerido</th>
                 <th>Descripción</th>
             </tr>
         </thead>
@@ -935,56 +871,52 @@ def build_html_content() -> str:
             <tr>
                 <td><code>question</code></td>
                 <td>string</td>
-                <td><strong>Requerido</strong></td>
-                <td>Pregunta en lenguaje natural formulada por el usuario.</td>
+                <td><strong>Sí</strong></td>
+                <td>Consulta o texto de búsqueda temática.</td>
             </tr>
             <tr>
                 <td><code>top_k</code></td>
                 <td>integer</td>
-                <td>5</td>
-                <td>Cantidad de fragmentos contextuales a recuperar (1 - 20).</td>
-            </tr>
-            <tr>
-                <td><code>similarity_threshold</code></td>
-                <td>float</td>
-                <td>0.40</td>
-                <td>Umbral mínimo de similitud coseno para descartar fragmentos irrelevantes.</td>
+                <td>No (def: 5)</td>
+                <td>Cantidad de fragmentos a recuperar (1 a 50).</td>
             </tr>
             <tr>
                 <td><code>filters</code></td>
                 <td>object</td>
-                <td>null</td>
-                <td>Filtros de metadatos opcionales (ej. <code>{"company_sigla": "CRI"}</code>).</td>
+                <td>No</td>
+                <td>Filtros combinables: <code>sigla_aseguradora</code>, <code>ramo</code>, <code>numero_poliza</code>, <code>tipo_documento</code>, <code>vigencia_fecha</code>, <code>id_cliente</code>.</td>
             </tr>
         </tbody>
     </table>
 
     <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
 <pre><code>{
-  "answer": "La cobertura de Responsabilidad Civil Extracontractual cubre hasta un límite máximo de USD 20,000.00 por evento, con un deducible aplicable del 10% del monto indemnizable.",
-  "question": "¿Cuál es el límite de responsabilidad civil y su deducible?",
-  "chunks_retrieved": 3,
-  "sources": [
+  "chunks": [
     {
-      "chunk_id": "f8a92b3c-...",
-      "policy_id": "4b684531-...",
-      "file_name": "condicionado_particular.pdf",
-      "company_sigla": "CRI",
-      "page_number": 4,
-      "similarity_score": 0.884,
-      "content": "CLÁUSULA 4. RESPONSABILIDAD CIVIL: Límite USD 20,000.00..."
+      "chunk_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "content": "CLÁUSULA 3ra: DEDUCIBLE POR ACCIDENTE. En caso de colisión, el asegurado asumirá un deducible del 10%...",
+      "score": 0.892,
+      "policy_id": "POL-2024-9988",
+      "page_number": 3,
+      "metadata": {
+        "aseguradora": "BISA",
+        "ramo": "AUTOMOTOR",
+        "tipo_documento": "POLIZA",
+        "file_name": "caratula_bisa.pdf"
+      }
     }
   ],
-  "latency_seconds": 1.42
+  "total_found": 1,
+  "query": "¿Cuál es el deducible por colisión?"
 }</code></pre>
 </div>
 
 <div class="endpoint-card">
     <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/query/health</span>
+        <span class="badge-post">POST</span>
+        <span class="endpoint-path">/api/v1/query</span>
     </div>
-    <p><strong>Propósito:</strong> Verifica que el modelo de embeddings BGE-M3 y el motor vectorial se encuentren cargados en memoria y listos para inferencia.</p>
+    <p><strong>Propósito:</strong> Responde preguntas formuladas en lenguaje natural sobre las pólizas digitalizadas, sintetizando una respuesta fundamentada con citas textuales a partir de fragmentos semánticos recuperados en pgvector.</p>
 </div>
 
 <!-- 6.4 SYSTEM & HEALTH -->
@@ -1003,54 +935,63 @@ def build_html_content() -> str:
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/health/system</span>
     </div>
-    <p><strong>Propósito:</strong> Reporte técnico completo: versión de DocEngine, motor de extracción (Docling/PDFExtract), modelos OCR y conectividad a PostgreSQL.</p>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/health/metrics</span>
-    </div>
-    <p><strong>Propósito:</strong> Estadísticas acumuladas: documentos procesados, páginas totales, tablas detectadas, tiempo promedio y tasa de éxito.</p>
-</div>
-
-<div class="endpoint-card">
-    <div class="endpoint-header">
-        <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/health/logs</span>
-    </div>
-    <p><strong>Propósito:</strong> Consulta el búfer circular en memoria de los últimos eventos del servidor (filtrable por nivel: <code>level=INFO|WARNING|ERROR</code>, <code>limit=100</code>).</p>
+    <p><strong>Propósito:</strong> Reporte técnico completo: versión de DocEngine, motor de extracción (Docling), conectividad a PostgreSQL y modelos cargados.</p>
 </div>
 
 <!-- ==================================================================== -->
-<!-- 7. LÍMITES DE TASA Y RENDIMIENTO -->
+<!-- 7. LÍMITES TÉCNICOS POR ARCHIVO Y RENDIMIENTO -->
 <!-- ==================================================================== -->
-<h1>7. Límites de Tasa (Rate Limiting) y Rendimiento</h1>
+<h1>7. Límites Técnicos por Archivo y Rendimiento</h1>
 <p>
-    Debido a que DocEngine ejecuta modelos locales de inteligencia artificial (modelos de visión OCR y modelo BGE-M3 de 1024 dimensiones), 
-    el rendimiento y la concurrencia deben gestionarse cuidadosamente:
+    Para garantizar la estabilidad del servidor y evitar el agotamiento de memoria por archivos anómalos o de volumen desmedido, DocEngine aplica controles deterministas al inicio de cada petición:
 </p>
-<ul>
-    <li><strong>Extracción e Ingesta:</strong> Operación intensiva en CPU/GPU. Se recomienda mantener una tasa máxima de <strong>10 a 15 documentos concurrentes</strong> por instancia para evitar saturación de memoria RAM.</li>
-    <li><strong>Consultas RAG:</strong> Operación liviana; el modelo BGE-M3 procesa la pregunta en menos de 50ms y pgvector responde en menos de 15ms. Capacidad recomendada: <strong>100 solicitudes por minuto por nodo</strong>.</li>
-    <li><strong>Memoria RAM Requerida:</strong> Mínimo 8 GB (16 GB recomendado para soporte simultáneo de OCR multihilo y BGE-M3).</li>
-</ul>
+<table>
+    <thead>
+        <tr>
+            <th>Parámetro</th>
+            <th>Límite Máximo</th>
+            <th>Respuesta de Error</th>
+            <th>Comportamiento</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Tamaño de Archivo</strong></td>
+            <td><strong>200 MB</strong> por archivo</td>
+            <td><code>413 Content Too Large</code></td>
+            <td>Rechazo inmediato antes de lectura en memoria o procesamiento.</td>
+        </tr>
+        <tr>
+            <td><strong>Cantidad de Páginas</strong></td>
+            <td><strong>500 páginas</strong> por archivo</td>
+            <td><code>422 Unprocessable Content</code></td>
+            <td>Validación previa mediante inspección de metadatos de página.</td>
+        </tr>
+        <tr>
+            <td><strong>Formato de Archivo</strong></td>
+            <td>Solo <code>application/pdf</code></td>
+            <td><code>400 Bad Request</code></td>
+            <td>Rechazo inmediato si la firma binaria de PDF no es válida.</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout callout-warning">
+    <div class="callout-title">Manejo de Documentos Extensos (ej. 2,300 Páginas)</div>
+    Documentos que superen las 500 páginas deben segmentarse antes de la ingesta en fascículos lógicos (por ejemplo, carátula, condiciones particulares y anexos por separado), o procesarse mediante el flujo asíncrono configurando <code>max_pages_per_file</code> en <code>PerformanceConfig</code> para evitar timeouts en conexiones HTTP síncronas.
+</div>
 
 <!-- ==================================================================== -->
-<!-- 8. PROCESAMIENTO ASÍNCRONO E IDEMPOTENCIA -->
+<!-- 8. PROCESAMIENTO ASÍNCRONO, IDEMPOTENCIA Y CONDICIONADOS GENERALES -->
 <!-- ==================================================================== -->
-<h1>8. Procesamiento Asíncrono e Idempotencia</h1>
+<h1>8. Procesamiento Asíncrono, Idempotencia y Condicionados Generales</h1>
 
-<h3>Garantía de Idempotencia Criptográfica</h3>
+<h3>Condicionados Generales Compartidos</h3>
 <p>
-    Cada archivo recibido se somete al cálculo inmediato de su firma SHA-256 (columna <code>file_hash</code> con restricción <code>UNIQUE</code> en la tabla <code>policies</code>). 
-    Si un archivo con el mismo hash ya existe en el sistema:
+    En el mercado asegurador boliviano, un mismo condicionado general aplica frecuentemente a múltiples pólizas de un mismo ramo.
+    DocEngine permite registrar el condicionado general una única vez con <code>tipo_documento="CONDICIONADO_GENERAL"</code>.
+    Los agentes y consultas RAG pueden recuperar fragmentos del condicionado general utilizando el filtro <code>ramo</code> sin necesidad de duplicar el documento ni los vectores en cada póliza.
 </p>
-<ol>
-    <li>Se omite la costosa fase de extracción Docling y vectorización.</li>
-    <li>El trabajo se marca como <code>status: SKIPPED</code> en la tabla <code>processing_jobs</code>.</li>
-    <li>Se retorna inmediatamente el identificador existente y se asocia al sobre indicado.</li>
-</ol>
 
 <h3>Ciclo de Vida de los Trabajos (Jobs)</h3>
 <table>
@@ -1063,35 +1004,31 @@ def build_html_content() -> str:
     <tbody>
         <tr>
             <td><code>PENDING</code></td>
-            <td>Archivo en cola de recepción.</td>
+            <td>Archivo recibido y validado; en cola de ejecución en segundo plano.</td>
         </tr>
         <tr>
             <td><code>PROCESSING</code></td>
-            <td>Extracción Docling, chunking o vectorización en curso.</td>
+            <td>Extracción Docling, atomización de coberturas y vectorización BGE-M3 en curso.</td>
         </tr>
         <tr>
             <td><code>COMPLETED</code></td>
-            <td>Documento procesado e indexado exitosamente en PostgreSQL.</td>
-        </tr>
-        <tr>
-            <td><code>SKIPPED</code></td>
-            <td>Documento omitido por detección de duplicado idéntico (SHA-256).</td>
+            <td>Documento procesado, estructurado e indexado exitosamente en PostgreSQL.</td>
         </tr>
         <tr>
             <td><code>FAILED</code></td>
-            <td>Fallo en el pipeline; incluye mensaje de error en la columna <code>error_message</code>.</td>
+            <td>Fallo controlado durante el pipeline; incluye traza legible en <code>error_message</code>.</td>
         </tr>
     </tbody>
 </table>
 
 <div class="callout callout-info" style="margin-top: 15px;">
     <div class="callout-title">Resumen de Integración para Desarrolladores</div>
-    Flujo recomendado para sistemas externos (ERP / Portales Web):
+    Flujo recomendado para agentes de IA y sistemas ERP:
     <ol style="margin: 4px 0 0 16px; padding: 0;">
-        <li>Cargar documentos con <code>POST /api/v1/extract</code> pasando el <code>numero_poliza</code> para auto-agruparlos en un sobre.</li>
-        <li>Consultar el estado del sobre y sus partes mediante <code>GET /api/v1/policies/envelopes/by-number/{numero_poliza}</code>.</li>
-        <li>Si ocurre un error de carga o se requiere reiniciar la póliza, ejecutar <code>DELETE /api/v1/policies/envelopes/{envelope_id}?delete_files=true</code>.</li>
-        <li>Consultar coberturas mediante <code>POST /api/v1/query</code> en lenguaje natural.</li>
+        <li>Para búsqueda de fragmentos con LLM propio: invocar <code>POST /api/v1/query/search</code> pasando los filtros requeridos.</li>
+        <li>Para obtener coberturas y deducibles estructurados: invocar <code>GET /api/v1/policies/{policy_id}/structured</code>.</li>
+        <li>Para cargar documentos extensos: enviar con <code>POST /api/v1/extract/file?async_mode=true</code> y monitorear con <code>GET /api/v1/extract/jobs/{job_id}</code>.</li>
+        <li>Para reemplazar un documento suelto erróneo: eliminarlo con <code>DELETE /api/v1/policies/{policy_id}</code> y subir la versión corregida.</li>
     </ol>
 </div>
 

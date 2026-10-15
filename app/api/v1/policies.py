@@ -12,12 +12,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.v1.schemas import (
+    CoberturaItemResponseSchema,
+    DatosCabeceraResponseSchema,
+    DeleteDocumentResponseSchema,
     DeleteEnvelopeResponseSchema,
     DeletedDocumentInfoSchema,
+    ObjetoAseguradoResponseSchema,
     PolicyBasicInfoSchema,
     PolicyEnvelopeSchema,
     PolicyEnvelopeSearchResponse,
     PolicySearchResponseSchema,
+    PolicyStructuredDataResponseSchema,
     RecentPoliciesResponseSchema,
 )
 from app.infrastructure.database.db_connection import DatabaseManager
@@ -27,6 +32,7 @@ from app.infrastructure.database.pg_structured_search import (
 )
 from app.infrastructure.logging.logger import get_logger
 from app.infrastructure.storage.local_storage import LocalStorageService
+from app.api.security import require_role
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/policies", tags=["Policies"])
@@ -88,6 +94,7 @@ StorageServiceDep = Annotated[LocalStorageService, Depends(get_storage_service)]
     status_code=status.HTTP_200_OK,
     summary="Listar pólizas digitalizadas recientes",
     description="Retorna las pólizas digitalizadas más recientes almacenadas e indexadas en la base de datos con su información básica.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def get_recent_policies(
     repo: StructuredSearchDep,
@@ -115,6 +122,7 @@ def get_recent_policies(
     status_code=status.HTTP_200_OK,
     summary="Buscar póliza por número o palabra clave",
     description="Busca una póliza en la base de datos por su número de póliza, identificador UUID o palabra clave, y retorna su información básica.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def search_policy(
     repo: StructuredSearchDep,
@@ -146,6 +154,7 @@ def search_policy(
     status_code=status.HTTP_200_OK,
     summary="Listar sobres de póliza digitalizados",
     description="Retorna el listado de pólizas (sobres) indexadas, incluyendo la cantidad y detalles de documentos vinculados.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def list_envelopes(
     repo: EnvelopeRepoDep,
@@ -272,6 +281,7 @@ def get_envelope_by_id(
     status_code=status.HTTP_200_OK,
     summary="Obtener información básica de póliza por ID",
     description="Retorna los detalles estándar básicos de una póliza registrada a partir de su identificador único UUID.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def get_policy_by_id(
     policy_id: str,
@@ -296,6 +306,125 @@ def get_policy_by_id(
         ) from exc
 
 
+@router.get(
+    "/{policy_id}/structured",
+    response_model=PolicyStructuredDataResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Obtener datos estructurados completos de póliza (Coberturas, límites, deducibles, vigencias)",
+    description=(
+        "Retorna la representación estructurada y atomizada completa de la póliza de seguros: "
+        "datos contractuales de cabecera, especificaciones del objeto/vehículo asegurado, catálogo de coberturas con sumas, deducibles y límites, "
+        "y cláusulas o condiciones especiales."
+    ),
+    dependencies=[Depends(require_role("readonly"))],
+)
+def get_policy_structured(
+    policy_id: str,
+    repo: StructuredSearchDep,
+) -> PolicyStructuredDataResponseSchema:
+    """Retrieve full structured policy JSON by policy ID or policy number."""
+    try:
+        # 1. Attempt direct UUID lookup
+        record = repo.find_by_policy_id(policy_id)
+
+        # 2. If not found by direct UUID, fallback to lookup by policy number
+        resolved_id = policy_id
+        if not record:
+            basic = repo.find_basic_by_policy_number_or_id(policy_id)
+            if basic and basic.get("policy_id"):
+                resolved_id = basic["policy_id"]
+                record = repo.find_by_policy_id(resolved_id)
+
+        if not record or not record.get("data"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Datos estructurados para la póliza '{policy_id}' no encontrados.",
+            )
+
+        data = record.get("data", {})
+        cabecera_raw = data.get("datos_cabecera") if isinstance(data.get("datos_cabecera"), dict) else {}
+        objeto_raw = data.get("objeto_asegurado") if isinstance(data.get("objeto_asegurado"), dict) else None
+        coberturas_raw = data.get("coberturas") if isinstance(data.get("coberturas"), list) else []
+        condiciones_raw = data.get("condiciones_especiales") if isinstance(data.get("condiciones_especiales"), list) else []
+
+        # Map cabecera
+        cabecera = DatosCabeceraResponseSchema(
+            numero_poliza=cabecera_raw.get("numero_poliza"),
+            poliza_anterior=cabecera_raw.get("poliza_anterior"),
+            asegurado=cabecera_raw.get("asegurado"),
+            documento_identidad=cabecera_raw.get("documento_identidad"),
+            nit=cabecera_raw.get("nit"),
+            codigo_spvs=cabecera_raw.get("codigo_spvs"),
+            direccion=cabecera_raw.get("direccion"),
+            zona=cabecera_raw.get("zona"),
+            barrio_distrito=cabecera_raw.get("barrio_distrito"),
+            telefono=cabecera_raw.get("telefono"),
+            celular=cabecera_raw.get("celular"),
+            email=cabecera_raw.get("email"),
+            actividad_economica=cabecera_raw.get("actividad_economica"),
+            tomador=cabecera_raw.get("tomador"),
+            aseguradora=cabecera_raw.get("aseguradora"),
+            sigla_empresa=cabecera_raw.get("sigla_empresa") or record.get("company_sigla"),
+            vigencia_desde=cabecera_raw.get("vigencia_desde"),
+            vigencia_hasta=cabecera_raw.get("vigencia_hasta"),
+            moneda=cabecera_raw.get("moneda"),
+            prima_total=cabecera_raw.get("prima_total"),
+        )
+
+        # Map objeto asegurado
+        objeto = (
+            ObjetoAseguradoResponseSchema(
+                tipo_bien=objeto_raw.get("tipo_bien"),
+                marca=objeto_raw.get("marca"),
+                modelo=objeto_raw.get("modelo"),
+                ano=objeto_raw.get("ano"),
+                placa=objeto_raw.get("placa"),
+                motor=objeto_raw.get("motor"),
+                chasis=objeto_raw.get("chasis"),
+                color=objeto_raw.get("color"),
+                uso_servicio=objeto_raw.get("uso_servicio"),
+                valor_declarado=objeto_raw.get("valor_declarado"),
+                alcance_territorial=objeto_raw.get("alcance_territorial"),
+            )
+            if objeto_raw
+            else None
+        )
+
+        # Map coberturas
+        coberturas = [
+            CoberturaItemResponseSchema(
+                nombre=c.get("nombre", "Cobertura"),
+                suma_asegurada=c.get("suma_asegurada"),
+                deducible=c.get("deducible"),
+                limite=c.get("limite"),
+            )
+            for c in coberturas_raw
+            if isinstance(c, dict)
+        ]
+
+        condiciones = [str(cond) for cond in condiciones_raw]
+        id_cliente = cabecera.documento_identidad or cabecera.nit
+
+        return PolicyStructuredDataResponseSchema(
+            policy_id=record.get("policy_id", resolved_id),
+            file_name=record.get("file_name"),
+            company_sigla=record.get("company_sigla"),
+            id_cliente=id_cliente,
+            datos_cabecera=cabecera,
+            objeto_asegurado=objeto,
+            coberturas=coberturas,
+            condiciones_especiales=condiciones,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error retrieving structured policy data", policy_id=policy_id, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving structured policy data: {exc}",
+        ) from exc
+
+
 @router.delete(
     "/envelopes/{envelope_id}",
     response_model=DeleteEnvelopeResponseSchema,
@@ -306,6 +435,7 @@ def get_policy_by_id(
         "documentos asociados a él en PostgreSQL (incluyendo chunks vectoriales, datos estructurados, "
         "markdown y estadísticas). Opcionalmente elimina las carpetas de salida en disco."
     ),
+    dependencies=[Depends(require_role("admin"))],
 )
 def delete_envelope(
     envelope_id: str,
@@ -371,3 +501,69 @@ def delete_envelope(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al eliminar el sobre de póliza: {exc}",
         ) from exc
+
+
+@router.delete(
+    "/{policy_id}",
+    response_model=DeleteDocumentResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Eliminar documento individual de póliza (Reemplazo de documento)",
+    description=(
+        "Elimina de forma atómica un documento específico de la base de datos a partir de su UUID en la tabla policies "
+        "(incluyendo sus fragmentos vectoriales, datos estructurados, markdown y estadísticas). "
+        "Permite volver a subir una versión corregida del documento sin duplicidad ni inconsistencias. "
+        "Opcionalmente elimina sus carpetas de salida en disco."
+    ),
+    dependencies=[Depends(require_role("admin"))],
+)
+def delete_single_document(
+    policy_id: str,
+    repo: EnvelopeRepoDep,
+    storage: StorageServiceDep,
+    delete_files: bool = Query(
+        default=True,
+        description="Si es True, elimina también del sistema de archivos las carpetas generadas en outputs/",
+    ),
+) -> DeleteDocumentResponseSchema:
+    """Delete a single policy document and its associated storage."""
+    try:
+        deleted_doc = repo.delete_document(policy_id)
+        if not deleted_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Documento con ID '{policy_id}' no encontrado.",
+            )
+
+        deleted_disk_dirs: list[str] = []
+        if delete_files:
+            dirs = storage.delete_result_files(
+                document_id=deleted_doc.get("policy_id"),
+                company_sigla=deleted_doc.get("company_sigla"),
+                filename=deleted_doc.get("file_name"),
+            )
+            deleted_disk_dirs.extend(dirs)
+
+        logger.info(
+            "Documento eliminado exitosamente",
+            policy_id=policy_id,
+            filename=deleted_doc.get("file_name"),
+            envelope_id=deleted_doc.get("envelope_id"),
+        )
+
+        return DeleteDocumentResponseSchema(
+            policy_id=deleted_doc["policy_id"],
+            file_name=deleted_doc["file_name"],
+            envelope_id=deleted_doc.get("envelope_id"),
+            company_sigla=deleted_doc.get("company_sigla"),
+            deleted_disk_dirs=deleted_disk_dirs,
+            message="Documento eliminado exitosamente. Ya puede cargar la versión corregida sin duplicidad.",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error al eliminar documento individual", policy_id=policy_id, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al eliminar documento: {exc}",
+        ) from exc
+
