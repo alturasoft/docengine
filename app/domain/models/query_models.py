@@ -31,6 +31,33 @@ class RetrievedChunk:
     chunk_content: str
     metadata_json: dict = field(default_factory=dict)
     similarity_score: float = 0.0
+    numero_poliza: str | None = None
+    company_sigla: str | None = None
+
+    @property
+    def resolved_numero_poliza(self) -> str | None:
+        """Return the resolved policy number from explicit field or metadata."""
+        if self.numero_poliza:
+            return self.numero_poliza
+        if isinstance(self.metadata_json, dict):
+            return (
+                self.metadata_json.get("numero_poliza")
+                or self.metadata_json.get("policy_number")
+            )
+        return None
+
+    @property
+    def resolved_company_sigla(self) -> str | None:
+        """Return the resolved company sigla from explicit field or metadata."""
+        if self.company_sigla:
+            return self.company_sigla
+        if isinstance(self.metadata_json, dict):
+            return (
+                self.metadata_json.get("company_sigla")
+                or self.metadata_json.get("sigla_aseguradora")
+                or self.metadata_json.get("aseguradora")
+            )
+        return None
 
     @property
     def document_label(self) -> str:
@@ -119,6 +146,8 @@ class QueryResponse:
                 {
                     "chunk_id": s.chunk_id,
                     "policy_id": s.policy_id,
+                    "numero_poliza": s.resolved_numero_poliza,
+                    "company_sigla": s.resolved_company_sigla,
                     "chunk_index": s.chunk_index,
                     "similarity_score": round(s.similarity_score, 4),
                     "label": s.document_label,

@@ -16,7 +16,7 @@ def build_html_content() -> str:
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>DocEngine — Especificación Técnica de Endpoints y APIs (v1.1)</title>
+<title>DocEngine — Especificación Técnica de APIs (v1.1)</title>
 <style>
     @page {
         size: letter;
@@ -361,23 +361,23 @@ def build_html_content() -> str:
 <!-- ==================================================================== -->
 <div class="cover-page">
     <div class="cover-badge">DOCENGINE REST API &bull; ESPECIFICACIÓN TÉCNICA v1.1</div>
-    <div class="cover-title">DocEngine — Especificación Técnica de Endpoints y APIs</div>
+    <div class="cover-title">DocEngine — Especificación Técnica de APIs</div>
     <div class="cover-subtitle">
-        Manual integral de integración y arquitectura para analistas y desarrolladores.<br>
-        Ingesta documental, motor de sobres, persistencia vectorial, consultas semánticas RAG, extracción estructurada JSON y control de acceso RBAC.
+        Guía de arquitectura e integración técnica para desarrolladores y analistas de sistemas.<br>
+        Ingesta documental, agrupación por sobres de póliza, persistencia vectorial, consultas semánticas RAG, extracción estructurada y control de acceso basado en roles (RBAC).
     </div>
     <div class="cover-meta">
         <table>
             <tr>
                 <td class="label">Plataforma:</td>
-                <td>DocEngine (FastAPI + IBM Docling + PostgreSQL pgvector)</td>
+                <td>DocEngine (FastAPI &bull; IBM Docling &bull; PostgreSQL con pgvector)</td>
             </tr>
             <tr>
                 <td class="label">Versión de la API:</td>
                 <td>v1.1.0 (Prefijo global: <code>/api/v1</code>)</td>
             </tr>
             <tr>
-                <td class="label">Formatos de Datos:</td>
+                <td class="label">Formatos de Intercambio:</td>
                 <td>JSON (UTF-8) / multipart/form-data</td>
             </tr>
             <tr>
@@ -386,7 +386,7 @@ def build_html_content() -> str:
             </tr>
             <tr>
                 <td class="label">Estado del Documento:</td>
-                <td>Especificación Técnica Oficial y Operativa (9 Endpoints y Requerimientos Integrados)</td>
+                <td>Especificación Técnica Oficial y Vigente</td>
             </tr>
         </table>
     </div>
@@ -398,21 +398,22 @@ def build_html_content() -> str:
 <div class="toc">
     <div class="toc-title">Índice del Contenido</div>
     <ul>
-        <li><strong>1. Visión General:</strong> Propósito, formatos de intercambio y arquitectura de sobres.</li>
-        <li><strong>2. Entornos y URLs Base:</strong> Direcciones por ciclo de vida (Desarrollo, Staging, Producción) y OpenAPI.</li>
-        <li><strong>3. Autenticación y Autorización (RBAC):</strong> Mecanismos de seguridad, cabecera <code>X-API-Key</code> y roles de usuario.</li>
-        <li><strong>4. Convención Global de Errores y Respuestas:</strong> Estructura estándar <code>ErrorDetailSchema</code> y códigos HTTP admitidos.</li>
-        <li><strong>5. Paginación y Filtros Avanzados:</strong> Reglas de consulta por aseguradora, ramo, número de póliza, tipo de documento y vigencia.</li>
+        <li><strong>1. Visión General:</strong> Propósito, arquitectura técnica, formatos de intercambio y principios de diseño.</li>
+        <li><strong>2. Entornos y Direcciones Base:</strong> Puntos de enlace por ciclo de vida (Desarrollo, Homologación y Producción) y especificación OpenAPI.</li>
+        <li><strong>3. Autenticación y Autorización (RBAC):</strong> Esquema de seguridad por cabecera <code>X-API-Key</code> y matriz de perfiles de acceso.</li>
+        <li><strong>4. Estándar Global de Errores y Códigos HTTP:</strong> Estructura unificada <code>ErrorDetailSchema</code> y catálogo de respuestas HTTP.</li>
+        <li><strong>5. Parámetros de Consulta y Filtros de Búsqueda:</strong> Criterios de filtrado por cliente, aseguradora, ramo, póliza, tipo documental y vigencia.</li>
         <li><strong>6. Catálogo Detallado de Endpoints:</strong>
             <ul>
-                <li>&bull; <em>6.1 Módulo Extraction:</em> Ingesta síncrona/asíncrona (<code>async_mode</code>), consulta de jobs, límites y catálogo de aseguradoras.</li>
-                <li>&bull; <em>6.2 Módulo Policies & Envelopes:</em> Datos estructurados de póliza (Cláusula 2da), reemplazo de documentos sueltos y gestión de sobres.</li>
-                <li>&bull; <em>6.3 Módulo RAG Query:</em> Búsqueda pura de fragmentos y score (sin LLM) y consultas semánticas con síntesis.</li>
-                <li>&bull; <em>6.4 Módulo System & Health:</em> Monitoreo de latido, métricas de rendimiento y buffer de logs.</li>
+                <li>&bull; <em>6.1 Ingesta y Extracción Documental (Extraction):</em> Carga síncrona/asíncrona (<code>async_mode</code>) y supervisión de trabajos en cola.</li>
+                <li>&bull; <em>6.2 Catálogos Normativos Maestros (Catalogs):</em> Entidades aseguradoras, tipos de documento y ramos autorizados.</li>
+                <li>&bull; <em>6.3 Pólizas y Gestión de Sobres (Policies & Envelopes):</em> Extracción estructurada (Cláusula 2da), descarte de documentos y control de sobres.</li>
+                <li>&bull; <em>6.4 Consultas Semánticas RAG (RAG Query):</em> Recuperación pura de fragmentos por similitud y consultas con síntesis generativa.</li>
+                <li>&bull; <em>6.5 Sistema y Monitoreo (System & Health):</em> Verificación de latido operativo (<em>liveness check</em>) y diagnóstico del entorno.</li>
             </ul>
         </li>
-        <li><strong>7. Límites Técnicos por Archivo y Rendimiento:</strong> Restricciones de tamaño (200 MB), páginas (500 págs) y validación de PDF.</li>
-        <li><strong>8. Procesamiento Asíncrono, Idempotencia y Reintentos:</strong> Hashing SHA-256, ciclo de vida de jobs y condicionados generales.</li>
+        <li><strong>7. Límites Operativos y Rendimiento:</strong> Restricciones de tamaño por archivo (200 MB), volumen de páginas (500 págs.) y validación de PDF.</li>
+        <li><strong>8. Procesamiento Asíncrono, Idempotencia y Condicionados Generales:</strong> Verificación SHA-256, ciclo de vida de trabajos y reutilización de condicionados generales.</li>
     </ul>
 </div>
 
@@ -421,30 +422,31 @@ def build_html_content() -> str:
 <!-- ==================================================================== -->
 <h1>1. Visión General</h1>
 <p>
-    <strong>DocEngine</strong> es una plataforma de servicios de alto rendimiento diseñada para la digitalización, extracción estructurada, 
-    clasificación y consulta conversacional (RAG) de pólizas de seguro en Bolivia. 
+    <strong>DocEngine</strong> es una plataforma de servicios de alto rendimiento orientada a la digitalización, extracción estructurada, 
+    clasificación y consulta conversacional (RAG) de pólizas de seguros en el mercado boliviano.
 </p>
 <p>
-    El sistema procesa documentos PDF complejos (nativos o escaneados con OCR), normaliza la estructura visual a Markdown estructurado y JSON, 
-    fragmenta el contenido en jerarquías <em>Parent-Child</em>, genera representaciones vectoriales densas de 1024 dimensiones utilizando el modelo 
-    local <strong>BAAI/bge-m3</strong>, y almacena la información tanto relacional como vectorialmente en <strong>PostgreSQL con la extensión pgvector</strong>.
+    El motor procesa documentos PDF complejos —tanto nativos digitales como escaneados mediante OCR—, estandariza su estructura visual 
+    en representaciones Markdown y esquemas JSON jerárquicos, fragmenta el contenido bajo una estrategia <em>Parent-Child</em>, 
+    genera representaciones vectoriales densas de 1024 dimensiones con el modelo local <strong>BAAI/bge-m3</strong>, y consolida la 
+    información tanto de forma relacional como vectorial en <strong>PostgreSQL con la extensión pgvector</strong>.
 </p>
 
-<h3>Principios Clave de la API</h3>
+<h3>Principios de Arquitectura e Integración</h3>
 <ul>
-    <li><strong>Versionado Estricto:</strong> Todos los endpoints de negocio están bajo la ruta base <code>/api/v1/</code>, garantizando evolución controlada y compatibilidad hacia atrás.</li>
-    <li><strong>Formato Estándar:</strong> Todas las peticiones y respuestas estructuradas utilizan <strong>JSON</strong> codificado en <strong>UTF-8</strong> (salvo la carga de archivos binarios vía <code>multipart/form-data</code>).</li>
-    <li><strong>Idempotencia Nativa:</strong> Toda ingesta documental verifica el hash criptográfico SHA-256 del archivo; si el documento ya fue procesado, no se reprocesa innecesariamente, evitando costos de cómputo y duplicación de vectores.</li>
-    <li><strong>Arquitectura de Sobres (Policy Envelopes):</strong> Los documentos no existen aislados; se agrupan lógicamente en "sobres" que representan la póliza completa (agrupando carátula, condicionados generales, condicionados particulares, liquidaciones y anexos).</li>
-    <li><strong>Aislamiento Multi-Inquilino (id_cliente):</strong> Cada operación de ingesta y consulta puede aislarse por identificador de cliente, garantizando la privacidad de los datos.</li>
+    <li><strong>Versionado Estricto:</strong> Todos los endpoints de negocio se exponen bajo el prefijo <code>/api/v1/</code>, asegurando una evolución predecible y compatibilidad hacia atrás con los sistemas cliente.</li>
+    <li><strong>Formatos Estandarizados:</strong> La comunicación estructurada utiliza exclusivamente <strong>JSON</strong> codificado en <strong>UTF-8</strong>, mientras que la recepción de archivos binarios se efectúa mediante <code>multipart/form-data</code>.</li>
+    <li><strong>Idempotencia Nativa:</strong> Cada ingesta calcula el hash criptográfico SHA-256 del documento. Si el archivo ya fue procesado previamente, el sistema evita cómputos redundantes y previene la duplicación de fragmentos vectoriales.</li>
+    <li><strong>Arquitectura de Sobres (Policy Envelopes):</strong> Los documentos asociados a una misma póliza no se gestionan de forma aislada, sino que se integran en "sobres de póliza", agrupando coherentemente carátulas, condiciones generales, condiciones particulares, liquidaciones de pago y anexos.</li>
+    <li><strong>Aislamiento Multi-Inquilino (id_cliente):</strong> Toda operación de ingesta, indexación y consulta puede segmentarse por el identificador de cliente (<code>id_cliente</code>), garantizando estricta confidencialidad y separación lógica de datos.</li>
 </ul>
 
 <!-- ==================================================================== -->
 <!-- 2. ENTORNOS Y URLS BASE -->
 <!-- ==================================================================== -->
-<h1>2. Entornos y URLs Base</h1>
+<h1>2. Entornos y Direcciones Base</h1>
 <p>
-    La API se despliega de forma desacoplada y puede consumirse a través de los siguientes endpoints base según el ciclo de vida del software:
+    La API de DocEngine se despliega mediante una arquitectura desacoplada, facilitando su consumo en distintos puntos de enlace según la fase del ciclo de vida del software. Las direcciones de host y puertos definitivos se establecen conforme a la infraestructura y configuración de red de cada despliegue.
 </p>
 
 <table>
@@ -452,8 +454,8 @@ def build_html_content() -> str:
         <tr>
             <th>Entorno</th>
             <th>URL Base de Endpoints</th>
-            <th>Documentación Swagger UI</th>
-            <th>Propósito</th>
+            <th>Documentación Interactiva (Swagger)</th>
+            <th>Propósito Operativo</th>
         </tr>
     </thead>
     <tbody>
@@ -461,26 +463,26 @@ def build_html_content() -> str:
             <td><strong>Desarrollo Local</strong></td>
             <td><code>http://localhost:8000/api/v1</code></td>
             <td><code>http://localhost:8000/docs</code></td>
-            <td>Pruebas locales, ejecución directa con Uvicorn.</td>
+            <td>Pruebas de desarrollo y depuración local con Uvicorn.</td>
         </tr>
         <tr>
-            <td><strong>Staging / Pruebas</strong></td>
-            <td><code>http://192.168.1.50:8000/api/v1</code></td>
-            <td><code>http://192.168.1.50:8000/docs</code></td>
-            <td>Validación de integración y QA con clientes internos.</td>
+            <td><strong>Staging / Homologación</strong></td>
+            <td><code>http://172.24.25.30:8000/api/v1</code></td>
+            <td><code>http://172.24.25.30:8000/docs</code></td>
+            <td>Pruebas de integración, certificación de calidad (QA) y validación previa con clientes.</td>
         </tr>
         <tr>
             <td><strong>Producción</strong></td>
-            <td><code>https://docengine.altura.bo/api/v1</code></td>
-            <td><code>https://docengine.altura.bo/docs</code></td>
-            <td>Servidor productivo de alta concurrencia.</td>
+            <td><code>https://docengine.[sudamericana].bo/api/v1</code></td>
+            <td><code>https://docengine.[sudamericana].bo/docs</code></td>
+            <td>Entorno operativo principal de alta concurrencia y disponibilidad.</td>
         </tr>
     </tbody>
 </table>
 
 <div class="callout callout-info">
-    <div class="callout-title">Documentación Interactiva y OpenAPI Versionado</div>
-    DocEngine expone la especificación OpenAPI v3 estándar en <code>/openapi.json</code> y provee interfaces interactivas para pruebas en <code>/docs</code> (Swagger UI) y <code>/redoc</code> (ReDoc). La especificación exportada se mantiene sincronizada y versionada en <code>docs/openapi.json</code> bajo la política de versionado <code>docs/API_VERSIONING_POLICY.md</code>.
+    <div class="callout-title">Documentación Interactiva y Especificación OpenAPI</div>
+    DocEngine publica el esquema OpenAPI v3 estándar en la ruta <code>/openapi.json</code> e incluye interfaces gráficas interactivas para exploración y pruebas en <code>/docs</code> (Swagger UI) y <code>/redoc</code> (ReDoc). La especificación se mantiene sincronizada con el repositorio en <code>docs/openapi.json</code> bajo la directiva formal de versionado <code>docs/API_VERSIONING_POLICY.md</code>.
 </div>
 
 <!-- ==================================================================== -->
@@ -488,37 +490,37 @@ def build_html_content() -> str:
 <!-- ==================================================================== -->
 <h1>3. Autenticación y Autorización (RBAC)</h1>
 <p>
-    DocEngine implementa un esquema de seguridad basado en claves de API (<code>X-API-Key</code>) con control de acceso basado en roles (<strong>RBAC</strong>).
-    El sistema puede operar en modo abierto (para redes internas/desarrollo local) o en modo autenticado estricto mediante la variable de entorno <code>DOCENGINE_SECURITY_ENABLED=true</code>.
+    DocEngine incorpora un esquema de seguridad basado en cabeceras de API Key (<code>X-API-Key</code>), complementado con control de acceso basado en roles (<strong>RBAC</strong>).
+    El sistema admite operación abierta únicamente en redes internas o entornos de desarrollo local; para entornos productivos y de homologación, la autenticación estricta se activa mediante la variable de entorno <code>DOCENGINE_SECURITY_ENABLED=true</code>.
 </p>
 
 <h3>Cabecera HTTP de Autenticación</h3>
 <pre><code>X-API-Key: &lt;TU_API_KEY_SECRETA&gt;</code></pre>
 
-<h3>Perfiles de Acceso (Roles)</h3>
+<h3>Matriz de Perfiles y Roles de Usuario</h3>
 <table>
     <thead>
         <tr>
             <th>Rol</th>
-            <th>Permisos Otorgados</th>
-            <th>Endpoints Habilitados</th>
+            <th>Alcance de Permisos</th>
+            <th>Endpoints Autorizados</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td><code>readonly</code></td>
-            <td>Lectura y búsqueda</td>
-            <td><code>POST /api/v1/query/search</code>, <code>POST /api/v1/query</code>, <code>GET /api/v1/policies/*</code> (incluye datos estructurados), <code>GET /api/v1/health/*</code>.</td>
+            <td>Consulta y lectura</td>
+            <td><code>POST /api/v1/query/search</code>, <code>POST /api/v1/query</code>, <code>GET /api/v1/policies/*</code> (incluyendo esquemas estructurados) y <code>GET /api/v1/health/*</code>.</td>
         </tr>
         <tr>
             <td><code>writer</code></td>
-            <td>Lectura + Ingesta documental</td>
-            <td>Todos los permisos de <code>readonly</code> más <code>POST /api/v1/extract/*</code> y <code>GET /api/v1/extract/jobs/*</code>.</td>
+            <td>Lectura e ingesta documental</td>
+            <td>Habilita todos los permisos de <code>readonly</code> más la carga documental en <code>POST /api/v1/extract/*</code> y el seguimiento de trabajos en <code>GET /api/v1/extract/jobs/*</code>.</td>
         </tr>
         <tr>
             <td><code>admin</code></td>
-            <td>Control total</td>
-            <td>Todos los permisos anteriores más <code>DELETE /api/v1/policies/{policy_id}</code> y <code>DELETE /api/v1/policies/envelopes/{envelope_id}</code>.</td>
+            <td>Administración integral</td>
+            <td>Comprende la totalidad de operaciones previas y autoriza la eliminación controlada de documentos (<code>DELETE /api/v1/policies/{policy_id}</code>) y de sobres completos (<code>DELETE /api/v1/policies/envelopes/{envelope_id}</code>).</td>
         </tr>
     </tbody>
 </table>
@@ -526,77 +528,77 @@ def build_html_content() -> str:
 <!-- ==================================================================== -->
 <!-- 4. CONVENCIÓN GLOBAL DE ERRORES Y RESPUESTAS -->
 <!-- ==================================================================== -->
-<h1>4. Convención Global de Errores y Respuestas</h1>
+<h1>4. Estándar Global de Errores y Respuestas</h1>
 <p>
-    DocEngine se adhiere a las mejores prácticas de diseño RESTful y convenciones estándar de FastAPI/Starlette con esquemas de error estandarizados.
+    El diseño de la API se apega a los lineamientos RESTful y las convenciones estándar de FastAPI, asegurando una estructura uniforme y predecible en todas las respuestas de excepción mediante el esquema <code>ErrorDetailSchema</code>.
 </p>
 
-<h3>Estructura Estándar de Error JSON (ErrorDetailSchema)</h3>
+<h3>Estructura Estándar de Respuesta de Error (ErrorDetailSchema)</h3>
 <pre><code>{
-  "detail": "Descripción precisa y legible del motivo del error o validación",
+  "detail": "Descripción precisa y contextualizada de la causa del error o de la validación",
   "error_code": "INVALID_PAGE_COUNT",
   "timestamp": "2026-10-14T18:00:00Z"
 }</code></pre>
 
-<h3>Códigos de Estado HTTP Admitidos</h3>
+<h3>Catálogo de Códigos de Estado HTTP</h3>
 <table>
     <thead>
         <tr>
             <th>Código HTTP</th>
-            <th>Significado</th>
-            <th>Contexto en DocEngine</th>
+            <th>Estado</th>
+            <th>Contexto de Aplicación en DocEngine</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td><strong>200 OK</strong></td>
-            <td>Éxito síncrono</td>
-            <td>La petición se procesó exitosamente y se retorna la información solicitada.</td>
+            <td>Procesamiento Exitoso</td>
+            <td>La solicitud se ejecutó satisfactoriamente y se retorna la carga útil solicitada en el cuerpo de la respuesta.</td>
         </tr>
         <tr>
             <td><strong>202 Accepted</strong></td>
-            <td>Procesamiento asíncrono</td>
-            <td>La carga fue validada y puesta en cola en segundo plano; incluye <code>job_id</code> para consulta de estado.</td>
+            <td>Aceptado para Procesamiento Asíncrono</td>
+            <td>La carga fue validada e incorporada a la cola de procesamiento en segundo plano; se suministra un <code>job_id</code> para el seguimiento del trabajo.</td>
         </tr>
         <tr>
             <td><strong>400 Bad Request</strong></td>
-            <td>Petición inválida</td>
-            <td>Parámetros incorrectos, archivo con formato no admitido (solo PDF) o archivo PDF corrupto/dañado.</td>
+            <td>Solicitud Inválida</td>
+            <td>Parámetros ausentes o incorrectos, tipo de archivo no admitido o documento PDF con inconsistencias estructurales.</td>
         </tr>
         <tr>
             <td><strong>401 Unauthorized</strong></td>
-            <td>No autenticado</td>
-            <td>Falta la cabecera <code>X-API-Key</code> o la clave provista es inválida.</td>
+            <td>No Autenticado</td>
+            <td>Omisión de la cabecera <code>X-API-Key</code> o clave de acceso no reconocida por el sistema.</td>
         </tr>
         <tr>
             <td><strong>403 Forbidden</strong></td>
-            <td>Acceso denegado</td>
-            <td>La clave tiene rol insuficiente para la operación solicitada (ej. rol <code>readonly</code> intentando eliminar).</td>
+            <td>Acceso Restringido</td>
+            <td>La credencial proporcionada carece de privilegios suficientes para la acción requerida (por ejemplo, rol <code>readonly</code> ejecutando operaciones de borrado).</td>
         </tr>
         <tr>
             <td><strong>404 Not Found</strong></td>
-            <td>No encontrado</td>
-            <td>El sobre (<code>envelope_id</code>), documento (<code>policy_id</code>) o trabajo (<code>job_id</code>) no existe.</td>
+            <td>Recurso No Encontrado</td>
+            <td>El sobre (<code>envelope_id</code>), documento (<code>policy_id</code>) o trabajo (<code>job_id</code>) especificado no existe en el registro.</td>
         </tr>
         <tr>
             <td><strong>413 Content Too Large</strong></td>
-            <td>Archivo excedido</td>
-            <td>El tamaño del archivo supera el límite configurado (por defecto <strong>200 MB</strong>).</td>
+            <td>Archivo Excede Capacidad</td>
+            <td>El tamaño del archivo cargado supera el límite técnico predeterminado (<strong>200 MB</strong>).</td>
         </tr>
         <tr>
             <td><strong>422 Unprocessable Content</strong></td>
-            <td>Validación / Límite páginas</td>
-            <td>Error en formato de datos Pydantic o el PDF supera el límite máximo permitido de <strong>500 páginas</strong>.</td>
+            <td>Validación Semántica o Límite de Extensión</td>
+            <td>Discrepancia en la validación del esquema Pydantic, o el archivo supera el umbral máximo permitido de <strong>500 páginas</strong>.</td>
         </tr>
         <tr>
             <td><strong>500 Internal Error</strong></td>
-            <td>Fallo de servidor</td>
-            <td>Excepción no controlada en el motor de extracción Docling o en PostgreSQL.</td>
+            <td>Error Interno del Servidor</td>
+            <td>Excepción no controlada originada en el motor de extracción Docling o en el gestor de base de datos PostgreSQL.</td>
         </tr>
         <tr>
             <td><strong>503 Service Unavailable</strong></td>
-            <td>Servicio no disponible</td>
-            <td>El motor vectorial o la base de datos se encuentran fuera de línea o en inicialización.</td>
+            <td>Servicio no Disponible</td>
+            <td>Indisponibilidad momentánea o etapa de calentamiento/inicialización del motor vectorial o del servicio de base de datos.</td>
         </tr>
     </tbody>
 </table>
@@ -604,16 +606,16 @@ def build_html_content() -> str:
 <!-- ==================================================================== -->
 <!-- 5. PAGINACIÓN Y FILTROS AVANZADOS -->
 <!-- ==================================================================== -->
-<h1>5. Paginación y Filtros Avanzados</h1>
+<h1>5. Parámetros de Consulta y Filtros Avanzados</h1>
 <p>
-    Tanto los endpoints de búsqueda vectorial (<code>/query/search</code>) como los de gestión de sobres admiten filtros estructurados combinables mediante el objeto <code>SearchFiltersSchema</code>:
+    Los endpoints de recuperación semántica (<code>/query/search</code>) y de gestión documental admiten criterios de búsqueda estructurados y combinables mediante el esquema <code>SearchFiltersSchema</code>:
 </p>
 <table>
     <thead>
         <tr>
-            <th>Filtro</th>
-            <th>Tipo</th>
-            <th>Descripción</th>
+            <th>Parámetro</th>
+            <th>Tipo de Dato</th>
+            <th>Definición y Alcance</th>
             <th>Ejemplo</th>
         </tr>
     </thead>
@@ -621,37 +623,43 @@ def build_html_content() -> str:
         <tr>
             <td><code>id_cliente</code></td>
             <td>string</td>
-            <td>Aislamiento multi-inquilino estricto por cliente.</td>
+            <td>Aislamiento estricto multi-inquilino por titular de póliza (Carnet de Identidad o NIT).</td>
             <td><code>"CLI-001"</code></td>
         </tr>
         <tr>
-            <td><code>sigla_aseguradora</code></td>
-            <td>string</td>
-            <td>Sigla oficial normalizada contra el catálogo maestro (18 aseguradoras).</td>
-            <td><code>"BISA"</code>, <code>"CRI"</code></td>
-        </tr>
-        <tr>
-            <td><code>ramo</code></td>
-            <td>string</td>
-            <td>Ramo de seguro técnico normalizado.</td>
-            <td><code>"AUTOMOTOR"</code>, <code>"INCENDIO"</code></td>
+            <td><code>policy_id</code></td>
+            <td>string (UUID)</td>
+            <td>Identificador unívoco del documento en el repositorio central (formato canónico UUID de 36 caracteres).</td>
+            <td><code>"4b684531-10df-4f40-84cf-8d9633e6c0c2"</code></td>
         </tr>
         <tr>
             <td><code>numero_poliza</code></td>
             <td>string</td>
-            <td>Búsqueda exacta o parcial sobre el número de póliza.</td>
+            <td>Número o código contractual asignado a la póliza por la aseguradora. Debe distinguirse del <code>policy_id</code> interno.</td>
             <td><code>"POL-2024-9988"</code></td>
+        </tr>
+        <tr>
+            <td><code>company_sigla</code></td>
+            <td>string</td>
+            <td>Sigla canónica de la entidad aseguradora según el catálogo oficial de 18 compañías (<code>GET /api/v1/catalogs/companies</code>). Admite el alias <code>sigla_aseguradora</code> por retrocompatibilidad.</td>
+            <td><code>"BISA"</code>, <code>"CRE"</code>, <code>"LBC"</code></td>
+        </tr>
+        <tr>
+            <td><code>ramo</code></td>
+            <td>string</td>
+            <td>Ramo técnico normalizado conforme a la codificación de la APS (<code>GET /api/v1/catalogs/ramos</code>).</td>
+            <td><code>"AUTOMOTOR"</code>, <code>"INCENDIO"</code></td>
         </tr>
         <tr>
             <td><code>tipo_documento</code></td>
             <td>string</td>
-            <td>Tipo documental: <code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>, etc.</td>
+            <td>Clasificación tipológica del documento según catálogo normativo (<code>GET /api/v1/catalogs/document-types</code>): <code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>, etc.</td>
             <td><code>"CONDICIONADO_GENERAL"</code></td>
         </tr>
         <tr>
             <td><code>vigencia_fecha</code></td>
             <td>string (ISO)</td>
-            <td>Filtra documentos cuya vigencia abarque la fecha especificada (<code>YYYY-MM-DD</code>).</td>
+            <td>Filtra documentos cuya vigencia contractual comprenda la fecha indicada (formato <code>YYYY-MM-DD</code>).</td>
             <td><code>"2024-06-15"</code></td>
         </tr>
     </tbody>
@@ -670,15 +678,15 @@ def build_html_content() -> str:
         <span class="badge-post">POST</span>
         <span class="endpoint-path">/api/v1/extract/file</span>
     </div>
-    <p><strong>Propósito:</strong> Carga un archivo PDF binario para extracción, chunking y vectorización. Soporta ejecución síncrona inmediata o asíncrona mediante el parámetro <code>async_mode=true</code>.</p>
+    <p><strong>Propósito:</strong> Carga un archivo binario PDF para su extracción estructural, segmentación (<em>chunking</em>) y generación de incrustaciones vectoriales. Permite ejecución síncrona directa o diferida en segundo plano activando el parámetro <code>async_mode=true</code>.</p>
     <p><strong>Content-Type:</strong> <code>multipart/form-data</code></p>
     <table>
         <thead>
             <tr>
-                <th>Campo Form</th>
-                <th>Tipo</th>
-                <th>Requerido</th>
-                <th>Descripción</th>
+                <th>Campo de Formulario</th>
+                <th>Tipo de Dato</th>
+                <th>Obligatorio</th>
+                <th>Descripción Técnica</th>
             </tr>
         </thead>
         <tbody>
@@ -686,48 +694,48 @@ def build_html_content() -> str:
                 <td><code>file</code></td>
                 <td>Binary (PDF)</td>
                 <td><strong>Sí</strong></td>
-                <td>Archivo PDF (máximo 200 MB y 500 páginas).</td>
+                <td>Documento PDF a procesar (máximo 200 MB y 500 páginas).</td>
             </tr>
             <tr>
                 <td><code>id_cliente</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Identificador único del cliente para aislamiento multi-tenant.</td>
+                <td>Identificador de cliente para segmentación y aislamiento multi-inquilino.</td>
             </tr>
             <tr>
                 <td><code>company_sigla</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Sigla oficial de la aseguradora (ej. <code>BISA</code>, <code>CRI</code>, <code>ALI</code>).</td>
+                <td>Sigla oficial de la aseguradora según catálogo (ej. <code>BISA</code>, <code>CRE</code>, <code>LBC</code>). Admite el alias <code>sigla_aseguradora</code>.</td>
             </tr>
             <tr>
                 <td><code>numero_poliza</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Número de póliza para vinculación en sobre.</td>
+                <td>Número comercial de la póliza para indexación y vinculación en su sobre correspondiente.</td>
             </tr>
             <tr>
                 <td><code>ramo</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Ramo de la póliza (ej. <code>AUTOMOTOR</code>).</td>
+                <td>Ramo de seguro asociado a la póliza (ej. <code>AUTOMOTOR</code>, <code>TODO_RIESGO</code>).</td>
             </tr>
             <tr>
                 <td><code>tipo_documento</code></td>
                 <td>string</td>
                 <td>No</td>
-                <td>Tipo de documento (ej. <code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>).</td>
+                <td>Clasificación del documento (ej. <code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>).</td>
             </tr>
             <tr>
                 <td><code>async_mode</code></td>
                 <td>boolean</td>
                 <td>No (def: false)</td>
-                <td>Si es <code>true</code>, encola la tarea en background y retorna <code>202 Accepted</code> con un <code>job_id</code>.</td>
+                <td>Si se establece en <code>true</code>, encola la tarea en segundo plano y retorna de inmediato el código <code>202 Accepted</code> junto con el <code>job_id</code>.</td>
             </tr>
         </tbody>
     </table>
 
-    <p><strong>Respuesta Asíncrona (202 Accepted):</strong></p>
+    <p><strong>Ejemplo de Respuesta Asíncrona (202 Accepted):</strong></p>
 <pre><code>{
   "job_id": "d8e3b1c4-9a1f-4b12-a7e8-c51d9e2a4f00",
   "status": "PENDING",
@@ -741,8 +749,8 @@ def build_html_content() -> str:
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/extract/jobs/{job_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Consulta el estado de procesamiento de una carga asíncrona para documentos grandes o procesamiento por lotes.</p>
-    <p><strong>Parámetro Path:</strong> <code>job_id</code> (string, UUID del trabajo).</p>
+    <p><strong>Propósito:</strong> Consulta el estado operativo y el avance de un trabajo de extracción en segundo plano, facilitando el procesamiento desacoplado de documentos extensos o cargas masivas.</p>
+    <p><strong>Parámetro Path:</strong> <code>job_id</code> (string, identificador único UUID del trabajo).</p>
     <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
 <pre><code>{
   "job_id": "d8e3b1c4-9a1f-4b12-a7e8-c51d9e2a4f00",
@@ -752,7 +760,9 @@ def build_html_content() -> str:
   "updated_at": "2026-10-14T17:30:25Z",
   "error_message": null,
   "result": {
-    "policy_id": "POL-2024-9988",
+    "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
+    "numero_poliza": "POL-2024-9988",
+    "company_sigla": "BISA",
     "id_cliente": "CLI-001",
     "chunks_indexed": 38,
     "total_pages": 45
@@ -760,23 +770,45 @@ def build_html_content() -> str:
 }</code></pre>
 </div>
 
+<!-- 6.2 CATALOGS -->
+<h2>6.2 Módulo de Catálogos Normativos Maestros (Catalogs)</h2>
+<p>
+    DocEngine provee endpoints de consulta para catálogos estandarizados de aseguradoras, ramos y tipologías documentales, garantizando la consistencia terminológica en las integraciones externas:
+</p>
+
 <div class="endpoint-card">
     <div class="endpoint-header">
         <span class="badge-get">GET</span>
-        <span class="endpoint-path">/api/v1/extract/companies</span>
+        <span class="endpoint-path">/api/v1/catalogs/companies</span>
     </div>
-    <p><strong>Propósito:</strong> Retorna el catálogo oficial de siglas y nombres completos de las compañías aseguradoras bolivianas soportadas por el motor.</p>
+    <p><strong>Propósito:</strong> Retorna el catálogo oficial de las 18 entidades aseguradoras supervisadas en Bolivia, detallando su identificador numérico (<code>id</code>), razón social (<code>nombre</code>), sigla canónica (<code>sigla</code>, ej. <code>BISA</code>, <code>CRE</code>, <code>LBC</code>, <code>ALI-SEG</code>) y sigla previa (<code>sigla_anterior</code>).</p>
 </div>
 
-<!-- 6.2 POLICIES & ENVELOPES -->
-<h2>6.2 Módulo de Pólizas y Gestión de Sobres (Policies & Envelopes)</h2>
+<div class="endpoint-card">
+    <div class="endpoint-header">
+        <span class="badge-get">GET</span>
+        <span class="endpoint-path">/api/v1/catalogs/document-types</span>
+    </div>
+    <p><strong>Propósito:</strong> Retorna la relación de tipologías documentales admitidas en la plataforma (<code>POLIZA</code>, <code>CONDICIONADO_GENERAL</code>, <code>CONDICIONADO_PARTICULAR</code>, <code>ANEXO</code>, <code>LIQUIDACION_PAGOS</code>, entre otras).</p>
+</div>
+
+<div class="endpoint-card">
+    <div class="endpoint-header">
+        <span class="badge-get">GET</span>
+        <span class="endpoint-path">/api/v1/catalogs/ramos</span>
+    </div>
+    <p><strong>Propósito:</strong> Retorna el catálogo lineal de ramos de seguros autorizados según la codificación de la APS. La vista estructurada por categorías de ramo se encuentra en <code>GET /api/v1/catalogs/ramos/grouped</code>.</p>
+</div>
+
+<!-- 6.3 POLICIES & ENVELOPES -->
+<h2>6.3 Módulo de Pólizas y Gestión de Sobres (Policies & Envelopes)</h2>
 
 <div class="endpoint-card" style="border-left: 4px solid #2563eb;">
     <div class="endpoint-header">
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/policies/{policy_id}/structured</span>
     </div>
-    <p><strong>Propósito:</strong> Retorna el esquema JSON con los datos estructurados extraídos de la póliza (coberturas, límites, deducibles, valores asegurados y vigencias), correspondiente al objeto del contrato (Cláusula Segunda, incisos a y c).</p>
+    <p><strong>Propósito:</strong> Obtiene en formato JSON el conjunto de datos estructurados de la póliza (coberturas, límites asegurados, deducibles, valores patrimoniales e intervalos de vigencia), correspondientes al objeto contractual (Cláusula Segunda, incisos a y c).</p>
     <p><strong>Parámetro Path:</strong> <code>policy_id</code> (string, UUID del documento).</p>
     <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
 <pre><code>{
@@ -820,7 +852,7 @@ def build_html_content() -> str:
         <span class="badge-delete">DELETE</span>
         <span class="endpoint-path">/api/v1/policies/{policy_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Elimina un documento individual suelto (por ejemplo, para reemplazar un anexo o condicionado erróneo sin eliminar la póliza completa). Desvincula el documento del sobre, elimina sus fragmentos vectoriales en cascada y limpia los archivos derivados en disco.</p>
+    <p><strong>Propósito:</strong> Remueve un documento individual dentro de la plataforma (por ejemplo, para reemplazar un anexo o condicionado erróneo sin afectar el resto de la póliza). Desvincula el documento de su sobre, elimina sus fragmentos vectoriales en cascada y depura los archivos asociados en el almacenamiento físico.</p>
     <p><strong>Parámetro Path:</strong> <code>policy_id</code> (string, UUID del documento a eliminar).</p>
     <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
 <pre><code>{
@@ -837,7 +869,8 @@ def build_html_content() -> str:
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/policies/envelopes/{envelope_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Retorna el detalle completo de un sobre y todos sus documentos asociados.</p>
+    <p><strong>Propósito:</strong> Retorna la información integral de un sobre de póliza y la relación de todos los documentos asociados que lo componen.</p>
+    <p><strong>Parámetro Path:</strong> <code>envelope_id</code> (string, UUID del sobre).</p>
 </div>
 
 <div class="endpoint-card" style="border-left: 4px solid #dc2626;">
@@ -845,26 +878,27 @@ def build_html_content() -> str:
         <span class="badge-delete">DELETE</span>
         <span class="endpoint-path">/api/v1/policies/envelopes/{envelope_id}</span>
     </div>
-    <p><strong>Propósito:</strong> Elimina de forma atómica y completa una póliza entera (sobre) y todos sus documentos asociados.</p>
+    <p><strong>Propósito:</strong> Ejecuta la eliminación atómica y completa de un sobre de póliza junto con la totalidad de sus documentos vinculados, fragmentos vectoriales y archivos físicos en disco.</p>
+    <p><strong>Parámetro Path:</strong> <code>envelope_id</code> (string, UUID del sobre a eliminar).</p>
 </div>
 
-<!-- 6.3 RAG QUERY -->
-<h2>6.3 Módulo de Consultas Semánticas RAG (RAG Query)</h2>
+<!-- 6.4 RAG QUERY -->
+<h2>6.4 Módulo de Consultas Semánticas RAG (RAG Query)</h2>
 
 <div class="endpoint-card" style="border-left: 4px solid #059669;">
     <div class="endpoint-header">
         <span class="badge-post">POST</span>
         <span class="endpoint-path">/api/v1/query/search</span>
     </div>
-    <p><strong>Propósito:</strong> Endpoint de búsqueda pura que devuelve los fragmentos relevantes recuperados por similitud híbrida (denso + recíproco FTS) con sus metadatos y puntaje, <strong>sin generar respuesta con LLM</strong>. Permite que cada agente o sistema externo utilice su propio modelo de lenguaje para la síntesis.</p>
+    <p><strong>Propósito:</strong> Endpoint de búsqueda semántica pura que recupera fragmentos documentales mediante concordancia híbrida (vectorial densa y ponderación léxica), retornando metadatos completos y puntajes de similitud <strong>sin realizar síntesis generativa con LLM</strong>. Permite que aplicaciones y agentes externos suministren su propio modelo de lenguaje para la interpretación.</p>
     <p><strong>Content-Type:</strong> <code>application/json</code></p>
     <table>
         <thead>
             <tr>
                 <th>Campo JSON</th>
-                <th>Tipo</th>
-                <th>Requerido</th>
-                <th>Descripción</th>
+                <th>Tipo de Dato</th>
+                <th>Obligatorio</th>
+                <th>Descripción Técnica</th>
             </tr>
         </thead>
         <tbody>
@@ -872,42 +906,47 @@ def build_html_content() -> str:
                 <td><code>question</code></td>
                 <td>string</td>
                 <td><strong>Sí</strong></td>
-                <td>Consulta o texto de búsqueda temática.</td>
+                <td>Texto de consulta temática o criterio de búsqueda en lenguaje natural.</td>
             </tr>
             <tr>
                 <td><code>top_k</code></td>
                 <td>integer</td>
                 <td>No (def: 5)</td>
-                <td>Cantidad de fragmentos a recuperar (1 a 50).</td>
+                <td>Cantidad de fragmentos a recuperar (rango admisible: 1 a 50).</td>
             </tr>
             <tr>
                 <td><code>filters</code></td>
                 <td>object</td>
                 <td>No</td>
-                <td>Filtros combinables: <code>sigla_aseguradora</code>, <code>ramo</code>, <code>numero_poliza</code>, <code>tipo_documento</code>, <code>vigencia_fecha</code>, <code>id_cliente</code>.</td>
+                <td>Filtros combinables: <code>company_sigla</code> (o <code>sigla_aseguradora</code>), <code>numero_poliza</code>, <code>ramo</code>, <code>tipo_documento</code>, <code>vigencia_fecha</code>, <code>id_cliente</code>, <code>policy_id</code> y <code>envelope_id</code>.</td>
             </tr>
         </tbody>
     </table>
 
     <p><strong>Ejemplo de Respuesta (200 OK):</strong></p>
 <pre><code>{
-  "chunks": [
+  "query": "¿Cuál es el deducible por colisión?",
+  "total_results": 1,
+  "results": [
     {
       "chunk_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-      "content": "CLÁUSULA 3ra: DEDUCIBLE POR ACCIDENTE. En caso de colisión, el asegurado asumirá un deducible del 10%...",
-      "score": 0.892,
-      "policy_id": "POL-2024-9988",
-      "page_number": 3,
-      "metadata": {
-        "aseguradora": "BISA",
+      "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
+      "numero_poliza": "POL-2024-9988",
+      "company_sigla": "BISA",
+      "chunk_index": 3,
+      "similarity_score": 0.892,
+      "document_label": "[Documento: caratula_bisa.pdf | Tipo: POLIZA | Sección: Coberturas | Pág: 3 | Empresa: BISA]",
+      "chunk_content": "CLÁUSULA 3ra: DEDUCIBLE POR ACCIDENTE. En caso de colisión, el asegurado asumirá un deducible del 10%...",
+      "metadata_json": {
+        "company_sigla": "BISA",
+        "numero_poliza": "POL-2024-9988",
         "ramo": "AUTOMOTOR",
         "tipo_documento": "POLIZA",
-        "file_name": "caratula_bisa.pdf"
+        "file_name": "caratula_bisa.pdf",
+        "page": 3
       }
     }
-  ],
-  "total_found": 1,
-  "query": "¿Cuál es el deducible por colisión?"
+  ]
 }</code></pre>
 </div>
 
@@ -916,18 +955,18 @@ def build_html_content() -> str:
         <span class="badge-post">POST</span>
         <span class="endpoint-path">/api/v1/query</span>
     </div>
-    <p><strong>Propósito:</strong> Responde preguntas formuladas en lenguaje natural sobre las pólizas digitalizadas, sintetizando una respuesta fundamentada con citas textuales a partir de fragmentos semánticos recuperados en pgvector.</p>
+    <p><strong>Propósito:</strong> Atiende preguntas en lenguaje natural sobre las pólizas digitalizadas, produciendo una respuesta fundamentada con citas textuales extraídas de los fragmentos semánticos indexados en PostgreSQL/pgvector.</p>
 </div>
 
-<!-- 6.4 SYSTEM & HEALTH -->
-<h2>6.4 Módulo de Sistema y Monitoreo (System & Health)</h2>
+<!-- 6.5 SYSTEM & HEALTH -->
+<h2>6.5 Módulo de Sistema y Monitoreo (System & Health)</h2>
 
 <div class="endpoint-card">
     <div class="endpoint-header">
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/health</span>
     </div>
-    <p><strong>Propósito:</strong> Verificación básica de latido del servicio (<em>liveness check</em>). Retorna <code>{"status": "ok"}</code>.</p>
+    <p><strong>Propósito:</strong> Verificación de latido operativo básico (<em>liveness probe</em>). Retorna <code>{"status": "ok"}</code> para validar la disponibilidad del servicio.</p>
 </div>
 
 <div class="endpoint-card">
@@ -935,7 +974,7 @@ def build_html_content() -> str:
         <span class="badge-get">GET</span>
         <span class="endpoint-path">/api/v1/health/system</span>
     </div>
-    <p><strong>Propósito:</strong> Reporte técnico completo: versión de DocEngine, motor de extracción (Docling), conectividad a PostgreSQL y modelos cargados.</p>
+    <p><strong>Propósito:</strong> Diagnóstico técnico del entorno: versión activa de DocEngine, estado del motor de extracción Docling, conectividad con PostgreSQL y modelos vectoriales cargados en memoria.</p>
 </div>
 
 <!-- ==================================================================== -->
@@ -943,42 +982,42 @@ def build_html_content() -> str:
 <!-- ==================================================================== -->
 <h1>7. Límites Técnicos por Archivo y Rendimiento</h1>
 <p>
-    Para garantizar la estabilidad del servidor y evitar el agotamiento de memoria por archivos anómalos o de volumen desmedido, DocEngine aplica controles deterministas al inicio de cada petición:
+    Con el fin de preservar la estabilidad operativa del entorno y prevenir la saturación de recursos por archivos anómalos o de volumen excesivo, DocEngine ejecuta validaciones deterministas antes de procesar cada documento:
 </p>
 <table>
     <thead>
         <tr>
-            <th>Parámetro</th>
-            <th>Límite Máximo</th>
-            <th>Respuesta de Error</th>
-            <th>Comportamiento</th>
+            <th>Criterio</th>
+            <th>Límite Operativo</th>
+            <th>Código de Error</th>
+            <th>Mecanismo de Control</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td><strong>Tamaño de Archivo</strong></td>
-            <td><strong>200 MB</strong> por archivo</td>
+            <td><strong>200 MB</strong> por documento</td>
             <td><code>413 Content Too Large</code></td>
-            <td>Rechazo inmediato antes de lectura en memoria o procesamiento.</td>
+            <td>Rechazo inmediato antes de transferir el flujo binario a la memoria principal.</td>
         </tr>
         <tr>
-            <td><strong>Cantidad de Páginas</strong></td>
-            <td><strong>500 páginas</strong> por archivo</td>
+            <td><strong>Extensión en Páginas</strong></td>
+            <td><strong>500 páginas</strong> por documento</td>
             <td><code>422 Unprocessable Content</code></td>
-            <td>Validación previa mediante inspección de metadatos de página.</td>
+            <td>Inspección de metadatos estructurales previa al inicio de la extracción Docling.</td>
         </tr>
         <tr>
             <td><strong>Formato de Archivo</strong></td>
-            <td>Solo <code>application/pdf</code></td>
+            <td>Únicamente <code>application/pdf</code></td>
             <td><code>400 Bad Request</code></td>
-            <td>Rechazo inmediato si la firma binaria de PDF no es válida.</td>
+            <td>Validación de la firma binaria de cabecera (<em>magic bytes</em>) del estándar PDF.</td>
         </tr>
     </tbody>
 </table>
 
 <div class="callout callout-warning">
-    <div class="callout-title">Manejo de Documentos Extensos (ej. 2,300 Páginas)</div>
-    Documentos que superen las 500 páginas deben segmentarse antes de la ingesta en fascículos lógicos (por ejemplo, carátula, condiciones particulares y anexos por separado), o procesarse mediante el flujo asíncrono configurando <code>max_pages_per_file</code> en <code>PerformanceConfig</code> para evitar timeouts en conexiones HTTP síncronas.
+    <div class="callout-title">Tratamiento de Documentos de Gran Extensión</div>
+    Aquellos documentos que excedan el límite de 500 páginas deben segmentarse previo a la ingesta en fascículos lógicos (por ejemplo, carátula, condiciones particulares y anexos en archivos independientes) o canalizarse a través del modo asíncrono configurando el parámetro <code>max_pages_per_file</code> en <code>PerformanceConfig</code>, evitando la desconexión por tiempo de espera (<em>timeout</em>) en clientes HTTP síncronos.
 </div>
 
 <!-- ==================================================================== -->
@@ -988,9 +1027,9 @@ def build_html_content() -> str:
 
 <h3>Condicionados Generales Compartidos</h3>
 <p>
-    En el mercado asegurador boliviano, un mismo condicionado general aplica frecuentemente a múltiples pólizas de un mismo ramo.
-    DocEngine permite registrar el condicionado general una única vez con <code>tipo_documento="CONDICIONADO_GENERAL"</code>.
-    Los agentes y consultas RAG pueden recuperar fragmentos del condicionado general utilizando el filtro <code>ramo</code> sin necesidad de duplicar el documento ni los vectores en cada póliza.
+    En la práctica aseguradora de Bolivia, un condicionado general suele regir de manera uniforme para múltiples pólizas de un mismo ramo.
+    DocEngine permite registrar el condicionado general una sola vez con <code>tipo_documento="CONDICIONADO_GENERAL"</code>.
+    Posteriormente, las consultas RAG y los agentes externos pueden recuperar los fragmentos correspondientes aplicando el filtro <code>ramo</code>, eliminando la necesidad de duplicar archivos físicos o recomputar vectores para cada póliza.
 </p>
 
 <h3>Ciclo de Vida de los Trabajos (Jobs)</h3>
@@ -998,37 +1037,37 @@ def build_html_content() -> str:
     <thead>
         <tr>
             <th>Estado</th>
-            <th>Significado</th>
+            <th>Descripción Operativa</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td><code>PENDING</code></td>
-            <td>Archivo recibido y validado; en cola de ejecución en segundo plano.</td>
+            <td>Documento recibido y validado; registrado en la cola de procesamiento en segundo plano.</td>
         </tr>
         <tr>
             <td><code>PROCESSING</code></td>
-            <td>Extracción Docling, atomización de coberturas y vectorización BGE-M3 en curso.</td>
+            <td>Extracción estructural con Docling, segmentación semántica y generación de vectores BGE-M3 en curso.</td>
         </tr>
         <tr>
             <td><code>COMPLETED</code></td>
-            <td>Documento procesado, estructurado e indexado exitosamente en PostgreSQL.</td>
+            <td>Procesamiento completado; datos estructurados e incrustaciones vectoriales persistidos exitosamente en PostgreSQL.</td>
         </tr>
         <tr>
             <td><code>FAILED</code></td>
-            <td>Fallo controlado durante el pipeline; incluye traza legible en <code>error_message</code>.</td>
+            <td>Interrupción controlada del pipeline ante una excepción; incluye la traza descriptiva en <code>error_message</code>.</td>
         </tr>
     </tbody>
 </table>
 
 <div class="callout callout-info" style="margin-top: 15px;">
-    <div class="callout-title">Resumen de Integración para Desarrolladores</div>
-    Flujo recomendado para agentes de IA y sistemas ERP:
+    <div class="callout-title">Guía Rápida de Integración para Desarrolladores</div>
+    Flujo de trabajo recomendado para agentes de IA y sistemas de gestión (ERP/Core):
     <ol style="margin: 4px 0 0 16px; padding: 0;">
-        <li>Para búsqueda de fragmentos con LLM propio: invocar <code>POST /api/v1/query/search</code> pasando los filtros requeridos.</li>
-        <li>Para obtener coberturas y deducibles estructurados: invocar <code>GET /api/v1/policies/{policy_id}/structured</code>.</li>
-        <li>Para cargar documentos extensos: enviar con <code>POST /api/v1/extract/file?async_mode=true</code> y monitorear con <code>GET /api/v1/extract/jobs/{job_id}</code>.</li>
-        <li>Para reemplazar un documento suelto erróneo: eliminarlo con <code>DELETE /api/v1/policies/{policy_id}</code> y subir la versión corregida.</li>
+        <li><strong>Búsqueda contextual para LLM externo:</strong> Invocar <code>POST /api/v1/query/search</code> con la consulta en lenguaje natural y los filtros requeridos.</li>
+        <li><strong>Consulta de datos contractuales estructurados:</strong> Obtener coberturas, límites y deducibles mediante <code>GET /api/v1/policies/{policy_id}/structured</code>.</li>
+        <li><strong>Ingesta de documentos voluminosos:</strong> Cargar mediante <code>POST /api/v1/extract/file?async_mode=true</code> y consultar el progreso a través de <code>GET /api/v1/extract/jobs/{job_id}</code>.</li>
+        <li><strong>Sustitución de anexos o condicionados erróneos:</strong> Eliminar el documento específico con <code>DELETE /api/v1/policies/{policy_id}</code> y cargar el reemplazo sin necesidad de recrear el sobre completo.</li>
     </ol>
 </div>
 
@@ -1038,8 +1077,8 @@ def build_html_content() -> str:
 
 
 def generate_pdf() -> Path:
-    """Genera el archivo HTML y compila el PDF mediante Microsoft Edge."""
-    base_dir = Path(__file__).resolve().parents[1]
+    """Genera el archivo PDF a partir del contenido HTML utilizando Edge Headless."""
+    base_dir = Path(__file__).resolve().parent.parent
     docs_dir = base_dir / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
 

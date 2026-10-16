@@ -103,11 +103,12 @@ class PgVectorSearchRepository:
                 where_clauses.append("p.envelope_id = %s::uuid")
                 params.append(filters["envelope_id"])
 
-            if "company_sigla" in filters and filters["company_sigla"]:
+            sigla_val = filters.get("company_sigla") or filters.get("sigla_aseguradora") or filters.get("aseguradora")
+            if sigla_val:
                 # Requires a join to the policies table for sigla filtering
                 needs_policy_join = True
                 where_clauses.append("p.company_sigla = UPPER(%s)")
-                params.append(filters["company_sigla"])
+                params.append(sigla_val)
 
             if "id_cliente" in filters and filters["id_cliente"]:
                 needs_policy_join = True

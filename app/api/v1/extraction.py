@@ -96,6 +96,7 @@ async def extract_file(
     id_cliente: str = Form(..., description="Carnet de Identidad o NIT del cliente (REQUERIDO)"),
     rag_service: RagPipelineServiceDep = None,
     company_sigla: str | None = Form(default=None, description="Sigla identificadora de la compañía aseguradora (ej. CRI, LBC, ALI) para aplicar reglas especializadas"),
+    sigla_aseguradora: str | None = Form(default=None, description="Alias retrocompatible para company_sigla"),
     numero_poliza: str | None = Form(default=None, description="Número de póliza para vincular el documento a un sobre de póliza (envelope)"),
     ramo: str | None = Form(default=None, description="Ramo del seguro (ej. AUTOMOTOR, INCENDIO, SALUD)"),
     tipo_documento: str | None = Form(default=None, description="Clasificación o tipo de documento (ej. CONDICIONADO_GENERAL, CONDICIONADO_PARTICULAR, LIQUIDACION_PAGOS)"),
@@ -149,7 +150,8 @@ async def extract_file(
 
         temp_path.write_bytes(content)
 
-        sigla_clean = company_sigla.strip().upper() if company_sigla else None
+        sigla_input = company_sigla or sigla_aseguradora
+        sigla_clean = sigla_input.strip().upper() if sigla_input else None
         num_poliza_clean = numero_poliza.strip() if numero_poliza else None
         ramo_clean = ramo.strip() if ramo else None
         tipo_doc_clean = tipo_documento.strip() if tipo_documento else None

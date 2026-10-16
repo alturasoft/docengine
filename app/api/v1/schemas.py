@@ -9,7 +9,9 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field, HttpUrl
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +229,8 @@ class SourceChunkSchema(BaseModel):
     document_label: str = Field(description="Etiqueta legible del documento citado como fuente")
     chunk_content: str = Field(description="Contenido textual sin procesar del fragmento recuperado")
     metadata_json: dict = Field(default_factory=dict, description="Metadatos adicionales del fragmento (sección, página, etc.)")
+    numero_poliza: str | None = Field(default=None, description="Número de póliza comercial contractual asociada al fragmento")
+    company_sigla: str | None = Field(default=None, description="Sigla oficial de la aseguradora (ej. BISA, CRE, LBC)")
 
 
 class QueryResponseSchema(BaseModel):
@@ -361,7 +365,10 @@ class DeleteEnvelopeResponseSchema(BaseModel):
 class SearchFiltersSchema(BaseModel):
     """Filtros tipados para consultas y búsquedas RAG."""
 
-    company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora (ej. LBC, CRE, BISA)")
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    company_sigla: str | None = Field(default=None, description="Sigla oficial de la aseguradora (ej. LBC, CRE, BISA)")
+    sigla_aseguradora: str | None = Field(default=None, description="Alias retrocompatible para company_sigla")
     numero_poliza: str | None = Field(default=None, description="Número de póliza")
     ramo: str | None = Field(default=None, description="Ramo del seguro (ej. AUTOMOTOR, INCENDIO, SALUD)")
     tipo_documento: str | None = Field(default=None, description="Tipo de documento (ej. CONDICIONADO_GENERAL, CONDICIONADO_PARTICULAR)")
@@ -369,6 +376,17 @@ class SearchFiltersSchema(BaseModel):
     id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet de Identidad o NIT)")
     policy_id: str | None = Field(default=None, description="UUID del documento de póliza")
     envelope_id: str | None = Field(default=None, description="UUID del sobre de póliza")
+
+    @model_validator(mode="before")
+    @classmethod
+    def unify_sigla_alias(cls, data: Any) -> Any:
+        """Soporta tanto company_sigla como sigla_aseguradora o aseguradora de forma transparente."""
+        if isinstance(data, dict):
+            sigla = data.get("company_sigla") or data.get("sigla_aseguradora") or data.get("aseguradora")
+            if sigla:
+                data["company_sigla"] = sigla
+                data["sigla_aseguradora"] = sigla
+        return data
 
 
 class QuerySearchRequest(BaseModel):

@@ -160,6 +160,10 @@ class RAGQueryService:
         )
 
         effective_filters = dict(filters) if filters else {}
+        if "sigla_aseguradora" in effective_filters and "company_sigla" not in effective_filters:
+            effective_filters["company_sigla"] = effective_filters["sigla_aseguradora"]
+        elif "aseguradora" in effective_filters and "company_sigla" not in effective_filters:
+            effective_filters["company_sigla"] = effective_filters["aseguradora"]
 
         logger.info(
             "RAG query started",

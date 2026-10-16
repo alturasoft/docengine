@@ -98,6 +98,37 @@ class TestQuerySearchEndpoint:
         response = client.post("/api/v1/query/search", json=payload)
         assert response.status_code == 503
 
+    def test_search_documents_returns_numero_poliza_and_company_sigla(self, client: TestClient, mock_app) -> None:
+        mock_chunks = [
+            RetrievedChunk(
+                chunk_id="chunk-3",
+                policy_id="4b684531-10df-4f40-84cf-8d9633e6c0c2",
+                chunk_index=0,
+                chunk_content="Cobertura de daños propios.",
+                metadata_json={"numero_poliza": "POL-2024-9988", "company_sigla": "BISA"},
+                similarity_score=0.91,
+                numero_poliza="POL-2024-9988",
+                company_sigla="BISA",
+            ),
+        ]
+        mock_app.state.rag_query_service.search_chunks.return_value = mock_chunks
+
+        payload = {
+            "question": "¿Cuál es la cobertura?",
+            "filters": {
+                "sigla_aseguradora": "BISA",
+            },
+        }
+
+        response = client.post("/api/v1/query/search", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["results"]) == 1
+        res = data["results"][0]
+        assert res["policy_id"] == "4b684531-10df-4f40-84cf-8d9633e6c0c2"
+        assert res["numero_poliza"] == "POL-2024-9988"
+        assert res["company_sigla"] == "BISA"
+
 
 # ---------------------------------------------------------------------------
 # Test: GET /api/v1/policies/{policy_id}/structured

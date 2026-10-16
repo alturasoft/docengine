@@ -170,6 +170,8 @@ def search_documents(
             document_label=chunk.document_label,
             chunk_content=chunk.chunk_content,
             metadata_json=chunk.metadata_json,
+            numero_poliza=getattr(chunk, "resolved_numero_poliza", None) or (chunk.metadata_json.get("numero_poliza") if isinstance(chunk.metadata_json, dict) else None),
+            company_sigla=getattr(chunk, "resolved_company_sigla", None) or (chunk.metadata_json.get("company_sigla") if isinstance(chunk.metadata_json, dict) else None),
         )
         for chunk in chunks
     ]
@@ -230,6 +232,8 @@ def _to_response_schema(response: Any) -> QueryResponseSchema:
             document_label=chunk.document_label,
             chunk_content=chunk.chunk_content,
             metadata_json=chunk.metadata_json,
+            numero_poliza=getattr(chunk, "resolved_numero_poliza", None) or (chunk.metadata_json.get("numero_poliza") if isinstance(chunk.metadata_json, dict) else None),
+            company_sigla=getattr(chunk, "resolved_company_sigla", None) or (chunk.metadata_json.get("company_sigla") if isinstance(chunk.metadata_json, dict) else None),
         )
         for chunk in response.sources
     ]
