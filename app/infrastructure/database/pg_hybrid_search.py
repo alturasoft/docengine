@@ -61,8 +61,14 @@ def _build_flexible_tsquery(query_text: str) -> str:
     if not keywords:
         return query_text
 
+    # Priorizar identificadores de entidad (placas, chasis, mezcla de letras y números)
+    entity_tokens = [t for t in keywords if any(c.isdigit() for c in t) and any(c.isalpha() for c in t)]
+    if entity_tokens:
+        other_tokens = [t for t in keywords if t not in entity_tokens]
+        keywords = entity_tokens + other_tokens
+
     if len(keywords) > 1:
-        # e.g. "(nómina asegurados) or nómina"
+        # e.g. "(2571EDF condiciones) or 2571EDF"
         and_part = " ".join(keywords[:4])
         return f"({and_part}) or {keywords[0]}"
     return keywords[0]

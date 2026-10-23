@@ -200,4 +200,60 @@ class TestRAGQueryServicePipeline:
         assert response.chunks_used == 8
         assert response.answer == "Respuesta para cliente"
 
+    def test_query_injects_structured_client_portfolio_chunk_when_id_cliente_filtered(self):
+        """When id_cliente filter is provided, structured portfolio chunk should be injected."""
+        mock_embedder = MagicMock()
+        mock_embedder.embed_query.return_value = [0.1] * 1024
+        mock_config = RAGQueryConfig()
+        mock_vector = MagicMock()
+        mock_structured = MagicMock()
+
+        sample_records = [
+            {
+                "policy_id": "pol-1",
+                "file_name": "auto.pdf",
+                "company_sigla": "BISA",
+                "created_at": "2026-01-01",
+                "data": {
+                    "datos_cabecera": {
+                        "numero_poliza": "12345",
+                        "ramo": "Automotores",
+                        "vigencia_desde": "2026-01-01",
+                        "vigencia_hasta": "2026-12-31",
+                    }
+                },
+                "id_cliente": "10203040",
+            }
+        ]
+        portfolio_chunk = RetrievedChunk(
+            chunk_id="client-portfolio-10203040",
+            policy_id="client-portfolio",
+            chunk_index=0,
+            chunk_content="[CARTERA DE PÓLIZAS DEL CLIENTE — CI/NIT: 10203040]",
+            metadata_json={"id_cliente": "10203040"},
+            similarity_score=1.0,
+        )
+
+        mock_structured.find_by_client_id.return_value = sample_records
+        mock_structured.format_client_portfolio_chunk.return_value = portfolio_chunk
+        mock_vector.get_all_chunks_for_client.return_value = []
+
+        service = RAGQueryService(
+            embedding_service=mock_embedder,
+            vector_search=mock_vector,
+            config=mock_config,
+            structured_search=mock_structured,
+        )
+
+        with patch.object(service, "_generate_answer", return_value="Cartera analizada"):
+            response = service.query(
+                question="¿Cuáles son los ramos del cliente?",
+                filters={"id_cliente": "10203040"},
+            )
+
+        mock_structured.find_by_client_id.assert_called_once_with("10203040")
+        mock_structured.format_client_portfolio_chunk.assert_called_once_with(sample_records, "10203040")
+        assert any(c.chunk_id == "client-portfolio-10203040" for c in response.sources)
+        assert response.answer == "Cartera analizada"
+
 

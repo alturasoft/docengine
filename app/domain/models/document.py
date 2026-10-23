@@ -71,6 +71,8 @@ class DocumentMetadata:
     # Policy envelope binding (optional — populated when bound to a policy envelope)
     envelope_id: str | None = None
     tipo_documento: str | None = None
+    id_cliente: str | None = None
+    nombre_cliente: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize metadata to a JSON-compatible dictionary.
@@ -103,6 +105,8 @@ class DocumentMetadata:
             # Policy envelope binding
             "envelope_id": self.envelope_id,
             "tipo_documento": self.tipo_documento,
+            "id_cliente": self.id_cliente,
+            "nombre_cliente": self.nombre_cliente,
         }
 
 

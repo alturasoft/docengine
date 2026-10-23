@@ -33,6 +33,11 @@ class RetrievedChunk:
     similarity_score: float = 0.0
     numero_poliza: str | None = None
     company_sigla: str | None = None
+    metadata: dict | None = None
+
+    def __post_init__(self) -> None:
+        if self.metadata is not None and not self.metadata_json:
+            self.metadata_json = self.metadata
 
     @property
     def resolved_numero_poliza(self) -> str | None:

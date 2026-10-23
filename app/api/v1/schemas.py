@@ -64,6 +64,10 @@ class MetadataSchema(BaseModel):
         default=None,
         description="Identificador del cliente (Carnet de Identidad o NIT)",
     )
+    nombre_cliente: str | None = Field(
+        default=None,
+        description="Nombre o razón social del cliente / tomador / asegurado",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +125,9 @@ class UrlExtractionRequest(BaseModel):
 
     url: str = Field(description="URL pública que apunta al documento PDF a procesar")
     id_cliente: str = Field(description="Identificador del cliente (Carnet de Identidad o NIT) (REQUERIDO)")
+    nombre_cliente: str | None = Field(
+        default=None, description="Nombre o razón social del cliente (opcional)"
+    )
     output_formats: list[str] = Field(
         default=["all"],
         description="Formatos de salida a generar: 'md', 'json', 'all'",
@@ -141,6 +148,10 @@ class FolderExtractionRequest(BaseModel):
     id_cliente: str | None = Field(
         default=None,
         description="Identificador del cliente (Carnet o NIT) para la carpeta, o inferible por prefijo de archivo/subcarpeta",
+    )
+    nombre_cliente: str | None = Field(
+        default=None,
+        description="Nombre o razón social del cliente para la carpeta (opcional)",
     )
     numero_poliza: str | None = Field(
         default=None,
@@ -318,6 +329,7 @@ class PolicyEnvelopeSchema(BaseModel):
     company_sigla: str | None = Field(default=None, description="Sigla de la aseguradora")
     ramo: str | None = Field(default=None, description="Ramo de la póliza")
     id_cliente: str | None = Field(default=None, description="Identificador del cliente (Carnet o NIT)")
+    nombre_cliente: str | None = Field(default=None, description="Nombre o razón social del cliente")
     created_at: str | None = Field(default=None, description="Fecha de registro")
     updated_at: str | None = Field(default=None, description="Última actualización")
     documents_count: int = Field(default=0, description="Cantidad de documentos vinculados")
@@ -329,6 +341,22 @@ class PolicyEnvelopeSearchResponse(BaseModel):
 
     total: int = Field(description="Cantidad de envelopes encontrados")
     envelopes: list[PolicyEnvelopeSchema] = Field(default_factory=list, description="Lista de envelopes")
+
+
+class ClientItemSchema(BaseModel):
+    """Información consolidada de un cliente y sus pólizas para búsqueda y selección."""
+
+    id_cliente: str = Field(description="Identificador del cliente (Carnet o NIT)")
+    nombre_cliente: str = Field(default="No especificado", description="Nombre o razón social del cliente")
+    envelopes_count: int = Field(default=0, description="Total de pólizas (sobres) registradas")
+    companies: list[str] = Field(default_factory=list, description="Aseguradoras vinculadas al cliente")
+
+
+class ClientSearchResponseSchema(BaseModel):
+    """Respuesta a la búsqueda predictiva de clientes."""
+
+    total: int = Field(description="Cantidad de clientes encontrados")
+    clients: list[ClientItemSchema] = Field(default_factory=list, description="Lista de clientes coincidentes")
 
 
 class DeletedDocumentInfoSchema(BaseModel):

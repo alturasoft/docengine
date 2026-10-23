@@ -1,0 +1,15 @@
+======================================================================
+        DocEngine — REPORTE DE EJECUCIÓN BATCH INICIAL
+======================================================================
+Fecha de reporte   : 2026-10-07 19:32:55 UTC
+Tiempo total       : 1256.75 s (20.95 min)
+Total PDFs hallados: 2313
+Procesados con éxito: 14
+Omitidos (previos) : 2299
+Fallidos con error : 0
+Páginas extraídas  : 205
+Chunks vectorizados: 1181
+Tiempo promedio/doc: 89.77 s
+======================================================================
+
+¡Todos los documentos fueron procesados sin errores!

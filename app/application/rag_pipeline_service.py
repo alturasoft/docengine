@@ -51,6 +51,117 @@ class RagPipelineService:
         else:
             self._envelope_repo = None
 
+    def _resolve_and_ensure_envelope(
+        self,
+        pol_num: str | None,
+        company_sigla: str | None,
+        ramo: str | None,
+        id_cliente: str | None,
+        nombre_cliente: str | None,
+        file_name: str | None = None,
+        file_hash: str | None = None,
+    ) -> str | None:
+        """Safeguard: Resolves, retrieves or creates a valid policy envelope.
+
+        Ensures envelope_id is NEVER None when self._envelope_repo is configured.
+        Implements fallback strategies:
+          1. Matches existing envelope by (id_cliente, company_sigla) if pol_num is missing.
+          2. Infers policy number from filename tokens.
+          3. Synthesizes a deterministic policy number if none can be inferred.
+          4. Employs resilient retry with minimal parameters in case of unexpected metadata errors.
+        """
+        if not self._envelope_repo:
+            return None
+
+        effective_num = (pol_num or "").strip()
+        effective_sigla = (company_sigla or "").strip().upper() or None
+        effective_client = (id_cliente or "").strip() or None
+        effective_name = (nombre_cliente or "").strip() or None
+        effective_ramo = (ramo or "").strip() or None
+
+        # Strategy 1: If pol_num is missing, search existing envelopes for this client & company
+        if not effective_num and effective_client and hasattr(self._envelope_repo, "get_envelopes_by_client_id"):
+            try:
+                client_envs = self._envelope_repo.get_envelopes_by_client_id(effective_client)
+                if client_envs:
+                    matched = [e for e in client_envs if effective_sigla and e.get("company_sigla") == effective_sigla]
+                    if not matched:
+                        matched = client_envs
+                    if matched:
+                        if effective_ramo:
+                            by_ramo = [e for e in matched if e.get("ramo") == effective_ramo]
+                            if by_ramo:
+                                matched = by_ramo
+                        chosen_env = matched[0]
+                        logger.info(
+                            "[Envelope Safeguard] Asociando documento huérfano a sobre existente del cliente",
+                            envelope_id=chosen_env.get("id"),
+                            numero_poliza=chosen_env.get("numero_poliza"),
+                            id_cliente=effective_client,
+                        )
+                        return chosen_env.get("id")
+            except Exception as e:
+                logger.warning("[Envelope Safeguard] Error buscando sobres existentes del cliente", error=str(e))
+
+        # Strategy 2: If still no policy number, infer from filename
+        if not effective_num and file_name:
+            import re  # noqa: PLC0415
+            from pathlib import Path  # noqa: PLC0415
+            stem = Path(file_name).stem
+            tokens = [t.strip() for t in re.split(r"[_\#\-]+", stem) if t.strip()]
+            for token in tokens:
+                if any(c.isdigit() for c in token) and len(token) >= 4:
+                    upper_t = token.upper()
+                    if upper_t not in ("CONDICIONADO", "LIQUIDACION", "ANEXO", "CARATULA", "GENERAL", "PARTICULAR", "POLIZA"):
+                        effective_num = token
+                        break
+
+        # Strategy 3: Deterministic fallback policy number if still missing
+        if not effective_num:
+            safe_suffix = effective_client or (file_hash[:8] if file_hash else "DOC")
+            effective_num = f"POL-{effective_sigla or 'DOC'}-{safe_suffix}"
+            logger.info(
+                "[Envelope Safeguard] Generando número de póliza sintético para garantizar existencia de sobre",
+                synthetic_pol_num=effective_num,
+                file_name=file_name,
+            )
+
+        # Call get_or_create_envelope with standard parameters
+        env_kwargs: dict[str, Any] = {
+            "numero_poliza": effective_num,
+            "company_sigla": effective_sigla,
+            "ramo": effective_ramo,
+        }
+        if effective_client:
+            env_kwargs["id_cliente"] = effective_client
+        if effective_name:
+            env_kwargs["nombre_cliente"] = effective_name
+
+        try:
+            envelope_id = self._envelope_repo.get_or_create_envelope(**env_kwargs)
+            if envelope_id:
+                return envelope_id
+        except Exception as exc:
+            logger.error(
+                "[Envelope Safeguard] Error en get_or_create_envelope con metadatos completos, reintentando con parámetros mínimos",
+                error=str(exc),
+            )
+
+        # Resilient fallback retry: Minimal parameters (prevents string bounds/metadata errors)
+        try:
+            return self._envelope_repo.get_or_create_envelope(
+                numero_poliza=effective_num[:100],
+                company_sigla=effective_sigla[:20] if effective_sigla else None,
+            )
+        except Exception as exc_minimal:
+            logger.critical(
+                "[Envelope Safeguard] Fallo crítico definitivo al crear envelope",
+                error=str(exc_minimal),
+                file_name=file_name,
+            )
+            return None
+
+
     def process_extraction_result(
         self,
         result: ExtractionResult,
@@ -58,6 +169,7 @@ class RagPipelineService:
         ramo: str | None = None,
         tipo_documento: str | None = None,
         id_cliente: str | None = None,
+        nombre_cliente: str | None = None,
     ) -> RagProcessingReport:
         """Process an ExtractionResult through the RAG pipeline and persist to PostgreSQL.
 
@@ -67,6 +179,7 @@ class RagPipelineService:
             ramo: Optional insurance branch/line name.
             tipo_documento: Optional document classification (e.g. CONDICIONADO_GENERAL).
             id_cliente: Optional customer identifier (Carnet or NIT).
+            nombre_cliente: Optional customer name or business name.
 
         Returns:
             RagProcessingReport with execution stats and status.
@@ -93,6 +206,7 @@ class RagPipelineService:
         pol_ramo = ramo or getattr(result.metadata, "ramo", None)
         doc_type = tipo_documento or getattr(result.metadata, "tipo_documento", None)
         client_id_hint = id_cliente or getattr(result.metadata, "id_cliente", None)
+        client_name_hint = nombre_cliente or getattr(result.metadata, "nombre_cliente", None)
 
         logger.info(
             "[RAG] Iniciando pipeline RAG y almacenamiento vectorial...",
@@ -102,6 +216,7 @@ class RagPipelineService:
             numero_poliza=pol_num,
             tipo_documento=doc_type,
             id_cliente=client_id_hint,
+            nombre_cliente=client_name_hint,
         )
 
         job_id = None
@@ -149,22 +264,32 @@ class RagPipelineService:
                             logger.debug("No se pudo obtener structured_data para idempotencia", error=str(e))
 
 
-                    if effective_pol_num:
+                    envelope_id = self._resolve_and_ensure_envelope(
+                        pol_num=effective_pol_num,
+                        company_sigla=effective_sigla,
+                        ramo=effective_ramo,
+                        id_cliente=client_id_hint,
+                        nombre_cliente=client_name_hint,
+                        file_name=file_name,
+                        file_hash=file_hash,
+                    )
+                    if envelope_id:
                         try:
-                            envelope_id = self._envelope_repo.get_or_create_envelope(
-                                numero_poliza=effective_pol_num,
-                                company_sigla=effective_sigla,
-                                ramo=effective_ramo,
-                            )
                             self._envelope_repo.link_policy_to_envelope(
                                 policy_id=existing_policy_id,
                                 envelope_id=envelope_id,
                                 tipo_documento=effective_doc_type,
+                                id_cliente=client_id_hint,
+                                nombre_cliente=client_name_hint,
                             )
-                            result.metadata.envelope_id = envelope_id
-                            result.metadata.tipo_documento = effective_doc_type
-                        except Exception as env_exc:
-                            logger.warning("Error vinculando póliza duplicada a envelope", error=str(env_exc))
+                        except Exception as link_exc:
+                            logger.warning("Error vinculando póliza duplicada a envelope", error=str(link_exc))
+                        result.metadata.envelope_id = envelope_id
+                        result.metadata.tipo_documento = effective_doc_type
+                        if client_id_hint:
+                            result.metadata.id_cliente = client_id_hint
+                        if client_name_hint:
+                            result.metadata.nombre_cliente = client_name_hint
 
                 job_id = self._repo.create_job(file_name)
                 self._repo.update_job(
@@ -372,38 +497,53 @@ class RagPipelineService:
                 if isinstance(structured_json.get("datos_cabecera"), dict)
                 else structured_json.get("documento_identidad")
             )
+            extracted_tomador = (
+                structured_json.get("datos_cabecera", {}).get("tomador")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("tomador")
+            )
+            extracted_asegurado = (
+                structured_json.get("datos_cabecera", {}).get("asegurado")
+                if isinstance(structured_json.get("datos_cabecera"), dict)
+                else structured_json.get("asegurado")
+            )
 
             effective_pol_num = pol_num or extracted_policy_num
             effective_sigla = company_sigla or extracted_sigla or getattr(result.metadata, "company_sigla", None)
             effective_ramo = pol_ramo or extracted_ramo or getattr(result.metadata, "ramo", None)
             effective_id_cliente = client_id_hint or extracted_nit or extracted_ci
+            effective_nombre_cliente = client_name_hint or extracted_tomador or extracted_asegurado
             effective_doc_type = (
                 normalize_document_type(doc_type)
                 or normalize_document_type(file_name)
                 or DocumentType.POLIZA_PRINCIPAL.value
             )
 
-            envelope_id = None
-            if effective_pol_num and self._envelope_repo:
-                try:
-                    env_kwargs = {
-                        "numero_poliza": effective_pol_num,
-                        "company_sigla": effective_sigla,
-                        "ramo": effective_ramo,
-                    }
-                    if effective_id_cliente:
-                        env_kwargs["id_cliente"] = effective_id_cliente
-                    envelope_id = self._envelope_repo.get_or_create_envelope(**env_kwargs)
-                except Exception as env_exc:
-                    logger.warning("Error creando o buscando envelope", error=str(env_exc))
+            envelope_id = self._resolve_and_ensure_envelope(
+                pol_num=effective_pol_num,
+                company_sigla=effective_sigla,
+                ramo=effective_ramo,
+                id_cliente=effective_id_cliente,
+                nombre_cliente=effective_nombre_cliente,
+                file_name=file_name,
+                file_hash=file_hash,
+            )
+            if self._envelope_repo and not envelope_id:
+                logger.error(
+                    "[Envelope Safeguard] ALERTA CRÍTICA: No se pudo asignar envelope_id",
+                    file_name=file_name,
+                    file_hash=file_hash,
+                )
 
-            # Enrich chunks metadata with id_cliente if available
-            if effective_id_cliente:
+            # Enrich chunks metadata with id_cliente and nombre_cliente if available
+            if effective_id_cliente or effective_nombre_cliente:
                 for c in chunks_with_embeddings:
                     if c.metadata_json is None:
                         c.metadata_json = {}
-                    if "id_cliente" not in c.metadata_json:
+                    if effective_id_cliente and "id_cliente" not in c.metadata_json:
                         c.metadata_json["id_cliente"] = effective_id_cliente
+                    if effective_nombre_cliente and "nombre_cliente" not in c.metadata_json:
+                        c.metadata_json["nombre_cliente"] = effective_nombre_cliente
 
             logger.info(
                 "[Persistencia BD] Guardando póliza, chunks, vectores y estadísticas en PostgreSQL (pgvector)...",
@@ -412,6 +552,7 @@ class RagPipelineService:
                 envelope_id=envelope_id,
                 tipo_documento=effective_doc_type,
                 id_cliente=effective_id_cliente,
+                nombre_cliente=effective_nombre_cliente,
             )
             policy_id = self._repo.save_rag_policy_transactional(
                 file_name=file_name,
@@ -426,16 +567,19 @@ class RagPipelineService:
                 envelope_id=envelope_id,
                 tipo_documento=effective_doc_type,
                 id_cliente=effective_id_cliente,
+                nombre_cliente=effective_nombre_cliente,
             )
             result.metadata.envelope_id = envelope_id
             result.metadata.tipo_documento = effective_doc_type
             result.metadata.id_cliente = effective_id_cliente
+            result.metadata.nombre_cliente = effective_nombre_cliente
 
             logger.info(
                 "[Persistencia BD] Registro transaccional completado en PostgreSQL",
                 policy_id=policy_id,
                 envelope_id=envelope_id,
                 id_cliente=effective_id_cliente,
+                nombre_cliente=effective_nombre_cliente,
             )
 
             # 6. Update Job Status to COMPLETED
@@ -444,6 +588,50 @@ class RagPipelineService:
                 status="COMPLETED",
                 policy_id=policy_id,
             )
+
+            # [ADITIVO FASE 2] Pólizas GRANDES: generar mapa estructural en segundo plano
+            if (result.metadata.page_count >= 500 or len(chunks_with_embeddings) >= 1500) and hasattr(self._repo, "_db"):
+                try:
+                    from app.application.policy_map_service import PolicyMapService
+                    PolicyMapService(self._repo._db).generate_map_for_policy(
+                        policy_id=policy_id,
+                        envelope_id=envelope_id,
+                    )
+                except Exception as map_err:
+                    logger.warning("No se pudo generar mapa de póliza grande durante ingesta", error=str(map_err))
+
+            # [ADITIVO] Nómina de Flota: extracción determinista en pólizas de automotores colectivas
+            if hasattr(self._repo, "_db"):
+                try:
+                    is_automotor = bool(
+                        (effective_ramo and "AUTO" in str(effective_ramo).upper())
+                        or ("VEHICULO" in str(result.markdown or "")[:50000].upper() and "PLACA" in str(result.markdown or "")[:50000].upper())
+                    )
+                    if is_automotor:
+                        from app.application.fleet_extractor_service import FleetExtractorService
+                        FleetExtractorService(self._repo._db).extract_and_save_policy_fleet(
+                            policy_id=policy_id,
+                            envelope_id=envelope_id,
+                        )
+                except Exception as fleet_err:
+                    logger.warning("No se pudo extraer nómina de flota durante ingesta", error=str(fleet_err))
+
+            # [ADITIVO] Nómina Colectiva de Personas: extracción determinista en Salud, Accidentes y Vida
+            if hasattr(self._repo, "_db"):
+                try:
+                    md_sample = str(result.markdown or "")[:80000].upper()
+                    is_collective_person = bool(
+                        (effective_ramo and any(r in str(effective_ramo).upper() for r in ["ACCIDENTE", "SALUD", "MEDICA", "ENFERMEDAD", "VIDA", "PERSONAS"]))
+                        or ("NOMINA DE ASEGURADOS" in md_sample or "NÓMINA DE ASEGURADOS" in md_sample or "REGISTRO DE ASEGURADOS" in md_sample)
+                    )
+                    if is_collective_person:
+                        from app.application.collective_insured_extractor_service import CollectiveInsuredExtractorService
+                        CollectiveInsuredExtractorService(self._repo._db).extract_and_save_policy_insured(
+                            policy_id=policy_id,
+                            envelope_id=envelope_id,
+                        )
+                except Exception as insured_err:
+                    logger.warning("No se pudo extraer nómina colectiva de personas durante ingesta", error=str(insured_err))
 
             elapsed = time.perf_counter() - start_time
             logger.info(

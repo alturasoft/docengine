@@ -35,9 +35,6 @@
     .cover-page {
         page-break-after: always;
         min-height: 85vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
         border-left: 8px solid #2563eb;
         padding-left: 32px;
         margin-top: 40px;
@@ -193,8 +190,6 @@
     }
 
     .endpoint-header {
-        display: flex;
-        align-items: center;
         background: #f8fafc;
         border: 1px solid #e2e8f0;
         padding: 6px 10px;
@@ -424,7 +419,7 @@
     <li><strong>Formatos Estandarizados:</strong> La comunicación estructurada utiliza exclusivamente <strong>JSON</strong> codificado en <strong>UTF-8</strong>, mientras que la recepción de archivos binarios se efectúa mediante <code>multipart/form-data</code>.</li>
     <li><strong>Idempotencia Nativa:</strong> Cada ingesta calcula el hash criptográfico SHA-256 del documento. Si el archivo ya fue procesado previamente, el sistema evita cómputos redundantes y previene la duplicación de fragmentos vectoriales.</li>
     <li><strong>Arquitectura de Sobres (Policy Envelopes):</strong> Los documentos asociados a una misma póliza no se gestionan de forma aislada, sino que se integran en "sobres de póliza", agrupando coherentemente carátulas, condiciones generales, condiciones particulares, liquidaciones de pago y anexos.</li>
-    <li><strong>Aislamiento Multi-Inquilino (id_cliente):</strong> Toda operación de ingesta, indexación y consulta puede segmentarse por el identificador de cliente (<code>id_cliente</code>), garantizando estricta confidencialidad y separación lógica de datos.</li>
+    <li><strong>Aislamiento y Trazabilidad de Clientes (id_cliente / nombre_cliente):</strong> Toda operación de ingesta, indexación y consulta puede segmentarse por el identificador de cliente (<code>id_cliente</code>) y su nombre o denominación social (<code>nombre_cliente</code>), garantizando estricta confidencialidad, separación lógica y trazabilidad personalizada.</li>
 </ul>
 
 <!-- ==================================================================== -->
@@ -609,8 +604,14 @@
         <tr>
             <td><code>id_cliente</code></td>
             <td>string</td>
-            <td>Aislamiento estricto multi-inquilino por titular de póliza (Carnet de Identidad o NIT).</td>
-            <td><code>"CLI-001"</code></td>
+            <td>Aislamiento estricto multi-inquilino por titular de póliza (Carnet de Identidad o NIT). Requerido obligatoriamente en la ingesta documental.</td>
+            <td><code>"1020415021"</code></td>
+        </tr>
+        <tr>
+            <td><code>nombre_cliente</code></td>
+            <td>string</td>
+            <td>Nombre completo, razón social o denominación del titular/tomador de la póliza. Parámetro complementario situado jerárquicamente tras el <code>id_cliente</code> para enriquecimiento contextual, auditoría y búsquedas semánticas.</td>
+            <td><code>"Minera San Cristóbal S.A."</code></td>
         </tr>
         <tr>
             <td><code>policy_id</code></td>
@@ -685,8 +686,14 @@
             <tr>
                 <td><code>id_cliente</code></td>
                 <td>string</td>
+                <td><strong>Sí</strong></td>
+                <td>Identificador de cliente (Carnet de Identidad o NIT) requerido para la segmentación y aislamiento multi-inquilino. No puede enviarse vacío.</td>
+            </tr>
+            <tr>
+                <td><code>nombre_cliente</code></td>
+                <td>string</td>
                 <td>No</td>
-                <td>Identificador de cliente para segmentación y aislamiento multi-inquilino.</td>
+                <td>Nombre completo o razón social del cliente / tomador. Parámetro normal situado jerárquicamente tras el <code>id_cliente</code>. En caso de no suministrarse, el pipeline RAG intentará inferirlo de manera inteligente a partir del tomador o asegurado identificado en las cláusulas de la póliza.</td>
             </tr>
             <tr>
                 <td><code>company_sigla</code></td>
@@ -749,7 +756,8 @@
     "policy_id": "4b684531-10df-4f40-84cf-8d9633e6c0c2",
     "numero_poliza": "POL-2024-9988",
     "company_sigla": "BISA",
-    "id_cliente": "CLI-001",
+    "id_cliente": "1020415021",
+    "nombre_cliente": "Minera San Cristóbal S.A.",
     "chunks_indexed": 38,
     "total_pages": 45
   }
@@ -904,7 +912,7 @@
                 <td><code>filters</code></td>
                 <td>object</td>
                 <td>No</td>
-                <td>Filtros combinables: <code>company_sigla</code> (o <code>sigla_aseguradora</code>), <code>numero_poliza</code>, <code>ramo</code>, <code>tipo_documento</code>, <code>vigencia_fecha</code>, <code>id_cliente</code>, <code>policy_id</code> y <code>envelope_id</code>.</td>
+                <td>Filtros combinables: <code>company_sigla</code> (o <code>sigla_aseguradora</code>), <code>numero_poliza</code>, <code>ramo</code>, <code>tipo_documento</code>, <code>vigencia_fecha</code>, <code>id_cliente</code>, <code>nombre_cliente</code>, <code>policy_id</code> y <code>envelope_id</code>.</td>
             </tr>
         </tbody>
     </table>

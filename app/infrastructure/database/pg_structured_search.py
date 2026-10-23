@@ -76,11 +76,41 @@ _FIND_BASIC_QUERY = """
         OR psd.data->'datos_cabecera'->>'numero_poliza' ILIKE %s
         OR p.file_name ILIKE %s
         OR psd.data->'datos_cabecera'->>'asegurado' ILIKE %s
+        OR p.nombre_cliente ILIKE %s
         OR p.id_cliente = %s
         OR psd.data->'datos_cabecera'->>'documento_identidad' = %s
         OR psd.data->'datos_cabecera'->>'nit' = %s
     ORDER BY p.created_at DESC
     LIMIT 1;
+"""
+
+_FIND_BY_CLIENT_QUERY = """
+    SELECT
+        p.id::text AS policy_id,
+        p.file_name,
+        p.company_sigla,
+        p.created_at::text,
+        psd.data,
+        p.id_cliente,
+        p.envelope_id::text AS envelope_id,
+        p.tipo_documento,
+        pe.numero_poliza AS envelope_numero_poliza,
+        pe.ramo AS envelope_ramo,
+        pe.nombre_cliente AS envelope_nombre_cliente
+    FROM policies p
+    LEFT JOIN policy_structured_data psd ON p.id = psd.policy_id
+    LEFT JOIN policy_envelopes pe ON p.envelope_id = pe.id
+    WHERE
+        p.id_cliente = %s
+        OR pe.id_cliente = %s
+        OR psd.data->'datos_cabecera'->>'documento_identidad' = %s
+        OR psd.data->'datos_cabecera'->>'nit' = %s
+        OR LOWER(REGEXP_REPLACE(COALESCE(p.id_cliente, ''), '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g'))
+        OR LOWER(REGEXP_REPLACE(COALESCE(pe.id_cliente, ''), '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g'))
+        OR pe.nombre_cliente ILIKE %s
+        OR psd.data->'datos_cabecera'->>'asegurado' ILIKE %s
+        OR psd.data->'datos_cabecera'->>'tomador' ILIKE %s
+    ORDER BY p.created_at DESC;
 """
 
 
@@ -430,7 +460,7 @@ class PgStructuredSearchRepository:
                 with conn.cursor() as cur:
                     cur.execute(
                         _FIND_BASIC_QUERY,
-                        (raw_q, norm_q, like_q, like_q, like_q, raw_q, raw_q, raw_q),
+                        (raw_q, norm_q, like_q, like_q, like_q, like_q, raw_q, raw_q, raw_q),
                     )
                     row = cur.fetchone()
                     if row is None:
@@ -447,3 +477,180 @@ class PgStructuredSearchRepository:
         except Exception as exc:
             logger.error("Failed to find basic policy info", query=query_str, error=str(exc))
             return None
+
+    def find_by_client_id(self, id_cliente: str) -> list[dict[str, Any]]:
+        """Fetch all structured policy records belonging to a client ID (CI or NIT).
+
+        Args:
+            id_cliente: Customer CI or NIT string.
+
+        Returns:
+            List of dicts containing policy_id, file_name, company_sigla, data, etc.
+        """
+        if not id_cliente or not id_cliente.strip():
+            return []
+
+        raw_id = id_cliente.strip()
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        _FIND_BY_CLIENT_QUERY,
+                        (raw_id, raw_id, raw_id, raw_id, raw_id, raw_id, f"%{raw_id}%", f"%{raw_id}%", f"%{raw_id}%"),
+                    )
+                    rows = cur.fetchall()
+                    results: list[dict[str, Any]] = []
+                    for row in rows:
+                        results.append({
+                            "policy_id": row[0],
+                            "file_name": row[1],
+                            "company_sigla": row[2],
+                            "created_at": row[3],
+                            "data": row[4] if isinstance(row[4], dict) else {},
+                            "id_cliente": row[5] if len(row) > 5 else None,
+                            "envelope_id": row[6] if len(row) > 6 else None,
+                            "tipo_documento": row[7] if len(row) > 7 else None,
+                            "envelope_numero_poliza": row[8] if len(row) > 8 else None,
+                            "envelope_ramo": row[9] if len(row) > 9 else None,
+                            "envelope_nombre_cliente": row[10] if len(row) > 10 else None,
+                        })
+                    return results
+        except Exception as exc:
+            logger.error("Failed to fetch structured policies by client ID", id_cliente=id_cliente, error=str(exc))
+            return []
+
+    def _doc_priority(self, rec: dict[str, Any]) -> int:
+        """Calculate source priority for consolidating policy information."""
+        fn = (rec.get("file_name") or "").lower()
+        td = (rec.get("tipo_documento") or "").lower()
+        data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+        cab = data.get("datos_cabecera") if isinstance(data.get("datos_cabecera"), dict) else {}
+        prio = 0
+        if any(k in td or k in fn for k in ["particular", "caratula", "carátula", "poliza", "póliza"]):
+            prio += 50
+        elif any(k in td or k in fn for k in ["liquidacion", "liquidación", "cobranza"]):
+            prio += 40
+        elif any(k in td or k in fn for k in ["certificado", "anexo", "endoso"]):
+            prio += 20
+        elif any(k in td or k in fn for k in ["general"]):
+            prio += 10
+
+        if cab.get("vigencia_desde") and cab.get("vigencia_hasta"):
+            prio += 15
+        if cab.get("prima_total"):
+            prio += 10
+        if cab.get("numero_poliza"):
+            prio += 5
+        return prio
+
+    def format_client_portfolio_chunk(
+        self, records: list[dict[str, Any]], id_cliente: str
+    ) -> RetrievedChunk:
+        """Format multiple policy records belonging to a client into a structured portfolio summary chunk.
+
+        Groups documents by unique commercial policy (envelope or policy number) to avoid repeating
+        duplicate rows for endorsements, annexes, and multiple sub-documents of the same policy.
+
+        Args:
+            records: List of policy records for the client.
+            id_cliente: Customer CI or NIT.
+
+        Returns:
+            RetrievedChunk with high priority containing the consolidated structured summary of the client's portfolio.
+        """
+        # Group records by unique policy
+        grouped_policies: dict[str, list[dict[str, Any]]] = {}
+        client_name = ""
+
+        for rec in records:
+            env_id = rec.get("envelope_id")
+            if not client_name:
+                client_name = rec.get("envelope_nombre_cliente") or ""
+                if not client_name and isinstance(rec.get("data"), dict):
+                    client_name = (rec["data"].get("datos_cabecera") or {}).get("asegurado") or ""
+
+            if env_id:
+                group_key = f"env_{env_id}"
+            else:
+                info = extract_basic_info(rec)
+                company = rec.get("company_sigla") or ""
+                norm_num = re.sub(r"[^a-zA-Z0-9]", "", info.get("numero_poliza") or rec.get("file_name") or "").lower()
+                group_key = f"pol_{company}_{norm_num}" if norm_num else f"id_{rec.get('policy_id')}"
+
+            grouped_policies.setdefault(group_key, []).append(rec)
+
+        header_suffix = f" — CLIENTE: {client_name}" if client_name else ""
+        lines = [
+            f"[CARTERA DE PÓLIZAS DEL CLIENTE — CI/NIT: {id_cliente}{header_suffix}]",
+            f"Total de pólizas registradas en cartera: {len(grouped_policies)}",
+            "",
+            "| N° | N° Póliza | Aseguradora | Ramo | Vigencia Contractual | Prima Total | Documentos Vinculados |",
+            "|---|---|---|---|---|---|---|",
+        ]
+
+        for idx, (group_key, group_recs) in enumerate(grouped_policies.items(), 1):
+            sorted_docs = sorted(group_recs, key=self._doc_priority, reverse=True)
+            primary_rec = sorted_docs[0]
+            primary_info = extract_basic_info(primary_rec)
+
+            num_poliza = (
+                primary_rec.get("envelope_numero_poliza")
+                or primary_info.get("numero_poliza")
+                or primary_rec.get("file_name", "Desconocido")
+            )
+            sigla = primary_rec.get("company_sigla") or primary_info.get("company_sigla") or "N/A"
+            ramo = (
+                primary_rec.get("envelope_ramo")
+                or (primary_info.get("ramo") if primary_info.get("ramo") != "No especificado" else None)
+            )
+
+            # Find best vigencia dates from group
+            fechas_str = ""
+            for doc in sorted_docs:
+                doc_data = doc.get("data") if isinstance(doc.get("data"), dict) else {}
+                doc_cab = doc_data.get("datos_cabecera") if isinstance(doc_data.get("datos_cabecera"), dict) else {}
+                v_d = doc_cab.get("vigencia_desde")
+                v_h = doc_cab.get("vigencia_hasta")
+                if v_d and v_h:
+                    fechas_str = f"Desde: {v_d} | Hasta: {v_h}"
+                    break
+                elif v_d or v_h:
+                    fechas_str = f"Desde: {v_d or 'N/E'} | Hasta: {v_h or 'N/E'}"
+                    break
+
+            if not fechas_str:
+                fechas_str = primary_info.get("vigencia", "No especificada")
+
+            # Find best prima from group if primary doesn't have it
+            prima = primary_info.get("prima_total", "No especificada")
+            if prima == "No especificada":
+                for doc in sorted_docs:
+                    doc_info = extract_basic_info(doc)
+                    if doc_info.get("prima_total") and doc_info.get("prima_total") != "No especificada":
+                        prima = doc_info["prima_total"]
+                        break
+
+            if not ramo or ramo == "No especificado":
+                for doc in sorted_docs:
+                    doc_info = extract_basic_info(doc)
+                    if doc_info.get("ramo") and doc_info.get("ramo") != "No especificado":
+                        ramo = doc_info["ramo"]
+                        break
+            ramo = ramo or "No especificado"
+
+            doc_count = len(group_recs)
+            doc_str = f"{doc_count} archivo{'s' if doc_count > 1 else ''}"
+
+            lines.append(
+                f"| {idx} | {num_poliza} | {sigla} | {ramo} | {fechas_str} | {prima} | {doc_str} |"
+            )
+
+        content = "\n".join(lines)
+        return RetrievedChunk(
+            chunk_id=f"client-portfolio-{id_cliente}",
+            policy_id="client-portfolio",
+            chunk_index=0,
+            chunk_content=content,
+            metadata_json={"source_file": "CARTERA_CLIENTE", "id_cliente": id_cliente},
+            similarity_score=1.0,
+        )

@@ -211,6 +211,9 @@ class TestRAGQueryConfig:
         assert cfg.top_k == 10
         assert cfg.similarity_threshold == 0.20
         assert cfg.llm_model == "gpt-4.1-mini"
+        assert cfg.max_tokens in (6144, 16384)
+        cfg_expanded = RAGQueryConfig(max_tokens=16384)
+        assert cfg_expanded.max_tokens == 16384
 
     def test_reranker_config_defaults(self) -> None:
         from app.config.settings import RerankerConfig

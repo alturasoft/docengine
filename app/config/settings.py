@@ -481,7 +481,12 @@ class RAGQueryConfig(BaseSettings):
             fidelity — do NOT change unless explicitly required.
     """
 
-    model_config = SettingsConfigDict(env_prefix="DOCENGINE_RAG_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=tuple(_env_files),
+        env_file_encoding="utf-8",
+        env_prefix="DOCENGINE_RAG_",
+        extra="ignore",
+    )
 
     top_k: int = Field(default=10, description="Default top-K chunks per query", ge=1, le=50)
     similarity_threshold: float = Field(
@@ -491,7 +496,7 @@ class RAGQueryConfig(BaseSettings):
         le=1.0,
     )
     llm_model: str = Field(default="gpt-4.1-mini", description="OpenAI chat completion model")
-    max_tokens: int = Field(default=2048, description="Max tokens for LLM response", ge=128, le=8192)
+    max_tokens: int = Field(default=16384, description="Max tokens for LLM response", ge=128, le=32768)
     temperature: float = Field(default=0.0, description="Sampling temperature (0.0 = deterministic)", ge=0.0, le=2.0)
 
 
@@ -525,6 +530,43 @@ class RerankerConfig(BaseSettings):
         default=None,
         description="Optional custom directory path for storing/loading reranker models",
     )
+
+
+class LargePolicyConfig(BaseSettings):
+    """[ADITIVO] Controla el tratamiento de pólizas GRANDES en el chat RAG.
+
+    Pólizas pequeñas e intermedias (contexto estimado <= ``token_threshold``)
+    siguen exactamente el flujo actual (póliza completa al LLM). Solo las
+    pólizas que superan el umbral reciben un contexto acotado por presupuesto
+    (ficha estructurada + fragmentos relevantes + anexos/particulares).
+
+    Attributes:
+        enabled: Activa/desactiva la estrategia de pólizas grandes.
+        token_threshold: Tokens estimados a partir de los cuales una póliza se
+            considera GRANDE (~450K ≈ 500+ páginas promedio).
+        context_budget_tokens: Presupuesto máximo de tokens del contexto en
+            modo GRANDE. 90K es seguro para cuentas OpenAI Tier 1 (200K TPM).
+        retrieval_top_k: Parent chunks a recuperar (búsqueda híbrida + reranker).
+        neighbor_expansion_top: Cuántos de los mejores fragmentos expanden a
+            sus vecinos inmediatos (chunk_index ±1).
+        chars_per_token: Relación caracteres/token usada para estimar (español).
+        fallback_on_too_large: Si OpenAI rechaza una petición por tamaño en el
+            flujo normal, reintenta automáticamente en modo GRANDE.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DOCENGINE_RAG_LARGE_", extra="ignore")
+
+    enabled: bool = Field(default=True)
+    token_threshold: int = Field(default=450_000, ge=10_000)
+    context_budget_tokens: int = Field(default=90_000, ge=8_000, le=900_000)
+    retrieval_top_k: int = Field(default=40, ge=5, le=100)
+    neighbor_expansion_top: int = Field(default=10, ge=0, le=50)
+    chars_per_token: float = Field(default=3.5, gt=1.0, le=8.0)
+    fallback_on_too_large: bool = Field(default=True)
+    # [ADITIVO FASE 2]
+    policy_map_enabled: bool = Field(default=True, description="Incluir mapa de la póliza en el contexto de pólizas grandes")
+    multi_query_enabled: bool = Field(default=True, description="Activar expansión multi-consulta para preguntas complejas")
+    multi_query_count: int = Field(default=2, ge=1, le=5, description="Número de sub-consultas para multi-query")
 
 
 # ---------------------------------------------------------------------------

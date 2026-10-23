@@ -179,6 +179,7 @@ class PgRagRepository:
         envelope_id: str | None = None,
         tipo_documento: str | None = None,
         id_cliente: str | None = None,
+        nombre_cliente: str | None = None,
     ) -> str:
         """Persist all RAG data into PostgreSQL within a single atomic transaction.
 
@@ -202,6 +203,7 @@ class PgRagRepository:
             envelope_id: Optional UUID string of the policy envelope.
             tipo_documento: Optional document classification (e.g. CONDICIONADO_GENERAL).
             id_cliente: Optional customer identifier (Carnet or NIT).
+            nombre_cliente: Optional customer name or business name.
 
         Returns:
             Newly created policy_id (UUID string).
@@ -214,6 +216,7 @@ class PgRagRepository:
         # Normalize company_sigla to uppercase if provided
         sigla = company_sigla.upper() if company_sigla else None
         clean_id_cliente = id_cliente.strip() if id_cliente else None
+        clean_nombre_cliente = nombre_cliente.strip() if nombre_cliente else None
 
         # Sanitize text and JSON values to remove \u0000 / \x00 which PostgreSQL rejects
         file_name = _sanitize_null_bytes(file_name)
@@ -225,13 +228,22 @@ class PgRagRepository:
             try:
                 with conn.cursor() as cur:
                     # 1. Insert into policies
-                    cur.execute(
-                        """
-                        INSERT INTO policies (id, file_name, file_hash, company_sigla, total_pages, file_size_bytes, envelope_id, tipo_documento, id_cliente)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
-                        """,
-                        (policy_id, file_name, file_hash, sigla, total_pages, file_size_bytes, envelope_id, tipo_documento, clean_id_cliente),
-                    )
+                    if clean_nombre_cliente:
+                        cur.execute(
+                            """
+                            INSERT INTO policies (id, file_name, file_hash, company_sigla, total_pages, file_size_bytes, envelope_id, tipo_documento, id_cliente, nombre_cliente)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                            """,
+                            (policy_id, file_name, file_hash, sigla, total_pages, file_size_bytes, envelope_id, tipo_documento, clean_id_cliente, clean_nombre_cliente),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO policies (id, file_name, file_hash, company_sigla, total_pages, file_size_bytes, envelope_id, tipo_documento, id_cliente)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                            """,
+                            (policy_id, file_name, file_hash, sigla, total_pages, file_size_bytes, envelope_id, tipo_documento, clean_id_cliente),
+                        )
 
                     # 2. Insert into policy_raw_md
                     cur.execute(

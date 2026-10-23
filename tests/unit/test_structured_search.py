@@ -135,3 +135,91 @@ class TestRAGQueryWithStructuredSearch:
         assert "SCR0667473" in user_message
         assert "Notificación de siniestro en 5 días" in user_message
 
+    def test_format_client_portfolio_chunk_deduplicates_by_envelope(self) -> None:
+        db_mock = MagicMock()
+        repo = PgStructuredSearchRepository(db_mock)
+
+        # 3 documents belonging to the same envelope
+        records = [
+            {
+                "policy_id": "p1",
+                "envelope_id": "env-1",
+                "envelope_numero_poliza": "POL-100",
+                "envelope_ramo": "Vida",
+                "envelope_nombre_cliente": "Cliente Test",
+                "file_name": "Condicionados_Particulares.pdf",
+                "company_sigla": "NAL-VIDA",
+                "data": {
+                    "datos_cabecera": {
+                        "numero_poliza": "POL-100",
+                        "vigencia_desde": "01/01/2025",
+                        "vigencia_hasta": "31/12/2025",
+                        "prima_total": "1000",
+                        "ramo": "Vida",
+                    }
+                },
+            },
+            {
+                "policy_id": "p2",
+                "envelope_id": "env-1",
+                "envelope_numero_poliza": "POL-100",
+                "envelope_ramo": "Vida",
+                "envelope_nombre_cliente": "Cliente Test",
+                "file_name": "Liquidacion.pdf",
+                "company_sigla": "NAL-VIDA",
+                "data": {
+                    "datos_cabecera": {
+                        "numero_poliza": "POL-100",
+                        "vigencia_desde": "01/01/2025",
+                        "vigencia_hasta": "31/12/2025",
+                    }
+                },
+            },
+            {
+                "policy_id": "p3",
+                "envelope_id": "env-1",
+                "envelope_numero_poliza": "POL-100",
+                "envelope_ramo": "Vida",
+                "envelope_nombre_cliente": "Cliente Test",
+                "file_name": "Anexo_1.pdf",
+                "company_sigla": "NAL-VIDA",
+                "data": {
+                    "datos_cabecera": {
+                        "numero_poliza": "POL-100",
+                    }
+                },
+            },
+            # 1 document belonging to a second envelope
+            {
+                "policy_id": "p4",
+                "envelope_id": "env-2",
+                "envelope_numero_poliza": "POL-200",
+                "envelope_ramo": "Incendio",
+                "envelope_nombre_cliente": "Cliente Test",
+                "file_name": "Condicionado_Particular.pdf",
+                "company_sigla": "FORT",
+                "data": {
+                    "datos_cabecera": {
+                        "numero_poliza": "POL-200",
+                        "vigencia_desde": "15/03/2025",
+                        "vigencia_hasta": "15/03/2026",
+                        "prima_total": "2500",
+                        "ramo": "Incendio",
+                    }
+                },
+            },
+        ]
+
+        chunk = repo.format_client_portfolio_chunk(records, "1017083029")
+        content = chunk.chunk_content
+
+        # Total unique policies should be 2, not 4!
+        assert "Total de pólizas registradas en cartera: 2" in content
+        # POL-100 should only appear once in table rows (after table header)
+        assert content.count("| POL-100 |") == 1
+        assert content.count("| POL-200 |") == 1
+        assert "Cliente Test" in content
+        assert "3 archivos" in content
+        assert "1 archivo" in content
+
+

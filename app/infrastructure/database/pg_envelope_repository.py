@@ -6,6 +6,7 @@ and document associations in PostgreSQL.
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -28,6 +29,8 @@ class PgEnvelopeRepository:
         company_sigla: str | None = None,
         ramo: str | None = None,
         id_cliente: str | None = None,
+        nombre_cliente: str | None = None,
+        **kwargs: Any,
     ) -> str:
         """Find an existing policy envelope or create a new one.
 
@@ -36,14 +39,21 @@ class PgEnvelopeRepository:
             company_sigla: Optional 3-letter company code.
             ramo: Optional insurance line name.
             id_cliente: Optional customer identifier (Carnet or NIT).
+            nombre_cliente: Optional customer name or business name.
+            **kwargs: Extra parameters ignored safely for backward/forward compatibility.
 
         Returns:
             UUID string of the found or created policy envelope.
         """
-        clean_num = numero_poliza.strip()
-        clean_sigla = company_sigla.strip().upper() if company_sigla else None
-        clean_ramo = ramo.strip() if ramo else None
-        clean_id_cliente = id_cliente.strip() if id_cliente else None
+        clean_num = (numero_poliza or "").strip()[:100]
+        if not clean_num:
+            fallback_sigla = company_sigla.strip().upper()[:20] if company_sigla else "GEN"
+            fallback_client = id_cliente.strip()[:50] if id_cliente else "UNKNOWN"
+            clean_num = f"POL-{fallback_sigla}-{fallback_client}"[:100]
+        clean_sigla = company_sigla.strip().upper()[:20] if company_sigla else None
+        clean_ramo = ramo.strip()[:200] if ramo else None
+        clean_id_cliente = id_cliente.strip()[:50] if id_cliente else None
+        clean_nombre_cliente = nombre_cliente.strip()[:255] if nombre_cliente else None
 
         with self._db.get_connection() as conn:
             with conn.cursor() as cur:
@@ -81,11 +91,48 @@ class PgEnvelopeRepository:
                             f"UPDATE policy_envelopes SET {', '.join(updates)} WHERE id = %s;",
                             tuple(params),
                         )
+
+                    if clean_nombre_cliente:
+                        try:
+                            cur.execute("SAVEPOINT check_nombre_cliente;")
+                            cur.execute(
+                                "UPDATE policy_envelopes SET nombre_cliente = %s WHERE id = %s AND (nombre_cliente IS NULL OR nombre_cliente = '');",
+                                (clean_nombre_cliente, envelope_id),
+                            )
+                            cur.execute("RELEASE SAVEPOINT check_nombre_cliente;")
+                        except Exception:
+                            cur.execute("ROLLBACK TO SAVEPOINT check_nombre_cliente;")
+
                     conn.commit()
                     return envelope_id
 
                 # 2. Create new envelope
                 envelope_id = str(uuid.uuid4())
+                if clean_nombre_cliente:
+                    try:
+                        cur.execute("SAVEPOINT insert_with_nombre;")
+                        cur.execute(
+                            """
+                            INSERT INTO policy_envelopes (id, numero_poliza, company_sigla, ramo, id_cliente, nombre_cliente)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (numero_poliza, company_sigla) DO UPDATE
+                            SET updated_at = CURRENT_TIMESTAMP,
+                                id_cliente = COALESCE(policy_envelopes.id_cliente, EXCLUDED.id_cliente),
+                                nombre_cliente = COALESCE(policy_envelopes.nombre_cliente, EXCLUDED.nombre_cliente)
+                            RETURNING id;
+                            """,
+                            (envelope_id, clean_num, clean_sigla, clean_ramo, clean_id_cliente, clean_nombre_cliente),
+                        )
+                        res = cur.fetchone()
+                        cur.execute("RELEASE SAVEPOINT insert_with_nombre;")
+                        conn.commit()
+                        return str(res[0]) if res else envelope_id
+                    except Exception:
+                        try:
+                            cur.execute("ROLLBACK TO SAVEPOINT insert_with_nombre;")
+                        except Exception:
+                            pass
+
                 cur.execute(
                     """
                     INSERT INTO policy_envelopes (id, numero_poliza, company_sigla, ramo, id_cliente)
@@ -109,6 +156,8 @@ class PgEnvelopeRepository:
         envelope_id: str,
         tipo_documento: str | None = None,
         id_cliente: str | None = None,
+        nombre_cliente: str | None = None,
+        **kwargs: Any,
     ) -> None:
         """Link a document (policies table entry) to a policy envelope.
 
@@ -117,9 +166,12 @@ class PgEnvelopeRepository:
             envelope_id: UUID of the policy envelope.
             tipo_documento: Optional document classification (e.g. CONDICIONADO_GENERAL).
             id_cliente: Optional customer identifier to persist in policies record.
+            nombre_cliente: Optional customer name or business name.
+            **kwargs: Extra parameters ignored safely for backward/forward compatibility.
         """
         clean_type = normalize_document_type(tipo_documento)
-        clean_id_cliente = id_cliente.strip() if id_cliente else None
+        clean_id_cliente = id_cliente.strip()[:50] if id_cliente else None
+        clean_nombre_cliente = nombre_cliente.strip()[:255] if nombre_cliente else None
 
         with self._db.get_connection() as conn:
             with conn.cursor() as cur:
@@ -144,6 +196,17 @@ class PgEnvelopeRepository:
                         """,
                         (envelope_id, clean_type, policy_id),
                     )
+
+                if clean_nombre_cliente:
+                    try:
+                        cur.execute("SAVEPOINT link_nombre;")
+                        cur.execute(
+                            "UPDATE policies SET nombre_cliente = %s WHERE id = %s;",
+                            (clean_nombre_cliente, policy_id),
+                        )
+                        cur.execute("RELEASE SAVEPOINT link_nombre;")
+                    except Exception:
+                        cur.execute("ROLLBACK TO SAVEPOINT link_nombre;")
             conn.commit()
 
     def get_envelope_by_id(self, envelope_id: str) -> dict[str, Any] | None:
@@ -159,10 +222,18 @@ class PgEnvelopeRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id::text, numero_poliza, company_sigla, ramo,
-                           created_at::text, updated_at::text, id_cliente
-                    FROM policy_envelopes
-                    WHERE id = %s::uuid;
+                    SELECT pe.id::text, pe.numero_poliza, pe.company_sigla, pe.ramo,
+                           pe.created_at::text, pe.updated_at::text, pe.id_cliente,
+                           COALESCE(
+                               pe.nombre_cliente,
+                               (SELECT psd.data->'datos_cabecera'->>'asegurado'
+                                FROM policies p
+                                JOIN policy_structured_data psd ON p.id = psd.policy_id
+                                WHERE p.envelope_id = pe.id AND psd.data->'datos_cabecera'->>'asegurado' IS NOT NULL
+                                LIMIT 1)
+                           ) AS nombre_cliente
+                    FROM policy_envelopes pe
+                    WHERE pe.id = %s::uuid;
                     """,
                     (envelope_id,),
                 )
@@ -178,6 +249,7 @@ class PgEnvelopeRepository:
                     "created_at": row[4],
                     "updated_at": row[5],
                     "id_cliente": row[6],
+                    "nombre_cliente": row[7],
                     "documents": [],
                 }
 
@@ -228,21 +300,29 @@ class PgEnvelopeRepository:
         clean_sigla = company_sigla.strip().upper() if company_sigla else None
 
         query = """
-            SELECT id::text, numero_poliza, company_sigla, ramo,
-                   created_at::text, updated_at::text, id_cliente
-            FROM policy_envelopes
+            SELECT pe.id::text, pe.numero_poliza, pe.company_sigla, pe.ramo,
+                   pe.created_at::text, pe.updated_at::text, pe.id_cliente,
+                   COALESCE(
+                       pe.nombre_cliente,
+                       (SELECT psd.data->'datos_cabecera'->>'asegurado'
+                        FROM policies p
+                        JOIN policy_structured_data psd ON p.id = psd.policy_id
+                        WHERE p.envelope_id = pe.id AND psd.data->'datos_cabecera'->>'asegurado' IS NOT NULL
+                        LIMIT 1)
+                   ) AS nombre_cliente
+            FROM policy_envelopes pe
             WHERE (
-                numero_poliza ILIKE %s
-                OR LOWER(REGEXP_REPLACE(numero_poliza, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g'))
+                pe.numero_poliza ILIKE %s
+                OR LOWER(REGEXP_REPLACE(pe.numero_poliza, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g'))
             )
         """
         params: list[Any] = [f"%{clean_num}%", clean_num]
 
         if clean_sigla:
-            query += " AND company_sigla = %s"
+            query += " AND pe.company_sigla = %s"
             params.append(clean_sigla)
 
-        query += " ORDER BY created_at DESC LIMIT 20;"
+        query += " ORDER BY pe.created_at DESC LIMIT 20;"
 
         envelopes = []
         with self._db.get_connection() as conn:
@@ -260,6 +340,7 @@ class PgEnvelopeRepository:
                         "created_at": row[4],
                         "updated_at": row[5],
                         "id_cliente": row[6],
+                        "nombre_cliente": row[7],
                         "documents": [],
                     }
                     envelopes.append(env)
@@ -294,6 +375,94 @@ class PgEnvelopeRepository:
 
         return envelopes
 
+    def search_clients(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Search distinct clients by CI, NIT, customer name, or business name.
+
+        Args:
+            query: Search string (Carnet, NIT, or name fragment).
+            limit: Maximum client entries to return.
+
+        Returns:
+            List of unique client dicts with id_cliente, nombre_cliente, envelopes_count, and companies.
+        """
+        clean_q = query.strip()
+        if not clean_q:
+            return []
+
+        clean_norm = re.sub(r"[^a-zA-Z0-9]", "", clean_q)
+        sql = """
+            WITH resolved_envelopes AS (
+                SELECT
+                    COALESCE(
+                        pe.id_cliente,
+                        (SELECT p.id_cliente FROM policies p WHERE p.envelope_id = pe.id AND p.id_cliente IS NOT NULL LIMIT 1)
+                    ) AS id_cliente,
+                    COALESCE(
+                        pe.nombre_cliente,
+                        (SELECT psd.data->'datos_cabecera'->>'asegurado'
+                         FROM policies p
+                         JOIN policy_structured_data psd ON p.id = psd.policy_id
+                         WHERE p.envelope_id = pe.id AND psd.data->'datos_cabecera'->>'asegurado' IS NOT NULL
+                         LIMIT 1)
+                    ) AS nombre_cliente,
+                    pe.company_sigla,
+                    pe.id AS envelope_id
+                FROM policy_envelopes pe
+                WHERE (
+                    pe.id_cliente ILIKE %s
+                    OR (pe.id_cliente IS NOT NULL AND LOWER(REGEXP_REPLACE(pe.id_cliente, '[^a-zA-Z0-9]', '', 'g')) = LOWER(%s))
+                    OR pe.nombre_cliente ILIKE %s
+                    OR EXISTS (
+                        SELECT 1 FROM policies p
+                        JOIN policy_structured_data psd ON p.id = psd.policy_id
+                        WHERE p.envelope_id = pe.id
+                          AND (
+                              psd.data->'datos_cabecera'->>'asegurado' ILIKE %s
+                              OR psd.data->'datos_cabecera'->>'tomador' ILIKE %s
+                          )
+                    )
+                )
+            )
+            SELECT
+                id_cliente,
+                MAX(nombre_cliente) AS nombre_cliente,
+                COUNT(DISTINCT envelope_id) AS envelopes_count,
+                ARRAY_AGG(DISTINCT company_sigla) FILTER (WHERE company_sigla IS NOT NULL) AS companies
+            FROM resolved_envelopes
+            WHERE id_cliente IS NOT NULL OR nombre_cliente IS NOT NULL
+            GROUP BY id_cliente
+            ORDER BY envelopes_count DESC, id_cliente ASC
+            LIMIT %s;
+        """
+        params: list[Any] = [
+            f"%{clean_q}%",
+            clean_norm,
+            f"%{clean_q}%",
+            f"%{clean_q}%",
+            f"%{clean_q}%",
+            max(1, limit),
+        ]
+
+        clients = []
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, tuple(params))
+                rows = cur.fetchall()
+                for row in rows:
+                    cid = str(row[0]) if row[0] else (row[1] or clean_q)
+                    cname = row[1] or "No especificado"
+                    clients.append({
+                        "id_cliente": cid,
+                        "nombre_cliente": cname,
+                        "envelopes_count": int(row[2]),
+                        "companies": list(row[3]) if row[3] else [],
+                    })
+        return clients
+
     def get_envelopes_by_client_id(
         self,
         id_cliente: str,
@@ -302,8 +471,10 @@ class PgEnvelopeRepository:
     ) -> list[dict[str, Any]]:
         """Retrieve policy envelopes and their bound documents for a specific client.
 
+        Supports filtering by CI/NIT or customer name/business name.
+
         Args:
-            id_cliente: Customer identifier (Carnet or NIT).
+            id_cliente: Customer identifier (Carnet or NIT) or customer name.
             limit: Maximum envelopes to return (default 50).
             offset: Pagination offset.
 
@@ -311,18 +482,45 @@ class PgEnvelopeRepository:
             List of matching envelope dictionaries with documents.
         """
         clean_client = id_cliente.strip()
+        clean_norm = re.sub(r"[^a-zA-Z0-9]", "", clean_client)
         query = """
-            SELECT id::text, numero_poliza, company_sigla, ramo,
-                   created_at::text, updated_at::text, id_cliente
-            FROM policy_envelopes
+            SELECT pe.id::text, pe.numero_poliza, pe.company_sigla, pe.ramo,
+                   pe.created_at::text, pe.updated_at::text, pe.id_cliente,
+                   COALESCE(
+                       pe.nombre_cliente,
+                       (SELECT psd.data->'datos_cabecera'->>'asegurado'
+                        FROM policies p
+                        JOIN policy_structured_data psd ON p.id = psd.policy_id
+                        WHERE p.envelope_id = pe.id AND psd.data->'datos_cabecera'->>'asegurado' IS NOT NULL
+                        LIMIT 1)
+                   ) AS nombre_cliente
+            FROM policy_envelopes pe
             WHERE (
-                id_cliente ILIKE %s
-                OR LOWER(REGEXP_REPLACE(id_cliente, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g'))
+                pe.id_cliente ILIKE %s
+                OR (pe.id_cliente IS NOT NULL AND LOWER(REGEXP_REPLACE(pe.id_cliente, '[^a-zA-Z0-9]', '', 'g')) = LOWER(%s))
+                OR pe.nombre_cliente ILIKE %s
+                OR EXISTS (
+                    SELECT 1 FROM policies p
+                    JOIN policy_structured_data psd ON p.id = psd.policy_id
+                    WHERE p.envelope_id = pe.id
+                      AND (
+                          psd.data->'datos_cabecera'->>'asegurado' ILIKE %s
+                          OR psd.data->'datos_cabecera'->>'tomador' ILIKE %s
+                      )
+                )
             )
-            ORDER BY updated_at DESC, created_at DESC
+            ORDER BY pe.updated_at DESC, pe.created_at DESC
             LIMIT %s OFFSET %s;
         """
-        params: list[Any] = [f"%{clean_client}%", clean_client, max(1, limit), max(0, offset)]
+        params: list[Any] = [
+            f"%{clean_client}%",
+            clean_norm,
+            f"%{clean_client}%",
+            f"%{clean_client}%",
+            f"%{clean_client}%",
+            max(1, limit),
+            max(0, offset),
+        ]
 
         envelopes = []
         with self._db.get_connection() as conn:
@@ -340,6 +538,7 @@ class PgEnvelopeRepository:
                         "created_at": row[4],
                         "updated_at": row[5],
                         "id_cliente": row[6],
+                        "nombre_cliente": row[7],
                         "documents": [],
                     }
                     envelopes.append(env)
@@ -392,26 +591,34 @@ class PgEnvelopeRepository:
             List of envelope dictionaries with nested documents and counts.
         """
         query = """
-            SELECT id::text, numero_poliza, company_sigla, ramo,
-                   created_at::text, updated_at::text, id_cliente
-            FROM policy_envelopes
+            SELECT pe.id::text, pe.numero_poliza, pe.company_sigla, pe.ramo,
+                   pe.created_at::text, pe.updated_at::text, pe.id_cliente,
+                   COALESCE(
+                       pe.nombre_cliente,
+                       (SELECT psd.data->'datos_cabecera'->>'asegurado'
+                        FROM policies p
+                        JOIN policy_structured_data psd ON p.id = psd.policy_id
+                        WHERE p.envelope_id = pe.id AND psd.data->'datos_cabecera'->>'asegurado' IS NOT NULL
+                        LIMIT 1)
+                   ) AS nombre_cliente
+            FROM policy_envelopes pe
         """
         where_clauses: list[str] = []
         params: list[Any] = []
 
         if company_sigla:
-            where_clauses.append("company_sigla = %s")
+            where_clauses.append("pe.company_sigla = %s")
             params.append(company_sigla.strip().upper())
 
         if id_cliente:
             clean_client = id_cliente.strip()
-            where_clauses.append("(id_cliente ILIKE %s OR LOWER(REGEXP_REPLACE(id_cliente, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g')))")
+            where_clauses.append("(pe.id_cliente ILIKE %s OR LOWER(REGEXP_REPLACE(pe.id_cliente, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(%s, '[^a-zA-Z0-9]', '', 'g')))")
             params.extend([f"%{clean_client}%", clean_client])
 
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
 
-        query += " ORDER BY updated_at DESC, created_at DESC LIMIT %s OFFSET %s;"
+        query += " ORDER BY pe.updated_at DESC, pe.created_at DESC LIMIT %s OFFSET %s;"
         params.extend([max(1, limit), max(0, offset)])
 
         envelopes = []
@@ -430,6 +637,7 @@ class PgEnvelopeRepository:
                         "created_at": row[4],
                         "updated_at": row[5],
                         "id_cliente": row[6],
+                        "nombre_cliente": row[7],
                         "documents": [],
                     }
                     envelopes.append(env)

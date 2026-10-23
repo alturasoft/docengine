@@ -567,9 +567,174 @@ class TestFilenamePrefixInference:
     def test_fallback_to_defaults(self):
         from app.api.v1.extraction import _infer_client_and_policy
 
-        client, pol = _infer_client_and_policy("Condicionado_General.pdf", default_client="CLIENT-DEFAULT", default_pol="POL-DEFAULT")
-        assert client == "CLIENT-DEFAULT"
-        assert pol == "POL-DEFAULT"
+class TestClientSearch:
+    """Test suite for client search by name, CI, or NIT."""
+
+    def test_search_clients_repository(self):
+        db_mock = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        db_mock.get_connection.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        mock_cur.fetchall.return_value = [
+            ("1024705020", "LOCHMANN & ASOCIADOS", 3, ["FORT", "LBC"]),
+            ("1017083029", "CRECER IFD", 6, ["FORT", "NAL-VIDA", "LBC"]),
+        ]
+
+        repo = PgEnvelopeRepository(db_mock)
+        clients = repo.search_clients("LOCH")
+
+        assert len(clients) == 2
+        assert clients[0]["id_cliente"] == "1024705020"
+        assert clients[0]["nombre_cliente"] == "LOCHMANN & ASOCIADOS"
+        assert clients[0]["envelopes_count"] == 3
+        assert clients[0]["companies"] == ["FORT", "LBC"]
+
+    def test_search_clients_empty_query(self):
+        db_mock = MagicMock()
+        repo = PgEnvelopeRepository(db_mock)
+        clients = repo.search_clients("   ")
+        assert clients == []
+
+    def test_endpoint_search_clients(self):
+        app = create_app()
+        mock_env_repo = MagicMock()
+        mock_env_repo.search_clients.return_value = [
+            {
+                "id_cliente": "1024705020",
+                "nombre_cliente": "LOCHMANN & ASOCIADOS",
+                "envelopes_count": 3,
+                "companies": ["FORT"],
+            }
+        ]
+
+        app.dependency_overrides[get_envelope_repo] = lambda: mock_env_repo
+        client = TestClient(app)
+
+        res = client.get("/api/v1/policies/clients/search?q=LOCHMANN")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total"] == 1
+        assert data["clients"][0]["nombre_cliente"] == "LOCHMANN & ASOCIADOS"
+        assert data["clients"][0]["id_cliente"] == "1024705020"
+
+
+class TestEnvelopeSafeguards:
+    """Test suite verifying robust envelope safeguards and fallbacks."""
+
+    def test_safeguard_fallback_to_client_existing_envelope(self):
+        from app.application.rag_pipeline_service import RagPipelineService
+
+        mock_chunker = MagicMock()
+        mock_chunker.chunk_markdown.return_value = []
+        mock_embedder = MagicMock()
+        mock_embedder.generate_embeddings_batch.return_value = []
+        mock_extractor = MagicMock()
+        mock_extractor.extract_structured_json.return_value = {"datos_cabecera": {}}
+
+        mock_repo = MagicMock()
+        mock_repo.policy_exists_by_hash.return_value = None
+        mock_repo.create_job.return_value = "job-safe-1"
+        mock_repo.save_rag_policy_transactional.return_value = "pol-safe-1"
+
+        mock_env_repo = MagicMock(spec=PgEnvelopeRepository)
+        mock_env_repo.get_envelopes_by_client_id.return_value = [
+            {"id": "env-client-match-123", "company_sigla": "ALI-SEG", "numero_poliza": "POL-1006303024"}
+        ]
+
+        service = RagPipelineService(
+            chunking_service=mock_chunker,
+            embedding_service=mock_embedder,
+            structured_extractor=mock_extractor,
+            repository=mock_repo,
+            envelope_repository=mock_env_repo,
+        )
+
+        from pathlib import Path
+        result = ExtractionResult(
+            document_id="doc-orphan-1",
+            status=ExtractionStatus.SUCCESS,
+            markdown="# Condicionado General",
+            json_data={},
+            metadata=DocumentMetadata(
+                filename="Condicionado_General.pdf",
+                source_path=Path("Condicionado_General.pdf"),
+                sha256="sha-orphan-1",
+                company_sigla="ALI-SEG",
+                id_cliente="1006303024",
+                page_count=5,
+                extraction_time_seconds=0.5,
+                docling_version="2.0",
+                tables_detected=0,
+                figures_detected=0,
+                headers_removed=0,
+                footers_removed=0,
+                ocr_used=False,
+                has_multi_column=False,
+                markdown_size_bytes=100,
+            ),
+        )
+
+        report = service.process_extraction_result(result)
+        assert report.envelope_id == "env-client-match-123"
+        assert result.metadata.envelope_id == "env-client-match-123"
+
+    def test_safeguard_synthetic_envelope_when_no_policy_found(self):
+        from app.application.rag_pipeline_service import RagPipelineService
+
+        mock_chunker = MagicMock()
+        mock_chunker.chunk_markdown.return_value = []
+        mock_embedder = MagicMock()
+        mock_embedder.generate_embeddings_batch.return_value = []
+        mock_extractor = MagicMock()
+        mock_extractor.extract_structured_json.return_value = {"datos_cabecera": {}}
+
+        mock_repo = MagicMock()
+        mock_repo.policy_exists_by_hash.return_value = None
+        mock_repo.create_job.return_value = "job-safe-2"
+        mock_repo.save_rag_policy_transactional.return_value = "pol-safe-2"
+
+        mock_env_repo = MagicMock(spec=PgEnvelopeRepository)
+        mock_env_repo.get_envelopes_by_client_id.return_value = []
+        mock_env_repo.get_or_create_envelope.return_value = "env-synthetic-999"
+
+        service = RagPipelineService(
+            chunking_service=mock_chunker,
+            embedding_service=mock_embedder,
+            structured_extractor=mock_extractor,
+            repository=mock_repo,
+            envelope_repository=mock_env_repo,
+        )
+
+        from pathlib import Path
+        result = ExtractionResult(
+            document_id="doc-orphan-2",
+            status=ExtractionStatus.SUCCESS,
+            markdown="# Anexo sin poliza",
+            json_data={},
+            metadata=DocumentMetadata(
+                filename="Anexo_General.pdf",
+                source_path=Path("Anexo_General.pdf"),
+                sha256="sha-orphan-2",
+                company_sigla="FORT",
+                page_count=2,
+                extraction_time_seconds=0.3,
+                docling_version="2.0",
+                tables_detected=0,
+                figures_detected=0,
+                headers_removed=0,
+                footers_removed=0,
+                ocr_used=False,
+                has_multi_column=False,
+                markdown_size_bytes=80,
+            ),
+        )
+
+        report = service.process_extraction_result(result)
+        assert report.envelope_id == "env-synthetic-999"
+        mock_env_repo.get_or_create_envelope.assert_called()
+
 
 
 

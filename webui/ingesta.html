@@ -1013,6 +1013,14 @@
             <input type="text" id="envelopeIdCliente" class="form-control" style="font-size: 0.84rem; padding: 0.45rem 0.65rem; border-color: rgba(99, 102, 241, 0.45); font-weight: 500;" placeholder="Ej. 1020415021 o 4892341 SC" autocomplete="off" required>
           </div>
 
+          <!-- Nivel 1.1: Nombre de Cliente (Opcional) -->
+          <div style="margin-bottom: 0.75rem;">
+            <label style="font-size: 0.73rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 0.25rem;">
+              <i class="fa-solid fa-user" style="font-size: 0.68rem;"></i> Nombre / Razón Social del Cliente <span style="font-size: 0.68rem; color: var(--text-dim);">(Opcional)</span>
+            </label>
+            <input type="text" id="envelopeNombreCliente" class="form-control" style="font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Ej. Juan Pérez o Minera San Cristóbal S.A." autocomplete="off">
+          </div>
+
           <!-- Nivel 2: Póliza y Ramo -->
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.65rem;">
             <div>
@@ -1738,11 +1746,13 @@
       if (totalFiles === 1) {
         lastBatchData = null;
         const file = selectedFiles[0];
+        const nombreCliente = document.getElementById('envelopeNombreCliente')?.value?.trim();
         const tipoDoc = document.getElementById('envelopeTipoDocumento')?.value?.trim();
 
         const formData = new FormData();
         formData.append('file', file);
         formData.append('id_cliente', idCliente);
+        if (nombreCliente) formData.append('nombre_cliente', nombreCliente);
         formData.append('company_sigla', sigla);
         if (numPoliza) formData.append('numero_poliza', numPoliza);
         if (ramo) formData.append('ramo', ramo);
@@ -1798,6 +1808,8 @@
         const formData = new FormData();
         formData.append('file', file);
         formData.append('id_cliente', idCliente);
+        const batchNombreCliente = document.getElementById('envelopeNombreCliente')?.value?.trim();
+        if (batchNombreCliente) formData.append('nombre_cliente', batchNombreCliente);
         formData.append('company_sigla', sigla);
         if (numPoliza) formData.append('numero_poliza', numPoliza);
         if (ramo) formData.append('ramo', ramo);
@@ -1870,6 +1882,7 @@
       if (!sigla) return;
 
       const idCliente = document.getElementById('envelopeIdCliente')?.value?.trim();
+      const nombreCliente = document.getElementById('envelopeNombreCliente')?.value?.trim();
       if (!idCliente) {
         alert('⚠️ DEBES INGRESAR OBLIGATORIAMENTE EL ID DEL CLIENTE (Carnet de Identidad o NIT) PARA EXTRAER DESDE URL.');
         const idInput = document.getElementById('envelopeIdCliente');
@@ -1885,10 +1898,12 @@
       startExtractionLogPolling();
 
       try {
+        const payload = { url: url, id_cliente: idCliente, output_formats: ['all'], company_sigla: sigla };
+        if (nombreCliente) payload.nombre_cliente = nombreCliente;
         const res = await fetch(`${getApiUrl()}/api/v1/extract/url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url, id_cliente: idCliente, output_formats: ['all'], company_sigla: sigla })
+          body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
@@ -1924,6 +1939,7 @@
       startExtractionLogPolling();
 
       const idCliente = document.getElementById('envelopeIdCliente')?.value?.trim();
+      const nombreCliente = document.getElementById('envelopeNombreCliente')?.value?.trim();
       const numPoliza = document.getElementById('envelopeNumeroPoliza')?.value?.trim();
       const ramo = document.getElementById('envelopeRamo')?.value?.trim();
 
@@ -1933,6 +1949,7 @@
         company_sigla: sigla
       };
       if (idCliente) payload.id_cliente = idCliente;
+      if (nombreCliente) payload.nombre_cliente = nombreCliente;
       if (numPoliza) payload.numero_poliza = numPoliza;
       if (ramo) payload.ramo = ramo;
 

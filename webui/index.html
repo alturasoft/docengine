@@ -380,6 +380,41 @@
       color: #4338ca;
     }
 
+    .client-suggestion-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      margin: 0.4rem 0;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s ease-in-out;
+      width: 100%;
+    }
+    .client-suggestion-card:hover {
+      background: #eef2ff;
+      border-color: #a5b4fc;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.08);
+    }
+    .client-suggestion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 0.88rem;
+    }
+    .client-suggestion-meta {
+      font-size: 0.78rem;
+      color: #64748b;
+      display: flex;
+      gap: 0.75rem;
+    }
+
     /* ==========================================================================
        Área Principal de Conversación
        ========================================================================== */
@@ -714,9 +749,9 @@
 
         <!-- Acciones del Encabezado -->
         <div class="header-actions">
-          <!-- Campo para Ingresar ID Cliente (CI o NIT) -->
-          <div class="search-policy-box" title="Buscar por ID Cliente (Carnet o NIT)">
-            <input type="text" id="clientInput" placeholder="ID Cliente (CI / NIT)..."
+          <!-- Campo para Ingresar Cliente (Nombre, CI o NIT) -->
+          <div class="search-policy-box" title="Buscar por Nombre, Razón Social, Carnet o NIT del Cliente (ej. CRECER, LOCHMANN)">
+            <input type="text" id="clientInput" placeholder="Cliente (Nombre, CI o NIT)..."
               onkeydown="handleClientSearchKeyDown(event)">
             <button class="btn-search-trigger" id="btnSearchClient" onclick="searchByClientId()" title="Buscar pólizas del cliente">
               <i class="fa-solid fa-magnifying-glass"></i>
@@ -746,13 +781,13 @@
             </div>
           </div>
 
-          <!-- Acceso a Ingesta de Documentos (Ícono sutil con 70% de transparencia) -->
-          <a href="/ui/ingesta.html" class="btn-icon-subtle" title="Ingesta y extracción de pólizas">
+          <!-- Acceso a Ingesta de Documentos (Oculto temporalmente) -->
+          <a href="/ui/ingesta.html" class="btn-icon-subtle" title="Ingesta y extracción de pólizas" style="display: none;">
             <i class="fa-solid fa-file-arrow-up"></i>
           </a>
 
-          <!-- Acceso a Eliminación de Pólizas -->
-          <a href="/ui/eliminar.html" class="btn-icon-subtle" title="Eliminar sobre de póliza">
+          <!-- Acceso a Eliminación de Pólizas (Oculto temporalmente) -->
+          <a href="/ui/eliminar.html" class="btn-icon-subtle" title="Eliminar sobre de póliza" style="display: none;">
             <i class="fa-solid fa-trash-can"></i>
           </a>
         </div>
@@ -776,10 +811,14 @@
     <main id="chatScrollArea">
       <div class="chat-wrapper" id="chatStream">
         <!-- Mensaje de Bienvenida -->
-        <div class="chat-message assistant">
+        <div class="chat-message assistant" id="initialWelcomeMessage">
           <div class="avatar"><i class="fa-solid fa-robot"></i></div>
           <div class="bubble">
             <p><strong>¡Hola! Bienvenido al asistente de pólizas.</strong></p>
+            <div style="margin: 0.6rem 0; padding: 0.55rem 0.85rem; background: var(--primary-light); border-left: 3px solid var(--primary); border-radius: var(--radius-sm); font-size: 0.88rem; line-height: 1.5;">
+              <div><i class="fa-solid fa-user" style="color: var(--primary); margin-right: 6px; font-size: 0.82rem;"></i><strong>Cliente:</strong> <span id="displayClientName">No especificado</span></div>
+              <div style="margin-top: 0.25rem;"><i class="fa-solid fa-address-card" style="color: var(--primary); margin-right: 6px; font-size: 0.82rem;"></i><strong>ID Cliente:</strong> <span id="displayClientId">No especificado</span></div>
+            </div>
             <p>Puedes seleccionar una póliza en las <em>Últimas Pólizas</em> o ingresar su número arriba para enfocar
               tus preguntas en un documento específico, o bien hacerme cualquier pregunta directamente.</p>
           </div>
@@ -806,6 +845,8 @@
     let activePolicy = null;
     let recentPoliciesList = [];
     let clientPoliciesList = [];
+    let currentClientId = null;
+    let currentClientName = null;
     let isClientFiltered = false;
 
     // URL base de API
@@ -818,7 +859,29 @@
 
     // Inicialización al cargar la página
     document.addEventListener('DOMContentLoaded', () => {
-      loadRecentPolicies();
+      // Soporte para parámetros URL (nombre_cliente e id_cliente)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlNombreCliente = urlParams.get('nombre_cliente') || urlParams.get('cliente') || urlParams.get('nombre');
+      const urlIdCliente = urlParams.get('id_cliente') || urlParams.get('id');
+
+      if (urlNombreCliente) {
+        currentClientName = urlNombreCliente;
+        const nameEl = document.getElementById('displayClientName');
+        if (nameEl) nameEl.textContent = urlNombreCliente;
+      }
+      if (urlIdCliente) {
+        currentClientId = urlIdCliente;
+        const idEl = document.getElementById('displayClientId');
+        if (idEl) idEl.textContent = urlIdCliente;
+        const clientInput = document.getElementById('clientInput');
+        if (clientInput) clientInput.value = urlIdCliente;
+      }
+
+      loadRecentPolicies().then(() => {
+        if (urlIdCliente) {
+          searchByClientId();
+        }
+      });
 
       // Cerrar dropdown al hacer clic fuera
       document.addEventListener('click', (e) => {
@@ -887,6 +950,7 @@
     function resetToAllPolicies() {
       isClientFiltered = false;
       clientPoliciesList = [];
+      currentClientId = null;
       const btnText = document.getElementById('dropdownBtnText');
       if (btnText) btnText.innerText = 'Pólizas';
       renderDropdownItems(recentPoliciesList, true, false);
@@ -914,6 +978,27 @@
           resetToAllPolicies();
         };
         menu.appendChild(resetHeader);
+
+        if (list.length > 1) {
+          const portfolioItem = document.createElement('div');
+          portfolioItem.className = 'dropdown-item';
+          portfolioItem.dataset.policyNum = '__CLIENT_PORTFOLIO__';
+          if (activePolicy && activePolicy.is_client_portfolio) {
+            portfolioItem.classList.add('active');
+          }
+          portfolioItem.innerHTML = `
+            <div class="item-top">
+              <span class="item-policy-num"><i class="fa-solid fa-folder-open" style="color: var(--primary); margin-right: 4px;"></i>Toda la Cartera (${list.length} pólizas)</span>
+              <span class="company-tag" style="background: var(--primary); color: #fff;">CLIENTE</span>
+            </div>
+            <div class="item-sub">Consulta simultánea sobre todas las pólizas del cliente</div>
+          `;
+          portfolioItem.onclick = () => {
+            selectClientPortfolio(currentClientId, list);
+            closeDropdown();
+          };
+          menu.appendChild(portfolioItem);
+        }
       }
 
       list.forEach((item) => {
@@ -923,6 +1008,7 @@
         const idVal = isEnvelope ? item.id : item.policy_id;
         const numPoliza = item.numero_poliza || 'Sin número';
         const sigla = item.company_sigla || 'PÓLIZA';
+        const clientNameText = item.nombre_cliente ? ` • ${item.nombre_cliente}` : '';
         const clientText = item.id_cliente ? ` • CI/NIT: ${item.id_cliente}` : '';
         const ramoText = item.ramo ? ` • ${item.ramo}` : '';
         const aseguradoText = item.asegurado ? ` • ${item.asegurado}` : '';
@@ -930,7 +1016,7 @@
         const docsBadge = docsCount ? ` (${docsCount} docs)` : '';
 
         div.dataset.policyNum = numPoliza;
-        if (activePolicy && activePolicy.numero_poliza === numPoliza) {
+        if (activePolicy && !activePolicy.is_client_portfolio && activePolicy.numero_poliza === numPoliza) {
           div.classList.add('active');
         }
 
@@ -939,7 +1025,7 @@
             <span class="item-policy-num">N° ${escapeHtml(numPoliza)}${escapeHtml(docsBadge)}</span>
             <span class="company-tag">${escapeHtml(sigla)}</span>
           </div>
-          <div class="item-sub">${escapeHtml((clientText + ramoText) || aseguradoText || 'Documento indexado')}</div>
+          <div class="item-sub">${escapeHtml((clientNameText + clientText + ramoText) || aseguradoText || 'Documento indexado')}</div>
         `;
 
         div.onclick = () => {
@@ -955,12 +1041,73 @@
     function updateDropdownActiveItem() {
       const items = document.querySelectorAll('.dropdown-item');
       items.forEach((el) => {
-        if (activePolicy && el.dataset.policyNum === activePolicy.numero_poliza) {
+        if (activePolicy && activePolicy.is_client_portfolio && el.dataset.policyNum === '__CLIENT_PORTFOLIO__') {
+          el.classList.add('active');
+        } else if (activePolicy && !activePolicy.is_client_portfolio && el.dataset.policyNum === activePolicy.numero_poliza) {
           el.classList.add('active');
         } else {
           el.classList.remove('active');
         }
       });
+    }
+
+    // Seleccionar cartera completa de cliente activa
+    function selectClientPortfolio(clientId, envelopesList) {
+      const totalCount = envelopesList ? envelopesList.length : 0;
+      activePolicy = {
+        is_client_portfolio: true,
+        id_cliente: clientId,
+        envelopes: envelopesList,
+        total_policies: totalCount,
+        display_num: `Cartera (${totalCount} pólizas)`
+      };
+
+      // 1. Limpiar el chat por completo para comenzar la conversación sobre la cartera
+      const stream = document.getElementById('chatStream');
+      if (stream) {
+        stream.innerHTML = '';
+      }
+
+      // 2. Extraer y actualizar nombre e ID del cliente
+      if (clientId) {
+        currentClientId = clientId;
+        const idEl = document.getElementById('displayClientId');
+        if (idEl) idEl.textContent = clientId;
+      }
+      if (!currentClientName && envelopesList) {
+        const foundName = envelopesList.find(p => p.nombre_cliente)?.nombre_cliente
+                       || envelopesList.find(p => p.asegurado)?.asegurado;
+        if (foundName) {
+          currentClientName = foundName;
+          const nameEl = document.getElementById('displayClientName');
+          if (nameEl) nameEl.textContent = foundName;
+        }
+      }
+
+      // 3. Actualizar barra de contexto activa
+      const bar = document.getElementById('activeContextBar');
+      const text = document.getElementById('activePolicyText');
+      const clientPrefix = currentClientName ? `<strong>${escapeHtml(currentClientName)}</strong> | ` : '';
+      text.innerHTML = `<i class="fa-solid fa-users" style="margin-right: 6px;"></i>${clientPrefix}CI/NIT <strong>${escapeHtml(clientId || '')}</strong> — Cartera Completa (${totalCount} pólizas)`;
+      bar.style.display = 'flex';
+
+      // 4. Sincronizar campos de búsqueda
+      const policyInput = document.getElementById('policyInput');
+      if (policyInput) policyInput.value = '';
+      const clientInput = document.getElementById('clientInput');
+      if (clientInput && clientId) clientInput.value = clientId;
+
+      // 5. Marcar cartera activa en la lista desplegable
+      updateDropdownActiveItem();
+
+      // 6. Mostrar primer mensaje desplegado mostrando primero el nombre del cliente y luego el ID
+      const displayNombre = currentClientName || 'No especificado';
+      const displayId = clientId || 'No especificado';
+      appendAssistantMessage(`### 📁 Cartera Completa del Cliente\n\n` +
+        `**Cliente:** ${escapeHtml(displayNombre)}\n\n` +
+        `**ID Cliente (CI/NIT):** ${escapeHtml(displayId)}\n\n` +
+        `El chat ha sido configurado para consultar **toda la cartera (${totalCount} pólizas)** simultáneamente.\n\n` +
+        `*(Si deseas consultar a detalle una póliza específica, selecciónala desde el menú **Pólizas (${totalCount})** arriba).*`);
     }
 
     // Seleccionar póliza activa
@@ -982,17 +1129,30 @@
         stream.innerHTML = '';
       }
 
-      // 2. Actualizar barra de contexto activa
+      // 2. Resolver nombre e ID del cliente
+      if (policyData.nombre_cliente || policyData.asegurado) {
+        currentClientName = policyData.nombre_cliente || policyData.asegurado;
+        const nameEl = document.getElementById('displayClientName');
+        if (nameEl) nameEl.textContent = currentClientName;
+      }
+      if (policyData.id_cliente) {
+        currentClientId = policyData.id_cliente;
+        const idEl = document.getElementById('displayClientId');
+        if (idEl) idEl.textContent = policyData.id_cliente;
+      }
+
+      // 3. Actualizar barra de contexto activa
       const bar = document.getElementById('activeContextBar');
       const text = document.getElementById('activePolicyText');
       const sigla = policyData.company_sigla ? `[${policyData.company_sigla}] ` : '';
+      const clientLabel = currentClientName ? ` | ${currentClientName}` : '';
       const clienteText = policyData.id_cliente ? ` | CI/NIT: ${policyData.id_cliente}` : '';
       const ramo = policyData.ramo ? ` — ${policyData.ramo}` : '';
 
-      text.innerText = `${sigla}N° ${activePolicy.display_num}${clienteText}${ramo}`;
+      text.innerText = `${sigla}N° ${activePolicy.display_num}${clientLabel}${clienteText}${ramo}`;
       bar.style.display = 'flex';
 
-      // 3. Sincronizar campos de búsqueda
+      // 4. Sincronizar campos de búsqueda
       const policyInput = document.getElementById('policyInput');
       if (policyInput && activePolicy.numero_poliza) {
         policyInput.value = activePolicy.numero_poliza;
@@ -1002,11 +1162,17 @@
         clientInput.value = activePolicy.id_cliente;
       }
 
-      // 4. Marcar póliza activa en la lista desplegable
+      // 5. Marcar póliza activa en la lista desplegable
       updateDropdownActiveItem();
 
-      // 5. Mostrar mensaje inicial confirmando la póliza activa
-      appendAssistantMessage(`### 📋 Póliza Activa: ${sigla}N° ${escapeHtml(activePolicy.display_num)}${escapeHtml(ramo)}\n\nEl chat ha sido configurado para esta póliza. A partir de ahora, todas tus consultas se realizarán sobre este documento y sus anexos.\n\n¿Qué información deseas consultar o verificar?`);
+      // 6. Mostrar mensaje inicial confirmando la póliza activa con nombre del cliente y luego ID
+      const displayNombre = currentClientName || policyData.nombre_cliente || policyData.asegurado || 'No especificado';
+      const displayId = activePolicy.id_cliente || currentClientId || 'No especificado';
+      appendAssistantMessage(`### 📋 Póliza Activa: ${sigla}N° ${escapeHtml(activePolicy.display_num)}${escapeHtml(ramo)}\n\n` +
+        `**Cliente:** ${escapeHtml(displayNombre)}\n\n` +
+        `**ID Cliente (CI/NIT):** ${escapeHtml(displayId)}\n\n` +
+        `El chat ha sido configurado para esta póliza. A partir de ahora, todas tus consultas se realizarán sobre este documento y sus anexos.\n\n` +
+        `¿Qué información deseas consultar o verificar?`);
     }
 
     // Desvincular póliza activa
@@ -1034,7 +1200,14 @@
       appendAssistantMessage('Se ha quitado la selección de póliza activa. El chat ha sido reiniciado y las próximas consultas se responderán de forma general entre todos los documentos digitalizados.');
     }
 
-    // Búsqueda por ID Cliente (CI o NIT)
+    // Selección directa de cliente desde opciones múltiples
+    async function selectClientDirectly(clientId, clientName) {
+      const input = document.getElementById('clientInput');
+      if (input) input.value = clientId;
+      await searchByClientId();
+    }
+
+    // Búsqueda por Cliente (Nombre, Razón Social, CI o NIT)
     async function searchByClientId() {
       const input = document.getElementById('clientInput');
       const query = input ? input.value.trim() : '';
@@ -1047,12 +1220,86 @@
       }
 
       try {
-        const clientRes = await fetch(`${getApiUrl()}/api/v1/policies/envelopes/by-client/${encodeURIComponent(query)}`);
-        if (clientRes.ok) {
-          const clientJson = await clientRes.json();
+        // Consultar en paralelo búsqueda predictiva de clientes, sobres y búsqueda de póliza
+        const [clientsSearchRes, clientEnvelopesRes, searchPolicyRes] = await Promise.allSettled([
+          fetch(`${getApiUrl()}/api/v1/policies/clients/search?q=${encodeURIComponent(query)}`),
+          fetch(`${getApiUrl()}/api/v1/policies/envelopes/by-client/${encodeURIComponent(query)}`),
+          fetch(`${getApiUrl()}/api/v1/policies/search?q=${encodeURIComponent(query)}`)
+        ]);
+
+        let resolvedName = null;
+        if (searchPolicyRes.status === 'fulfilled' && searchPolicyRes.value && searchPolicyRes.value.ok) {
+          try {
+            const sData = await searchPolicyRes.value.json();
+            if (sData.found && sData.policy) {
+              resolvedName = sData.policy.nombre_cliente || sData.policy.asegurado || sData.policy.tomador || null;
+            }
+          } catch (e) {}
+        }
+
+        let clientsList = [];
+        if (clientsSearchRes.status === 'fulfilled' && clientsSearchRes.value && clientsSearchRes.value.ok) {
+          try {
+            const cData = await clientsSearchRes.value.json();
+            if (cData && cData.clients && cData.clients.length > 0) {
+              clientsList = cData.clients;
+            }
+          } catch (e) {}
+        }
+
+        // Si la búsqueda arrojó múltiples clientes diferentes (ej. término genérico o búsqueda parcial):
+        if (clientsList.length > 1) {
+          // Verificar si uno de ellos es coincidencia exacta de ID
+          const exactIdMatch = clientsList.find(c => c.id_cliente.toLowerCase() === query.toLowerCase());
+          if (!exactIdMatch) {
+            let msg = `<p>He encontrado <strong>${clientsList.length} clientes</strong> que coinciden con "<strong>${escapeHtml(query)}</strong>":</p><div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem;">`;
+            clientsList.forEach(c => {
+              const compStr = c.companies && c.companies.length > 0 ? ` [${escapeHtml(c.companies.join(', '))}]` : '';
+              const safeId = escapeHtml(c.id_cliente).replace(/'/g, "\\'");
+              msg += `<button class="client-suggestion-card" onclick="selectClientDirectly('${safeId}')">
+                <div class="client-suggestion-header">
+                  <span>${escapeHtml(c.nombre_cliente)}</span>
+                  <span class="badge" style="background:#e0e7ff; color:#4338ca; font-size:0.75rem; padding:2px 6px; border-radius:4px;">${c.envelopes_count} póliza(s)</span>
+                </div>
+                <div class="client-suggestion-meta">
+                  <span><i class="fa-solid fa-id-card"></i> NIT/CI: <strong>${escapeHtml(c.id_cliente)}</strong></span>
+                  ${compStr ? `<span><i class="fa-solid fa-building"></i> ${compStr}</span>` : ''}
+                </div>
+              </button>`;
+            });
+            msg += `</div><p style="margin-top: 0.5rem; font-size: 0.8rem; color: #64748b;">Haz clic en uno de los clientes para cargar su cartera de pólizas.</p>`;
+            appendAssistantMessage(msg);
+            return;
+          }
+        }
+
+        // Si la búsqueda de sobres retornó pólizas directamente:
+        if (clientEnvelopesRes.status === 'fulfilled' && clientEnvelopesRes.value && clientEnvelopesRes.value.ok) {
+          const clientJson = await clientEnvelopesRes.value.json();
           if (clientJson.total > 0 && clientJson.envelopes && clientJson.envelopes.length > 0) {
             clientPoliciesList = clientJson.envelopes;
             isClientFiltered = true;
+
+            // Extraer ID canónico y nombre canónico del cliente desde el resultado o sobres
+            const canonicalId = (clientsList.length === 1 ? clientsList[0].id_cliente : null)
+                             || clientPoliciesList[0].id_cliente
+                             || query;
+
+            if (!resolvedName) {
+              resolvedName = (clientsList.length === 1 ? clientsList[0].nombre_cliente : null)
+                          || clientPoliciesList.find(p => p.nombre_cliente)?.nombre_cliente
+                          || clientPoliciesList.find(p => p.asegurado)?.asegurado
+                          || null;
+            }
+
+            currentClientId = canonicalId;
+            currentClientName = resolvedName || query;
+
+            const nameEl = document.getElementById('displayClientName');
+            if (nameEl) nameEl.textContent = currentClientName;
+
+            const idEl = document.getElementById('displayClientId');
+            if (idEl) idEl.textContent = canonicalId;
 
             // Poblar menú desplegable con las pólizas de este cliente
             renderDropdownItems(clientPoliciesList, true, true);
@@ -1063,22 +1310,21 @@
               btnText.innerText = `Pólizas (${clientJson.total})`;
             }
 
-            // Auto-seleccionar la primera póliza
-            const firstEnv = clientPoliciesList[0];
-            selectPolicy(firstEnv, true);
-
-            // Si hay más de una póliza, notificar en el chat
-            if (clientJson.total > 1) {
-              appendAssistantMessage(`💡 **Cliente con múltiples pólizas:** Se encontraron **${clientJson.total} pólizas** asociadas al CI/NIT **${escapeHtml(query)}**.\n\nSe ha establecido como contexto activo la póliza **N° ${escapeHtml(firstEnv.numero_poliza)}**. Puedes abrir el menú **Pólizas (${clientJson.total})** en el encabezado para alternar a cualquiera de las otras.`);
+            // Si es 1 sola póliza, auto-seleccionar directamente esa póliza
+            if (clientJson.total === 1) {
+              selectPolicy(clientPoliciesList[0], true);
+            } else {
+              // Múltiples pólizas: activar contexto de Cartera Completa
+              selectClientPortfolio(canonicalId, clientPoliciesList);
             }
 
             return;
           }
         }
 
-        appendAssistantMessage(`No encontré ninguna póliza registrada con el ID Cliente (Carnet / NIT) **"${escapeHtml(query)}"**. Por favor verifica el número e intenta nuevamente.`);
+        appendAssistantMessage(`No encontré ninguna póliza ni cliente registrado con el término o ID **"${escapeHtml(query)}"**. Por favor verifica el nombre o número de NIT/CI e intenta nuevamente.`);
       } catch (err) {
-        appendAssistantMessage(`Ocurrió un error al buscar por ID Cliente: ${escapeHtml(err.message)}`);
+        appendAssistantMessage(`Ocurrió un error al buscar el cliente: ${escapeHtml(err.message)}`);
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -1186,13 +1432,18 @@
       // Construcción del payload
       const filters = {};
       if (activePolicy) {
-        if (activePolicy.envelope_id) {
-          filters.envelope_id = activePolicy.envelope_id;
-        } else if (activePolicy.policy_id) {
-          filters.policy_id = activePolicy.policy_id;
-        }
-        if (activePolicy.id_cliente) {
+        if (activePolicy.is_client_portfolio) {
+          // En modo cartera de cliente, solo enviamos id_cliente para abarcar todas sus pólizas
           filters.id_cliente = activePolicy.id_cliente;
+        } else {
+          if (activePolicy.envelope_id) {
+            filters.envelope_id = activePolicy.envelope_id;
+          } else if (activePolicy.policy_id) {
+            filters.policy_id = activePolicy.policy_id;
+          }
+          if (activePolicy.id_cliente) {
+            filters.id_cliente = activePolicy.id_cliente;
+          }
         }
       }
 

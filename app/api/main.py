@@ -163,6 +163,20 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
             ),
         },
         {
+            "name": "Fleet",
+            "description": (
+                "Consulta, búsqueda y exportación (CSV) de nóminas estructuradas de flotas de vehículos "
+                "asegurados en pólizas colectivas de automotores."
+            ),
+        },
+        {
+            "name": "CollectiveInsured",
+            "description": (
+                "Consulta, búsqueda y exportación (CSV) de nóminas estructuradas de personas aseguradas "
+                "en pólizas colectivas (Salud, Accidentes Personales, Vida en Grupo)."
+            ),
+        },
+        {
             "name": "System",
             "description": (
                 "Endpoints de monitoreo operativo y diagnóstico del sistema. "

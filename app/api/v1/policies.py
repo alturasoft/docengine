@@ -12,6 +12,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api.v1.schemas import (
+    ClientItemSchema,
+    ClientSearchResponseSchema,
     CoberturaItemResponseSchema,
     DatosCabeceraResponseSchema,
     DeleteDocumentResponseSchema,
@@ -184,11 +186,39 @@ def list_envelopes(
 
 
 @router.get(
+    "/clients/search",
+    response_model=ClientSearchResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Buscar clientes por Nombre, Razón Social, CI o NIT",
+    description="Retorna la lista de clientes registrados que coincidan con el término de búsqueda para autocompletado y selección.",
+    dependencies=[Depends(require_role("readonly"))],
+)
+def search_clients(
+    repo: EnvelopeRepoDep,
+    q: str = Query(..., min_length=1, description="Nombre de cliente, razón social, carnet o NIT a buscar"),
+    limit: int = Query(default=20, ge=1, le=50, description="Cantidad máxima de clientes a retornar"),
+) -> ClientSearchResponseSchema:
+    """Search unique clients by CI, NIT, or name fragment."""
+    try:
+        clients = repo.search_clients(query=q, limit=limit)
+        return ClientSearchResponseSchema(
+            total=len(clients),
+            clients=[ClientItemSchema(**c) for c in clients],
+        )
+    except Exception as exc:
+        logger.error("Error searching clients", query=q, error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error searching clients: {exc}",
+        ) from exc
+
+
+@router.get(
     "/envelopes/by-client/{id_cliente}",
     response_model=PolicyEnvelopeSearchResponse,
     status_code=status.HTTP_200_OK,
-    summary="Buscar sobres de póliza por cliente (Carnet o NIT)",
-    description="Retorna todas las pólizas (sobres) y documentos vinculados pertenecientes a un cliente específico.",
+    summary="Buscar sobres de póliza por cliente (Nombre, Carnet o NIT)",
+    description="Retorna todas las pólizas (sobres) y documentos vinculados pertenecientes a un cliente específico (buscando por CI/NIT o Nombre/Razón Social).",
 )
 def get_envelopes_by_client(
     id_cliente: str,
@@ -208,7 +238,7 @@ def get_envelopes_by_client(
             envelopes=[PolicyEnvelopeSchema(**e) for e in envelopes],
         )
     except Exception as exc:
-        logger.error("Error searching envelopes by client ID", id_cliente=id_cliente, error=str(exc))
+        logger.error("Error searching envelopes by client ID or name", id_cliente=id_cliente, error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error searching envelopes by client: {exc}",

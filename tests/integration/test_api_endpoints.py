@@ -191,8 +191,52 @@ class TestExtractionEndpoints:
         response = test_client.get("/api/v1/companies")
         assert response.status_code == 200
         data = response.json()
-        assert "CRI" in data
         assert "LBC" in data
-        assert "ALI" in data
+        assert "CRE" in data
+        assert "BISA" in data
+
+    def test_extract_pdf_with_nombre_cliente(self, test_client: TestClient) -> None:
+        """POST /extract with nombre_cliente must return 200 and include nombre_cliente in metadata."""
+        fake_pdf = b"%PDF-1.4 test with client name"
+        response = test_client.post(
+            "/api/v1/extract",
+            data={
+                "id_cliente": "10203040",
+                "nombre_cliente": "Minera San Cristóbal S.A.",
+            },
+            files={"file": ("poliza_cliente.pdf", io.BytesIO(fake_pdf), "application/pdf")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metadata"]["id_cliente"] == "10203040"
+        assert data["metadata"]["nombre_cliente"] == "Minera San Cristóbal S.A."
+
+    def test_extract_pdf_without_nombre_cliente_backward_compatibility(self, test_client: TestClient) -> None:
+        """POST /extract without nombre_cliente must continue working and return None for nombre_cliente."""
+        fake_pdf = b"%PDF-1.4 test without client name"
+        response = test_client.post(
+            "/api/v1/extract",
+            data={"id_cliente": "10203040"},
+            files={"file": ("poliza_legacy.pdf", io.BytesIO(fake_pdf), "application/pdf")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metadata"]["id_cliente"] == "10203040"
+        assert data["metadata"].get("nombre_cliente") is None
+
+    def test_extract_url_with_nombre_cliente(self, test_client: TestClient) -> None:
+        """POST /extract/url with nombre_cliente must return 200 and populate nombre_cliente."""
+        response = test_client.post(
+            "/api/v1/extract/url",
+            json={
+                "url": "https://example.com/poliza.pdf",
+                "id_cliente": "10203040",
+                "nombre_cliente": "Empresa Boliviana S.R.L.",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metadata"]["id_cliente"] == "10203040"
+        assert data["metadata"]["nombre_cliente"] == "Empresa Boliviana S.R.L."
 
 

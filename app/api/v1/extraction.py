@@ -94,6 +94,7 @@ async def extract_file(
     request: Request,
     background_tasks: BackgroundTasks,
     id_cliente: str = Form(..., description="Carnet de Identidad o NIT del cliente (REQUERIDO)"),
+    nombre_cliente: str | None = Form(default=None, description="Nombre o razón social del cliente / tomador (opcional)"),
     rag_service: RagPipelineServiceDep = None,
     company_sigla: str | None = Form(default=None, description="Sigla identificadora de la compañía aseguradora (ej. CRI, LBC, ALI) para aplicar reglas especializadas"),
     sigla_aseguradora: str | None = Form(default=None, description="Alias retrocompatible para company_sigla"),
@@ -111,6 +112,7 @@ async def extract_file(
         request: FastAPI request object.
         background_tasks: FastAPI background tasks queue.
         id_cliente: Customer identifier (Carnet or NIT) (REQUIRED).
+        nombre_cliente: Optional customer name or business name.
         rag_service: Injected RagPipelineService (optional).
         company_sigla: Optional 3-letter company code.
         numero_poliza: Optional policy number to bind this file to a policy envelope.
@@ -131,6 +133,7 @@ async def extract_file(
     _validate_upload(file)
 
     id_cliente_clean = id_cliente.strip() if id_cliente else ""
+    nombre_cliente_clean = nombre_cliente.strip() if nombre_cliente else None
     if not id_cliente_clean:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -161,6 +164,7 @@ async def extract_file(
             filename=file.filename,
             size_bytes=len(content),
             id_cliente=id_cliente_clean,
+            nombre_cliente=nombre_cliente_clean,
             company_sigla=sigla_clean or "NO_ESPECIFICADA",
             numero_poliza=num_poliza_clean,
             tipo_documento=tipo_doc_clean,
@@ -176,6 +180,7 @@ async def extract_file(
                 temp_path=temp_path,
                 filename=file.filename or "uploaded.pdf",
                 id_cliente_clean=id_cliente_clean,
+                nombre_cliente_clean=nombre_cliente_clean,
                 sigla_clean=sigla_clean,
                 num_poliza_clean=num_poliza_clean,
                 ramo_clean=ramo_clean,
@@ -203,6 +208,7 @@ async def extract_file(
             ramo=ramo_clean,
             tipo_documento=tipo_doc_clean,
             id_cliente=id_cliente_clean,
+            nombre_cliente=nombre_cliente_clean,
         )
 
         result = extraction_service.extract_document(request_obj)
@@ -210,6 +216,8 @@ async def extract_file(
             result.metadata.filename = file.filename
         if result.metadata:
             result.metadata.id_cliente = id_cliente_clean
+            if nombre_cliente_clean:
+                result.metadata.nombre_cliente = nombre_cliente_clean
         _record_and_log(result)
 
         rag_report_schema = _process_rag_safe(
@@ -219,6 +227,7 @@ async def extract_file(
             ramo=ramo_clean,
             tipo_documento=tipo_doc_clean,
             id_cliente=id_cliente_clean,
+            nombre_cliente=nombre_cliente_clean,
         )
         return _to_schema(result, rag_report=rag_report_schema)
 
@@ -300,6 +309,7 @@ def extract_url(
     try:
         sigla_clean = body.company_sigla.strip().upper() if body.company_sigla else None
         id_cliente_clean = body.id_cliente.strip() if body.id_cliente else ""
+        nombre_cliente_clean = body.nombre_cliente.strip() if body.nombre_cliente else None
         if not id_cliente_clean:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -309,8 +319,12 @@ def extract_url(
         result = extraction_service.extract_from_url(body.url, company_sigla=sigla_clean)
         if result.metadata:
             result.metadata.id_cliente = id_cliente_clean
+            if nombre_cliente_clean:
+                result.metadata.nombre_cliente = nombre_cliente_clean
         _record_and_log(result)
-        rag_report_schema = _process_rag_safe(rag_service, result, id_cliente=id_cliente_clean)
+        rag_report_schema = _process_rag_safe(
+            rag_service, result, id_cliente=id_cliente_clean, nombre_cliente=nombre_cliente_clean
+        )
         return _to_schema(result, rag_report=rag_report_schema)
     except ValueError as exc:
         raise HTTPException(
@@ -404,6 +418,7 @@ def extract_folder(
         pol_num_hint = body.numero_poliza.strip() if body.numero_poliza else None
         ramo_hint = body.ramo.strip() if body.ramo else None
         client_hint = body.id_cliente.strip() if body.id_cliente else None
+        client_name_hint = body.nombre_cliente.strip() if body.nombre_cliente else None
 
         # Auto-infer client ID from folder name if folder resembles CI/NIT (e.g. '10203040' or 'NIT_10203040')
         if not client_hint and folder.name:
@@ -443,6 +458,8 @@ def extract_folder(
 
             if r.metadata:
                 r.metadata.id_cliente = effective_client
+                if client_name_hint:
+                    r.metadata.nombre_cliente = client_name_hint
 
             rag_report_schema = _process_rag_safe(
                 rag_service,
@@ -451,6 +468,7 @@ def extract_folder(
                 ramo=ramo_hint,
                 tipo_documento=auto_tipo_doc,
                 id_cliente=effective_client,
+                nombre_cliente=client_name_hint,
             )
             schema_results.append(_to_schema(r, rag_report=rag_report_schema))
 
@@ -651,6 +669,7 @@ def _run_async_extraction(
     extraction_service: Any,
     rag_service: Any,
     rag_repo: Any,
+    nombre_cliente_clean: str | None = None,
 ) -> None:
     """Execute document extraction and RAG ingestion in background task."""
     try:
@@ -663,12 +682,15 @@ def _run_async_extraction(
             ramo=ramo_clean,
             tipo_documento=tipo_doc_clean,
             id_cliente=id_cliente_clean,
+            nombre_cliente=nombre_cliente_clean,
         )
         result = extraction_service.extract_document(request)
         if filename:
             result.metadata.filename = filename
         if result.metadata:
             result.metadata.id_cliente = id_cliente_clean
+            if nombre_cliente_clean:
+                result.metadata.nombre_cliente = nombre_cliente_clean
         _record_and_log(result)
 
         _process_rag_safe(
@@ -678,6 +700,7 @@ def _run_async_extraction(
             ramo=ramo_clean,
             tipo_documento=tipo_doc_clean,
             id_cliente=id_cliente_clean,
+            nombre_cliente=nombre_cliente_clean,
         )
         policy_id = result.document_id
         rag_repo.update_job(job_id=job_id, status="COMPLETED", policy_id=policy_id)
@@ -701,6 +724,7 @@ def _process_rag_safe(
     ramo: str | None = None,
     tipo_documento: str | None = None,
     id_cliente: str | None = None,
+    nombre_cliente: str | None = None,
 ) -> RagReportSchema | None:
     """Helper to safely execute RAG pipeline without failing primary extraction."""
     if not rag_service or not result.is_successful:
@@ -712,6 +736,7 @@ def _process_rag_safe(
             ramo=ramo,
             tipo_documento=tipo_documento,
             id_cliente=id_cliente,
+            nombre_cliente=nombre_cliente,
         )
         if report:
             return RagReportSchema(
@@ -770,6 +795,7 @@ def _to_schema(
             envelope_id=getattr(meta, "envelope_id", None),
             tipo_documento=getattr(meta, "tipo_documento", None),
             id_cliente=getattr(meta, "id_cliente", None),
+            nombre_cliente=getattr(meta, "nombre_cliente", None),
         ),
         output_paths={k: str(v) for k, v in result.output_paths.items()},
         rag_report=rag_report,

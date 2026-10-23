@@ -24,6 +24,14 @@ from app.config.settings import RAGQueryConfig
 from app.domain.models.query_models import QueryResponse, RetrievedChunk
 from app.infrastructure.logging.logger import get_logger
 
+# [ADITIVO] Estrategia de contexto para pólizas GRANDES
+from app.application.large_policy_context import (
+    ContextTooLargeError,
+    LargePolicyContextStrategy,
+    is_request_too_large,
+)
+from app.config.settings import LargePolicyConfig
+
 if TYPE_CHECKING:
     from app.application.embedding_service import EmbeddingService
     from app.application.reranker_service import RerankerService
@@ -70,6 +78,22 @@ DIRECTRICES DE RESPUESTA:
      * La 'CLÁUSULA DE AMPLIACIÓN DE AVISO DE SINIESTRO' se correlaciona directamente con la especificación particular 'HASTA 15 DÍAS CALENDARIOS'. En virtud de la prevalencia de las condiciones particulares y anexos sobre las generales, la respuesta afirmativa y operativa para el asegurado debe ser de 15 días calendarios (indicando expresamente que este plazo particular amplía y prevalece sobre el plazo general de 3 días del condicionado impreso y del Código de Comercio).
      * En 'ACCIDENTES PERSONALES A OCUPANTES', la secuencia de sumas aseguradas por persona cubierta corresponde a: Gastos de Sepelio Bs. 7.000, Muerte Accidental Bs. 70.000, Invalidez Total y/o Parcial Permanente Bs. 70.000, y Gastos Médicos Bs. 14.000.
      Examina con máxima minuciosidad estos valores tabulares particulares e inclúyelos textualmente en tus respuestas.
+
+7. Nómina de Vehículos en Pólizas Colectivas de Flota:
+   - Cuando en el contexto figure la sección "NÓMINA OFICIAL Y COMPLETA DE VEHÍCULOS ASEGURADOS" y el usuario solicite la nómina o el listado de vehículos asegurados:
+     * Presenta la lista o tabla estructurada de los vehículos provistos en el contexto (incluyendo Ítem, Tipo, Marca, Modelo, Año, Placa, Chasis y Valor Asegurado). No limites arbitrariamente la respuesta a una muestra si la nómina está provista en el contexto.
+     * Al final de la respuesta, proporciona el enlace de descarga en formato Excel / CSV para que el usuario pueda abrir el archivo directamente en Excel.
+
+8. Nómina de Personas en Pólizas Colectivas (Salud, Accidentes Personales, Vida en Grupo):
+   - Cuando en el contexto figure la sección "NÓMINA OFICIAL Y COMPLETA DE ASEGURADOS" y el usuario solicite la nómina, el listado de personas o verificar si un asegurado está cubierto:
+     * Presenta la tabla o lista de los asegurados provistos en el contexto (incluyendo Ítem, Nombre Completo, Documento/CI, Categoría/Parentesco, Edad, Cargo y Suma Asegurada).
+     * Al final de la respuesta, proporciona el enlace de descarga en formato Excel / CSV para que el usuario pueda descargar la nómina completa.
+
+9. Cartera de Pólizas del Cliente y Resumen de Vigencias:
+   - Cuando en el contexto figure la sección "[CARTERA DE PÓLIZAS DEL CLIENTE]" y el usuario consulte sobre la cartera de pólizas o la vigencia de todas las pólizas del cliente:
+     * Presenta exactamente UNA fila o entrada por cada póliza única registrada en la cartera del cliente.
+     * NUNCA repitas filas idénticas, números de póliza duplicados ni valores de vigencia idénticos. Los anexos, certificados o endosos forman parte de la misma póliza matriz.
+     * Estructura la respuesta de forma clara (en tabla o lista numerada) detallando para cada póliza: N° de Póliza, Aseguradora, Ramo, y Período de Vigencia (Desde - Hasta).
 """
 
 _CONTEXT_HEADER = """\
@@ -110,6 +134,8 @@ class RAGQueryService:
         reranker: RerankerService | None = None,
         # --- Structured Data Search dependency (optional, backward-compatible) ---
         structured_search: PgStructuredSearchRepository | None = None,
+        # --- Policy Map Service dependency (optional, backward-compatible, Fase 2) ---
+        policy_map: Any | None = None,
     ) -> None:
         self._embedder = embedding_service
         self._vector_search = vector_search
@@ -118,6 +144,40 @@ class RAGQueryService:
         self._reranker = reranker
         self._structured_search = structured_search
         self._openai_client: openai.OpenAI | None = None
+
+        # [ADITIVO FASE 1 & 2] Estrategia para pólizas grandes con Mapa y Multi-Query
+        map_service = policy_map
+        if map_service is None and hasattr(vector_search, "_db") and vector_search._db is not None:
+            try:
+                from app.application.policy_map_service import PolicyMapService
+                map_service = PolicyMapService(vector_search._db)
+            except Exception:
+                map_service = None
+
+        fleet_service = None
+        insured_service = None
+        if hasattr(vector_search, "_db") and vector_search._db is not None:
+            try:
+                from app.application.fleet_extractor_service import FleetExtractorService
+                fleet_service = FleetExtractorService(vector_search._db)
+            except Exception:
+                fleet_service = None
+
+            try:
+                from app.application.collective_insured_extractor_service import CollectiveInsuredExtractorService
+                insured_service = CollectiveInsuredExtractorService(vector_search._db)
+            except Exception:
+                insured_service = None
+
+        self._fleet_service = fleet_service
+        self._insured_service = insured_service
+
+        self._large_policy = LargePolicyContextStrategy(
+            config=LargePolicyConfig(),
+            priority_fn=self._chunk_hierarchy_priority,
+            map_service=map_service,
+            fleet_service=fleet_service,
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -177,11 +237,19 @@ class RAGQueryService:
         structured_chunks: list[RetrievedChunk] = []
         if self._structured_search is not None:
             policy_id_filter = effective_filters.get("policy_id")
+            client_id_filter = effective_filters.get("id_cliente")
+            envelope_id_filter = effective_filters.get("envelope_id")
             if policy_id_filter:
                 record = self._structured_search.find_by_policy_id(policy_id_filter)
                 if record:
                     structured_chunks.append(
                         self._structured_search.format_structured_chunk(record)
+                    )
+            elif client_id_filter and not envelope_id_filter and hasattr(self._structured_search, "find_by_client_id"):
+                client_records = self._structured_search.find_by_client_id(client_id_filter)
+                if client_records:
+                    structured_chunks.append(
+                        self._structured_search.format_client_portfolio_chunk(client_records, client_id_filter)
                     )
             else:
                 matched_records = self._structured_search.search_by_query_text(
@@ -192,8 +260,42 @@ class RAGQueryService:
                         self._structured_search.format_structured_chunk(record)
                     )
                     # If exactly one policy matched, focus downstream search on it
-                    if len(matched_records) == 1 and not effective_filters.get("policy_id"):
+                    if len(matched_records) == 1 and not effective_filters.get("policy_id") and not effective_filters.get("id_cliente"):
                         effective_filters["policy_id"] = record["policy_id"]
+
+        # Step 0b: Check for fleet roster intent (pólizas de automotores colectivas)
+        if self._fleet_service is not None and self._large_policy.is_fleet_query(question):
+            p_filter = effective_filters.get("policy_id")
+            e_filter = effective_filters.get("envelope_id")
+            if p_filter or e_filter:
+                try:
+                    fleet_chunk = self._fleet_service.format_fleet_summary_chunk(
+                        policy_id=p_filter,
+                        envelope_id=e_filter,
+                        sample_limit=None,
+                    )
+                    if fleet_chunk:
+                        structured_chunks.append(fleet_chunk)
+                        logger.info("Structured fleet chunk injected for fleet query", policy_id=p_filter)
+                except Exception as f_err:
+                    logger.warning("Failed injecting fleet chunk in step 0b", error=str(f_err))
+
+        # Step 0c: Check for collective insured roster intent (pólizas colectivas de personas)
+        if self._insured_service is not None and hasattr(self._large_policy, "is_insured_query") and self._large_policy.is_insured_query(question):
+            p_filter = effective_filters.get("policy_id")
+            e_filter = effective_filters.get("envelope_id")
+            if p_filter or e_filter:
+                try:
+                    insured_chunk = self._insured_service.format_insured_summary_chunk(
+                        policy_id=p_filter,
+                        envelope_id=e_filter,
+                        sample_limit=None,
+                    )
+                    if insured_chunk:
+                        structured_chunks.append(insured_chunk)
+                        logger.info("Structured collective insured chunk injected for insured query", policy_id=p_filter)
+                except Exception as i_err:
+                    logger.warning("Failed injecting collective insured chunk in step 0c", error=str(i_err))
 
         # Step 1: Embed the query using the shared bge-m3 model
         query_vector = self._embed_query(question)
@@ -283,6 +385,27 @@ class RAGQueryService:
                 if chunk.chunk_id:
                     seen_ids.add(chunk.chunk_id)
 
+        # [ADITIVO] Step 2b: Pólizas GRANDES — contexto acotado por presupuesto.
+        # Pólizas pequeñas e intermedias no entran aquí (flujo idéntico al actual).
+        large_policy_mode = False
+        if self._large_policy.is_large(merged_chunks):
+            logger.info(
+                "Póliza GRANDE detectada; aplicando contexto acotado",
+                chunks=len(merged_chunks),
+                tokens_est=self._large_policy.estimate_tokens(merged_chunks),
+            )
+            merged_chunks = self._large_policy.build(
+                question=question,
+                query_vector=query_vector,
+                all_chunks=merged_chunks,
+                structured_chunks=structured_chunks,
+                filters=effective_filters,
+                retrieve_fn=self._retrieve_and_rerank,
+                embed_fn=self._embed_query,
+            )
+            large_policy_mode = True
+        full_chunks_for_fallback = merged_chunks
+
         # Step 3: Contingency path — no relevant chunks found
         if not merged_chunks:
             logger.info(
@@ -302,7 +425,28 @@ class RAGQueryService:
         context_text = self._build_context(merged_chunks)
 
         # Step 5: Call OpenAI for answer generation
-        answer = self._generate_answer(question=question, context_text=context_text)
+        try:
+            answer = self._generate_answer(question=question, context_text=context_text)
+        except ContextTooLargeError:
+            # [ADITIVO] Fallback: OpenAI rechazó por tamaño (p. ej. Tier 1 = 200K TPM).
+            if large_policy_mode or not self._large_policy.fallback_enabled:
+                raise
+            logger.warning(
+                "Contexto rechazado por tamaño; reintentando en modo póliza GRANDE",
+                chunks=len(full_chunks_for_fallback),
+                tokens_est=self._large_policy.estimate_tokens(full_chunks_for_fallback),
+            )
+            merged_chunks = self._large_policy.build(
+                question=question,
+                query_vector=query_vector,
+                all_chunks=full_chunks_for_fallback,
+                structured_chunks=structured_chunks,
+                filters=effective_filters,
+                retrieve_fn=self._retrieve_and_rerank,
+                embed_fn=self._embed_query,
+            )
+            context_text = self._build_context(merged_chunks)
+            answer = self._generate_answer(question=question, context_text=context_text)
 
         logger.info(
             "RAG query completed",
@@ -601,21 +745,43 @@ class RAGQueryService:
 
         try:
             client = self._get_openai_client()
-            response = client.chat.completions.create(
-                model=self._config.llm_model,
-                temperature=self._config.temperature,
-                max_tokens=self._config.max_tokens,
-                messages=[
+            create_params: dict[str, Any] = {
+                "model": self._config.llm_model,
+                "temperature": self._config.temperature,
+                "messages": [
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {"role": "user", "content": user_content},
                 ],
-            )
-            content = response.choices[0].message.content
+            }
+            try:
+                response = client.chat.completions.create(
+                    **create_params,
+                    max_completion_tokens=self._config.max_tokens,
+                )
+            except (TypeError, openai.BadRequestError):
+                response = client.chat.completions.create(
+                    **create_params,
+                    max_tokens=self._config.max_tokens,
+                )
+            choice = response.choices[0]
+            if choice.finish_reason == "length":
+                logger.warning(
+                    "OpenAI answer generation reached maximum token limit (truncated)",
+                    max_tokens=self._config.max_tokens,
+                    model=self._config.llm_model,
+                )
+            content = choice.message.content
             if content is None:
                 raise RuntimeError("OpenAI returned an empty message content.")
             return content.strip()
 
         except openai.RateLimitError as exc:
+            # [ADITIVO] Un 429 "Request too large" no es temporal: reintentar no sirve.
+            if is_request_too_large(exc):
+                logger.error("OpenAI request too large for TPM/context", error=str(exc))
+                raise ContextTooLargeError(
+                    "La consulta excede el tamaño máximo admitido por el modelo para esta póliza."
+                ) from exc
             logger.error("OpenAI rate limit exceeded", error=str(exc))
             raise RuntimeError("OpenAI rate limit exceeded. Try again later.") from exc
         except openai.AuthenticationError as exc:
@@ -624,6 +790,15 @@ class RAGQueryService:
         except openai.APIConnectionError as exc:
             logger.error("OpenAI connection error", error=str(exc))
             raise RuntimeError("Could not connect to OpenAI API.") from exc
+        except openai.BadRequestError as exc:
+            # [ADITIVO] 400 context_length_exceeded → tamaño; otros 400 se tratan igual que APIError.
+            if is_request_too_large(exc):
+                logger.error("OpenAI context length exceeded", error=str(exc))
+                raise ContextTooLargeError(
+                    "La consulta excede la ventana de contexto del modelo para esta póliza."
+                ) from exc
+            logger.error("OpenAI API error", status_code=getattr(exc, "status_code", None), error=str(exc))
+            raise RuntimeError(f"OpenAI API error: {exc}") from exc
         except openai.APIError as exc:
             logger.error("OpenAI API error", status_code=getattr(exc, "status_code", None), error=str(exc))
             raise RuntimeError(f"OpenAI API error: {exc}") from exc

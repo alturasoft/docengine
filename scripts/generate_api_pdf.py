@@ -1077,7 +1077,7 @@ def build_html_content() -> str:
 
 
 def generate_pdf() -> Path:
-    """Genera el archivo PDF a partir del contenido HTML utilizando Edge Headless."""
+    """Genera el archivo PDF a partir del contenido HTML utilizando Edge Headless o xhtml2pdf."""
     base_dir = Path(__file__).resolve().parent.parent
     docs_dir = base_dir / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -1085,31 +1085,44 @@ def generate_pdf() -> Path:
     html_path = docs_dir / "DocEngine_Especificacion_Tecnica_APIs.html"
     pdf_path = docs_dir / "DocEngine_Especificacion_Tecnica_APIs.pdf"
 
-    html_content = build_html_content()
-    html_path.write_text(html_content, encoding="utf-8")
-    print(f"HTML generado en: {html_path}")
+    if html_path.exists():
+        html_content = html_path.read_text(encoding="utf-8")
+    else:
+        html_content = build_html_content()
+        html_path.write_text(html_content, encoding="utf-8")
+    print(f"HTML verificado en: {html_path}")
 
     edge_paths = [
         Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
         Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
     ]
     edge_exe = next((p for p in edge_paths if p.exists()), None)
-    if not edge_exe:
-        raise FileNotFoundError("No se encontró el ejecutable de Microsoft Edge.")
+    if edge_exe:
+        cmd = [
+            str(edge_exe),
+            "--headless",
+            "--disable-gpu",
+            "--run-all-compositor-stages-before-draw",
+            f"--print-to-pdf={pdf_path.resolve()}",
+            str(html_path.resolve()),
+        ]
+        print("Compilando PDF con Edge Headless...")
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        print(f"PDF generado exitosamente en: {pdf_path}")
+        return pdf_path
 
-    cmd = [
-        str(edge_exe),
-        "--headless",
-        "--disable-gpu",
-        "--run-all-compositor-stages-before-draw",
-        f"--print-to-pdf={pdf_path.resolve()}",
-        str(html_path.resolve()),
-    ]
-
-    print("Compilando PDF con Edge Headless...")
-    subprocess.run(cmd, capture_output=True, text=True, check=True)
-    print(f"PDF generado exitosamente en: {pdf_path}")
-    return pdf_path
+    # Fallback to xhtml2pdf if running on Linux / environment without Edge
+    try:
+        from xhtml2pdf import pisa
+        print("Compilando PDF con motor xhtml2pdf / ReportLab...")
+        with open(pdf_path, "wb") as f:
+            pisa_status = pisa.CreatePDF(html_content, dest=f)
+            if pisa_status.err:
+                raise RuntimeError("Error en compilación xhtml2pdf")
+        print(f"PDF generado exitosamente en: {pdf_path}")
+        return pdf_path
+    except ImportError:
+        raise FileNotFoundError("No se encontró Microsoft Edge ni el paquete xhtml2pdf para compilar.")
 
 
 if __name__ == "__main__":
