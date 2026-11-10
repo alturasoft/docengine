@@ -218,6 +218,8 @@ async def extract_file(
             result.metadata.id_cliente = id_cliente_clean
             if nombre_cliente_clean:
                 result.metadata.nombre_cliente = nombre_cliente_clean
+            if ramo_clean:
+                result.metadata.ramo = ramo_clean
         _record_and_log(result)
 
         rag_report_schema = _process_rag_safe(
@@ -691,9 +693,11 @@ def _run_async_extraction(
             result.metadata.id_cliente = id_cliente_clean
             if nombre_cliente_clean:
                 result.metadata.nombre_cliente = nombre_cliente_clean
+            if ramo_clean:
+                result.metadata.ramo = ramo_clean
         _record_and_log(result)
 
-        _process_rag_safe(
+        rag_report = _process_rag_safe(
             rag_service,
             result,
             numero_poliza=num_poliza_clean,
@@ -702,7 +706,7 @@ def _run_async_extraction(
             id_cliente=id_cliente_clean,
             nombre_cliente=nombre_cliente_clean,
         )
-        policy_id = result.document_id
+        policy_id = rag_report.policy_id if rag_report and rag_report.policy_id else None
         rag_repo.update_job(job_id=job_id, status="COMPLETED", policy_id=policy_id)
         logger.info("Async extraction completed successfully", job_id=job_id, policy_id=policy_id)
     except Exception as exc:

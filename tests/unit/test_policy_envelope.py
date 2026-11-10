@@ -138,6 +138,72 @@ class TestPgEnvelopeRepository:
         assert res == new_id
         mock_conn.commit.assert_called()
 
+    def test_get_or_create_envelope_resolves_and_persists_catalog_fks(self):
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+
+        mock_db.get_connection.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        new_id = str(uuid.uuid4())
+        mock_cur.fetchone.side_effect = [None, (new_id,)]
+
+        repo = PgEnvelopeRepository(mock_db)
+        res = repo.get_or_create_envelope(
+            numero_poliza="POL-AUTO-999",
+            company_sigla="CRI",  # Alias to CRE (id 2)
+            ramo="AUTOMOTOR",     # APS 9105
+            id_cliente="1234567",
+            nombre_cliente="Juan Perez",
+        )
+
+        assert res == new_id
+        # Verify that insert_full was executed with resolved FKs
+        assert mock_cur.execute.call_count >= 2
+        # Check call args of the INSERT
+        insert_call = [call for call in mock_cur.execute.call_args_list if "INSERT INTO policy_envelopes" in str(call[0][0])][0]
+        params = insert_call[0][1]
+        assert params[1] == "POL-AUTO-999"
+        assert params[2] == "CRI"
+        assert params[3] == "AUTOMOTOR"
+        assert params[4] == "1234567"
+        assert params[5] == "Juan Perez"
+        assert params[6] == 2      # id_aseguradora (cat_aseguradoras)
+        assert params[7] == 9105   # codigo_ramo (cat_ramos)
+
+    def test_get_or_create_envelope_updates_missing_catalog_fks(self):
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+
+        mock_db.get_connection.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+
+        existing_id = str(uuid.uuid4())
+        # Envelope exists but lacks ramo, id_aseguradora, codigo_ramo
+        mock_cur.fetchone.return_value = (existing_id, None, "1234567", None, None)
+
+        repo = PgEnvelopeRepository(mock_db)
+        res = repo.get_or_create_envelope(
+            numero_poliza="POL-AUTO-999",
+            company_sigla="BISA",
+            ramo="Incendio y Aliados",
+        )
+
+        assert res == existing_id
+        # Check that UPDATE was issued with ramo, id_aseguradora (5), codigo_ramo (9101)
+        update_calls = [call for call in mock_cur.execute.call_args_list if "UPDATE policy_envelopes" in str(call[0][0])]
+        assert len(update_calls) > 0
+        sql = update_calls[0][0][0]
+        params = update_calls[0][0][1]
+        assert "ramo = %s" in sql
+        assert "id_aseguradora = %s" in sql
+        assert "codigo_ramo = %s" in sql
+        assert "Incendio y Aliados" in params
+        assert 5 in params     # BISA -> 5
+        assert 9101 in params  # Incendio y Aliados -> 9101
+
     def test_link_policy_to_envelope(self):
         mock_db = MagicMock()
         mock_conn = MagicMock()
@@ -541,6 +607,8 @@ class TestRagPipelineEnvelopeIntegration:
             numero_poliza="POL-AUTO-777",
             company_sigla="CRI",
             ramo="AUTOMOTOR",
+            id_aseguradora=2,
+            codigo_ramo=9105,
         )
         _, kwargs = mock_repo.save_rag_policy_transactional.call_args
         assert kwargs["envelope_id"] == "env-auto-uuid"

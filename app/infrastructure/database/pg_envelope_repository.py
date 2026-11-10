@@ -30,6 +30,8 @@ class PgEnvelopeRepository:
         ramo: str | None = None,
         id_cliente: str | None = None,
         nombre_cliente: str | None = None,
+        id_aseguradora: int | None = None,
+        codigo_ramo: int | None = None,
         **kwargs: Any,
     ) -> str:
         """Find an existing policy envelope or create a new one.
@@ -40,6 +42,8 @@ class PgEnvelopeRepository:
             ramo: Optional insurance line name.
             id_cliente: Optional customer identifier (Carnet or NIT).
             nombre_cliente: Optional customer name or business name.
+            id_aseguradora: Optional FK to cat_aseguradoras(id). If None, auto-resolved from company_sigla.
+            codigo_ramo: Optional FK to cat_ramos(codigo). If None, auto-resolved from ramo.
             **kwargs: Extra parameters ignored safely for backward/forward compatibility.
 
         Returns:
@@ -55,12 +59,29 @@ class PgEnvelopeRepository:
         clean_id_cliente = id_cliente.strip()[:50] if id_cliente else None
         clean_nombre_cliente = nombre_cliente.strip()[:255] if nombre_cliente else None
 
+        # Auto-resolve catalog foreign keys if not explicitly supplied
+        effective_id_aseguradora = id_aseguradora
+        if effective_id_aseguradora is None and clean_sigla:
+            try:
+                from app.application.catalog_service import catalog_service
+                effective_id_aseguradora = catalog_service.resolve_company_id(clean_sigla)
+            except Exception:
+                effective_id_aseguradora = None
+
+        effective_codigo_ramo = codigo_ramo
+        if effective_codigo_ramo is None and clean_ramo:
+            try:
+                from app.application.catalog_service import catalog_service
+                effective_codigo_ramo = catalog_service.resolve_ramo_codigo(clean_ramo)
+            except Exception:
+                effective_codigo_ramo = None
+
         with self._db.get_connection() as conn:
             with conn.cursor() as cur:
                 # 1. Check if envelope already exists
                 cur.execute(
                     """
-                    SELECT id, ramo, id_cliente FROM policy_envelopes
+                    SELECT id, ramo, id_cliente, id_aseguradora, codigo_ramo, company_sigla FROM policy_envelopes
                     WHERE numero_poliza = %s
                       AND (company_sigla = %s OR (%s IS NULL AND company_sigla IS NULL))
                     ORDER BY created_at DESC
@@ -74,15 +95,54 @@ class PgEnvelopeRepository:
                     envelope_id = str(row[0])
                     existing_ramo = row[1] if len(row) > 1 else None
                     existing_id_cliente = row[2] if len(row) > 2 else None
+                    existing_id_aseguradora = row[3] if len(row) > 3 else None
+                    existing_codigo_ramo = row[4] if len(row) > 4 else None
+                    existing_sigla = row[5] if len(row) > 5 else None
                     updates = []
                     params: list[Any] = []
 
-                    if clean_ramo and not existing_ramo:
+                    # Auto-resolve missing id_aseguradora if either clean_sigla or existing_sigla is present
+                    if not existing_id_aseguradora and not effective_id_aseguradora:
+                        target_sigla = clean_sigla or existing_sigla
+                        if target_sigla:
+                            try:
+                                from app.application.catalog_service import catalog_service
+                                effective_id_aseguradora = catalog_service.resolve_company_id(target_sigla)
+                            except Exception:
+                                pass
+
+                    # Auto-resolve missing codigo_ramo if either clean_ramo or existing_ramo is present
+                    if not existing_codigo_ramo and not effective_codigo_ramo:
+                        target_ramo = clean_ramo or existing_ramo
+                        if target_ramo:
+                            try:
+                                from app.application.catalog_service import catalog_service
+                                effective_codigo_ramo = catalog_service.resolve_ramo_codigo(target_ramo)
+                            except Exception:
+                                pass
+
+                    if clean_ramo and (not existing_ramo or str(existing_ramo).strip() == ""):
                         updates.append("ramo = %s")
                         params.append(clean_ramo)
+                    elif (not existing_ramo or str(existing_ramo).strip() == "") and effective_codigo_ramo:
+                        try:
+                            from app.application.catalog_service import catalog_service
+                            resolved_ramo = catalog_service.resolve_ramo_nombre(effective_codigo_ramo)
+                            if resolved_ramo:
+                                updates.append("ramo = %s")
+                                params.append(resolved_ramo)
+                        except Exception:
+                            pass
+
                     if clean_id_cliente and not existing_id_cliente:
                         updates.append("id_cliente = %s")
                         params.append(clean_id_cliente)
+                    if effective_id_aseguradora and not existing_id_aseguradora:
+                        updates.append("id_aseguradora = %s")
+                        params.append(effective_id_aseguradora)
+                    if effective_codigo_ramo and not existing_codigo_ramo:
+                        updates.append("codigo_ramo = %s")
+                        params.append(effective_codigo_ramo)
 
                     if updates:
                         updates.append("updated_at = CURRENT_TIMESTAMP")
@@ -108,6 +168,49 @@ class PgEnvelopeRepository:
 
                 # 2. Create new envelope
                 envelope_id = str(uuid.uuid4())
+                if not clean_ramo and effective_codigo_ramo:
+                    try:
+                        from app.application.catalog_service import catalog_service
+                        clean_ramo = catalog_service.resolve_ramo_nombre(effective_codigo_ramo)
+                    except Exception:
+                        pass
+
+                # Primary insertion: full schema including id_aseguradora and codigo_ramo
+                try:
+                    cur.execute("SAVEPOINT insert_full;")
+                    cur.execute(
+                        """
+                        INSERT INTO policy_envelopes (
+                            id, numero_poliza, company_sigla, ramo, id_cliente,
+                            nombre_cliente, id_aseguradora, codigo_ramo
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (numero_poliza, company_sigla) DO UPDATE
+                        SET updated_at = CURRENT_TIMESTAMP,
+                            ramo = COALESCE(policy_envelopes.ramo, EXCLUDED.ramo),
+                            id_cliente = COALESCE(policy_envelopes.id_cliente, EXCLUDED.id_cliente),
+                            nombre_cliente = COALESCE(policy_envelopes.nombre_cliente, EXCLUDED.nombre_cliente),
+                            id_aseguradora = COALESCE(policy_envelopes.id_aseguradora, EXCLUDED.id_aseguradora),
+                            codigo_ramo = COALESCE(policy_envelopes.codigo_ramo, EXCLUDED.codigo_ramo)
+                        RETURNING id;
+                        """,
+                        (
+                            envelope_id, clean_num, clean_sigla, clean_ramo,
+                            clean_id_cliente, clean_nombre_cliente,
+                            effective_id_aseguradora, effective_codigo_ramo,
+                        ),
+                    )
+                    res = cur.fetchone()
+                    cur.execute("RELEASE SAVEPOINT insert_full;")
+                    conn.commit()
+                    return str(res[0]) if res else envelope_id
+                except Exception:
+                    try:
+                        cur.execute("ROLLBACK TO SAVEPOINT insert_full;")
+                    except Exception:
+                        pass
+
+                # Fallback strategy 1: with nombre_cliente without new FK columns
                 if clean_nombre_cliente:
                     try:
                         cur.execute("SAVEPOINT insert_with_nombre;")
@@ -117,6 +220,7 @@ class PgEnvelopeRepository:
                             VALUES (%s, %s, %s, %s, %s, %s)
                             ON CONFLICT (numero_poliza, company_sigla) DO UPDATE
                             SET updated_at = CURRENT_TIMESTAMP,
+                                ramo = COALESCE(policy_envelopes.ramo, EXCLUDED.ramo),
                                 id_cliente = COALESCE(policy_envelopes.id_cliente, EXCLUDED.id_cliente),
                                 nombre_cliente = COALESCE(policy_envelopes.nombre_cliente, EXCLUDED.nombre_cliente)
                             RETURNING id;
@@ -133,12 +237,14 @@ class PgEnvelopeRepository:
                         except Exception:
                             pass
 
+                # Fallback strategy 2: baseline insert
                 cur.execute(
                     """
                     INSERT INTO policy_envelopes (id, numero_poliza, company_sigla, ramo, id_cliente)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (numero_poliza, company_sigla) DO UPDATE
                     SET updated_at = CURRENT_TIMESTAMP,
+                        ramo = COALESCE(policy_envelopes.ramo, EXCLUDED.ramo),
                         id_cliente = COALESCE(policy_envelopes.id_cliente, EXCLUDED.id_cliente)
                     RETURNING id;
                     """,

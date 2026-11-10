@@ -168,3 +168,59 @@ class TestAsyncExtractionEndpoint:
             mock_repo.create_job.assert_called_once_with("async_doc.pdf")
         finally:
             mock_app.dependency_overrides.pop(get_rag_repo, None)
+
+    def test_run_async_extraction_uses_rag_policy_id(self, tmp_path) -> None:
+        from unittest.mock import MagicMock
+        from app.api.v1.extraction import _run_async_extraction
+        from app.domain.models.document import ExtractionResult, DocumentMetadata
+        from app.domain.models.extraction import ExtractionStatus
+
+        dummy_file = tmp_path / "test.pdf"
+        dummy_file.write_bytes(b"%PDF-dummy")
+
+        mock_extraction_svc = MagicMock()
+        mock_result = MagicMock(spec=ExtractionResult)
+        mock_result.document_id = "doc-uuid-in-memory"
+        mock_result.status = ExtractionStatus.SUCCESS
+        mock_result.is_successful = True
+        mock_meta = MagicMock(spec=DocumentMetadata)
+        mock_meta.page_count = 1
+        mock_meta.tables_detected = 0
+        mock_meta.extraction_time_seconds = 0.5
+        mock_result.metadata = mock_meta
+        mock_extraction_svc.extract_document.return_value = mock_result
+
+        mock_rag_svc = MagicMock()
+        mock_rag_report = MagicMock()
+        mock_rag_report.policy_id = "real-db-policy-uuid-1234"
+        mock_rag_report.job_id = "internal-job-uuid"
+        mock_rag_report.skipped_duplicate = False
+        mock_rag_report.chunks_created = 5
+        mock_rag_report.errors = []
+        mock_rag_report.envelope_id = None
+        mock_rag_report.tipo_documento = "CONDICIONADO_GENERAL"
+        mock_rag_svc.process_extraction_result.return_value = mock_rag_report
+
+        mock_rag_repo = MagicMock()
+
+        _run_async_extraction(
+            job_id="job-uuid-999",
+            temp_path=dummy_file,
+            filename="test.pdf",
+            id_cliente_clean="12345",
+            sigla_clean="CRE",
+            num_poliza_clean="POL-01",
+            ramo_clean="AUTOMOTORES",
+            tipo_doc_clean="CONDICIONADO_GENERAL",
+            extraction_service=mock_extraction_svc,
+            rag_service=mock_rag_svc,
+            rag_repo=mock_rag_repo,
+        )
+
+        # Ensure update_job was called with the REAL policy_id from RAG, not document_id
+        mock_rag_repo.update_job.assert_called_once_with(
+            job_id="job-uuid-999",
+            status="COMPLETED",
+            policy_id="real-db-policy-uuid-1234",
+        )
+

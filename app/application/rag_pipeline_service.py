@@ -103,6 +103,18 @@ class RagPipelineService:
             except Exception as e:
                 logger.warning("[Envelope Safeguard] Error buscando sobres existentes del cliente", error=str(e))
 
+        # Check existing envelope to inherit known ramo / company_sigla if missing
+        if (not effective_ramo or not effective_sigla) and effective_num and hasattr(self._envelope_repo, "get_envelopes_by_number"):
+            try:
+                existing_pol_envs = self._envelope_repo.get_envelopes_by_number(effective_num)
+                if existing_pol_envs:
+                    env_match = existing_pol_envs[0]
+                    effective_ramo = effective_ramo or env_match.get("ramo")
+                    effective_sigla = effective_sigla or env_match.get("company_sigla")
+                    effective_name = effective_name or env_match.get("nombre_cliente")
+            except Exception:
+                pass
+
         # Strategy 2: If still no policy number, infer from filename
         if not effective_num and file_name:
             import re  # noqa: PLC0415
@@ -137,6 +149,16 @@ class RagPipelineService:
         if effective_name:
             env_kwargs["nombre_cliente"] = effective_name
 
+        # Resolve catalog foreign keys safely
+        try:
+            from app.application.catalog_service import catalog_service
+            if effective_sigla:
+                env_kwargs["id_aseguradora"] = catalog_service.resolve_company_id(effective_sigla)
+            if effective_ramo:
+                env_kwargs["codigo_ramo"] = catalog_service.resolve_ramo_codigo(effective_ramo)
+        except Exception as cat_err:
+            logger.debug("[Envelope Safeguard] No se pudieron pre-resolver catalog IDs", error=str(cat_err))
+
         try:
             envelope_id = self._envelope_repo.get_or_create_envelope(**env_kwargs)
             if envelope_id:
@@ -152,6 +174,7 @@ class RagPipelineService:
             return self._envelope_repo.get_or_create_envelope(
                 numero_poliza=effective_num[:100],
                 company_sigla=effective_sigla[:20] if effective_sigla else None,
+                ramo=effective_ramo[:200] if effective_ramo else None,
             )
         except Exception as exc_minimal:
             logger.critical(
@@ -513,6 +536,63 @@ class RagPipelineService:
             effective_ramo = pol_ramo or extracted_ramo or getattr(result.metadata, "ramo", None)
             effective_id_cliente = client_id_hint or extracted_nit or extracted_ci
             effective_nombre_cliente = client_name_hint or extracted_tomador or extracted_asegurado
+
+            # [Additive Safeguard] Infer company sigla from full name if missing
+            if not effective_sigla:
+                extracted_aseguradora = (
+                    structured_json.get("datos_cabecera", {}).get("aseguradora")
+                    if isinstance(structured_json.get("datos_cabecera"), dict)
+                    else None
+                )
+                if extracted_aseguradora:
+                    try:
+                        from app.application.catalog_service import catalog_service
+                        co = catalog_service.get_company_by_sigla(extracted_aseguradora)
+                        if co:
+                            effective_sigla = co.sigla
+                    except Exception:
+                        pass
+
+            # [Additive Safeguard] Infer ramo from codigo_spvs, policy number, or document text if missing
+            if not effective_ramo:
+                spvs = (
+                    structured_json.get("datos_cabecera", {}).get("codigo_spvs")
+                    if isinstance(structured_json.get("datos_cabecera"), dict)
+                    else None
+                )
+                if spvs:
+                    try:
+                        from app.application.catalog_service import catalog_service
+                        effective_ramo = catalog_service.resolve_ramo_nombre(spvs)
+                    except Exception:
+                        pass
+
+            if not effective_ramo and effective_pol_num:
+                try:
+                    import re
+                    from app.application.catalog_service import catalog_service
+                    for part in re.split(r"[-_/]+", effective_pol_num):
+                        if part and len(part) >= 2:
+                            r_name = catalog_service.resolve_ramo_nombre(part)
+                            if r_name:
+                                effective_ramo = r_name
+                                break
+                except Exception:
+                    pass
+
+            if not effective_ramo and result.markdown:
+                try:
+                    import re
+                    from app.application.catalog_service import catalog_service
+                    m = re.search(r"(?:RAMO|P[ÓO]LIZA\s+DE\s+SEGURO\s+DE)\s*[:：]?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{4,60})", result.markdown, re.IGNORECASE)
+                    if m:
+                        candidate = m.group(1).strip()
+                        r_name = catalog_service.resolve_ramo_nombre(candidate)
+                        if r_name:
+                            effective_ramo = r_name
+                except Exception:
+                    pass
+
             effective_doc_type = (
                 normalize_document_type(doc_type)
                 or normalize_document_type(file_name)

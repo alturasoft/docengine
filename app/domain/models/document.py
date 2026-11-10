@@ -73,6 +73,7 @@ class DocumentMetadata:
     tipo_documento: str | None = None
     id_cliente: str | None = None
     nombre_cliente: str | None = None
+    ramo: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize metadata to a JSON-compatible dictionary.
@@ -107,6 +108,7 @@ class DocumentMetadata:
             "tipo_documento": self.tipo_documento,
             "id_cliente": self.id_cliente,
             "nombre_cliente": self.nombre_cliente,
+            "ramo": self.ramo,
         }
 
 
