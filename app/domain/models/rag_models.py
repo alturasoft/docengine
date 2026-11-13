@@ -118,6 +118,11 @@ class PolicyProcessingStats:
     coberturas_extracted_count: int = 0
     tables_detected: int = 0
     memory_peak_mb: float | None = None
+    envelope_id: str | None = None
+    file_name: str | None = None
+    file_hash: str | None = None
+    tipo_documento: str | None = None
+    id_cliente: str | None = None
     created_at: datetime = field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
     )
@@ -149,6 +154,11 @@ class PolicyProcessingStats:
             "coberturas_extracted_count": self.coberturas_extracted_count,
             "tables_detected": self.tables_detected,
             "memory_peak_mb": round(self.memory_peak_mb, 2) if self.memory_peak_mb is not None else None,
+            "envelope_id": self.envelope_id,
+            "file_name": self.file_name,
+            "file_hash": self.file_hash,
+            "tipo_documento": self.tipo_documento,
+            "id_cliente": self.id_cliente,
             "created_at": self.created_at.isoformat(),
         }
 

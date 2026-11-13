@@ -1,0 +1,2711 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocEngine — Control de Procesamiento y Auditoría</title>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0b1120;
+      --bg-surface: rgba(15, 23, 42, 0.85);
+      --bg-card: rgba(30, 41, 59, 0.72);
+      --bg-card-solid: #1e293b;
+      --bg-card-border: rgba(255, 255, 255, 0.08);
+      --bg-input: rgba(15, 23, 42, 0.75);
+      --accent-primary: #6366f1;
+      --accent-primary-hover: #4f46e5;
+      --accent-cyan: #06b6d4;
+      --accent-success: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --accent-pink: #ec4899;
+      --accent-purple: #a855f7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.25);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    body.light-theme {
+      --bg-dark: #f1f5f9;
+      --bg-surface: rgba(255, 255, 255, 0.92);
+      --bg-card: rgba(255, 255, 255, 0.95);
+      --bg-card-solid: #ffffff;
+      --bg-card-border: rgba(15, 23, 42, 0.09);
+      --bg-input: #f8fafc;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+      --shadow-card: 0 2px 12px rgba(15, 23, 42, 0.06);
+      background-image:
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.07) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-dark);
+      background-image:
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.14) 0px, transparent 48%),
+        radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 45%),
+        radial-gradient(at 80% 100%, rgba(16, 185, 129, 0.07) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+      transition: background-color 0.25s, color 0.25s;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-surface);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--bg-card-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0.85rem 1.75rem;
+    }
+
+    .header-container {
+      max-width: 1560px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      color: white;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+      flex-shrink: 0;
+    }
+
+    .logo-text h1 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+    }
+
+    .logo-text span {
+      font-size: 0.72rem;
+      color: var(--accent-cyan);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+
+    .nav-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.38rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--bg-card-border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    body.light-theme .nav-pill {
+      background: #f8fafc;
+    }
+
+    .nav-pill:hover {
+      color: var(--text-main);
+      border-color: var(--accent-primary);
+      background: rgba(99, 102, 241, 0.12);
+    }
+
+    .nav-pill.active {
+      color: white;
+      background: var(--accent-primary);
+      border-color: var(--accent-primary);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.35rem 0.72rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+    }
+
+    body.light-theme .status-pill {
+      color: #059669;
+    }
+
+    .status-pill.warning {
+      border-color: rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+    }
+
+    .status-pill.offline {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+    }
+
+    .dot-pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1560px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.35rem 1.75rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* Card Surface */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      padding: 1.15rem 1.25rem;
+      box-shadow: var(--shadow-card);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.9rem;
+      flex-wrap: wrap;
+    }
+
+    .section-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section-title i {
+      color: var(--accent-primary);
+    }
+
+    /* Filter Toolbar */
+    .filter-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .filter-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .segmented-group {
+      display: inline-flex;
+      background: var(--bg-input);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-sm);
+      padding: 0.2rem;
+      gap: 0.2rem;
+    }
+
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.34rem 0.72rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .seg-btn:hover {
+      color: var(--text-main);
+    }
+
+    .seg-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+    }
+
+    .filter-controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.7rem;
+      align-items: end;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+    }
+
+    .field-group label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-dim);
+    }
+
+    .input-ctrl {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      border-radius: var(--radius-sm);
+      padding: 0.46rem 0.68rem;
+      font-family: var(--font-sans);
+      font-size: 0.81rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input-ctrl:focus {
+      border-color: var(--accent-primary);
+    }
+
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.48rem 0.85rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--bg-card-border);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.79rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    body.light-theme .btn-action {
+      background: #f8fafc;
+    }
+
+    .btn-action:hover {
+      border-color: var(--accent-primary);
+      background: rgba(99, 102, 241, 0.14);
+    }
+
+    .btn-action.primary {
+      background: var(--accent-primary);
+      border-color: var(--accent-primary);
+      color: white;
+    }
+
+    .btn-action.primary:hover {
+      background: var(--accent-primary-hover);
+    }
+
+    /* Period Pulse Strip (Daily vs Weekly vs Inventory) */
+    .pulse-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    @media (max-width: 1120px) {
+      .pulse-grid { grid-template-columns: 1fr; }
+    }
+
+    .pulse-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pulse-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+
+    .pulse-card.daily::before { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
+    .pulse-card.weekly::before { background: linear-gradient(90deg, #6366f1, #a855f7); }
+    .pulse-card.inventory::before { background: linear-gradient(90deg, #10b981, #06b6d4); }
+
+    .pulse-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .pulse-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+
+    .pulse-stat .p-val {
+      font-family: var(--font-mono);
+      font-size: 1.18rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .pulse-stat .p-lbl {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .growth-badge {
+      font-family: var(--font-mono);
+      font-size: 0.71rem;
+      font-weight: 600;
+      padding: 0.14rem 0.48rem;
+      border-radius: 999px;
+    }
+
+    .growth-up { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .growth-down { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .growth-flat { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
+
+    /* Executive KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.9rem;
+    }
+
+    @media (max-width: 1400px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 760px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .kpi-grid { grid-template-columns: 1fr; } }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.05rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.55rem;
+      box-shadow: var(--shadow-card);
+    }
+
+    .kpi-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .kpi-label {
+      font-size: 0.73rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .kpi-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    .kpi-value {
+      font-family: var(--font-mono);
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--text-main);
+      line-height: 1.15;
+    }
+
+    .kpi-sub {
+      font-size: 0.73rem;
+      color: var(--text-dim);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.65rem;
+      border-top: 1px solid var(--bg-card-border);
+      padding-top: 0.48rem;
+    }
+
+    .kpi-sub b {
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    /* Charts Layout */
+    .charts-row-main {
+      display: grid;
+      grid-template-columns: 1.75fr 1fr;
+      gap: 1rem;
+    }
+
+    .charts-row-secondary {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .charts-row-split {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 1200px) {
+      .charts-row-main,
+      .charts-row-secondary,
+      .charts-row-split {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .chart-box {
+      position: relative;
+      height: 280px;
+      width: 100%;
+    }
+
+    .chart-box-sm {
+      position: relative;
+      height: 235px;
+      width: 100%;
+    }
+
+    /* Pipeline stage breakdown list */
+    .stage-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      margin-top: 0.25rem;
+    }
+
+    .stage-item-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.77rem;
+      margin-bottom: 0.22rem;
+    }
+
+    .stage-item-name { font-weight: 500; color: var(--text-main); }
+    .stage-item-val { font-family: var(--font-mono); font-weight: 600; color: var(--text-muted); }
+
+    .stage-track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    body.light-theme .stage-track { background: #e2e8f0; }
+
+    .stage-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    .pipeline-summary-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      margin-top: 0.9rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--bg-card-border);
+      text-align: center;
+    }
+
+    .ps-val {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .ps-lbl {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-sm);
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.79rem;
+      text-align: left;
+    }
+
+    table.data-table thead th {
+      background: rgba(15, 23, 42, 0.65);
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--bg-card-border);
+      white-space: nowrap;
+    }
+
+    body.light-theme table.data-table thead th {
+      background: #f8fafc;
+    }
+
+    table.data-table tbody td {
+      padding: 0.58rem 0.75rem;
+      border-bottom: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      vertical-align: middle;
+    }
+
+    table.data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.data-table tbody tr:hover {
+      background: rgba(99, 102, 241, 0.06);
+    }
+
+    .mono { font-family: var(--font-mono); font-size: 0.76rem; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.16rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.69rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .badge-success { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-danger  { background: rgba(239, 68, 68, 0.16); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-info    { background: rgba(6, 182, 212, 0.16); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+    .badge-primary { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.35); }
+    .badge-neutral { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.25); }
+
+    body.light-theme .badge-success { color: #047857; }
+    body.light-theme .badge-danger  { color: #b91c1c; }
+    body.light-theme .badge-warning { color: #b45309; }
+    body.light-theme .badge-info    { color: #0e7490; }
+    body.light-theme .badge-primary { color: #4338ca; }
+
+    /* Tabs */
+    .tabs-nav {
+      display: flex;
+      gap: 0.4rem;
+      border-bottom: 1px solid var(--bg-card-border);
+      padding-bottom: 0.65rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 0.48rem 0.9rem;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      background: rgba(99, 102, 241, 0.16);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+    }
+
+    body.light-theme .tab-btn.active {
+      color: var(--accent-primary);
+    }
+
+    .tab-count {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.08rem 0.42rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    body.light-theme .tab-count { background: #e2e8f0; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+      flex-wrap: wrap;
+    }
+
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 0.85rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    /* Error Categories Strip */
+    .error-cat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .error-cat-card {
+      background: rgba(239, 68, 68, 0.06);
+      border: 1px solid rgba(239, 68, 68, 0.22);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 0.9rem;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .error-cat-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+
+    .error-cat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.3rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #fca5a5;
+    }
+
+    body.light-theme .error-cat-top { color: #b91c1c; }
+
+    .error-cat-sample {
+      font-family: var(--font-mono);
+      font-size: 0.71rem;
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Log Console */
+    .log-box {
+      background: #050811;
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      height: 380px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+
+    .log-row {
+      padding: 0.18rem 0.4rem;
+      border-radius: 4px;
+      margin-bottom: 0.2rem;
+      word-break: break-word;
+    }
+
+    .log-row.err {
+      background: rgba(239, 68, 68, 0.12);
+      border-left: 3px solid #ef4444;
+      color: #fca5a5;
+    }
+
+    .log-row.warn {
+      background: rgba(245, 158, 11, 0.1);
+      border-left: 3px solid #f59e0b;
+      color: #fde68a;
+    }
+
+    .truncate-cell {
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Modal for inspecting full error/metadata */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1.25rem;
+    }
+
+    .modal-backdrop.show { display: flex; }
+
+    .modal-box {
+      background: var(--bg-card-solid);
+      border: 1px solid var(--bg-card-border);
+      border-radius: var(--radius-md);
+      max-width: 720px;
+      width: 100%;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.9rem 1.25rem;
+      border-bottom: 1px solid var(--bg-card-border);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+
+    .modal-body {
+      padding: 1.15rem 1.25rem;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-main);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2.2rem 1rem;
+      color: var(--text-dim);
+      font-size: 0.84rem;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.28); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="logo-area">
+        <div class="logo-icon"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="logo-text">
+          <h1>DocEngine Control Center</h1>
+          <span>Auditoría Inmutable (WORM) & Telemetría de Pólizas</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <a href="/" class="nav-pill" title="Asistente Chat RAG">
+          <i class="fa-solid fa-comments"></i> Chat RAG
+        </a>
+        <a href="/ingesta" class="nav-pill" title="Consola de Ingesta y Extracción">
+          <i class="fa-solid fa-file-arrow-up"></i> Ingesta
+        </a>
+        <a href="/eliminar" class="nav-pill" title="Gestión y Eliminación de Sobres">
+          <i class="fa-solid fa-folder-minus"></i> Sobres
+        </a>
+        <span class="nav-pill active">
+          <i class="fa-solid fa-gauge-high"></i> Dashboard
+        </span>
+
+        <span id="wormBadge" class="status-pill" title="Verificando blindaje WORM en PostgreSQL">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span id="wormBadgeText">WORM: Verificando...</span>
+        </span>
+
+        <span id="serverBadge" class="status-pill" title="Estado del servidor FastAPI">
+          <span class="dot-pulse"></span>
+          <span id="serverBadgeText">Conectando...</span>
+        </span>
+
+        <button class="btn-action" id="btnAutoRefresh" onclick="toggleAutoRefresh()" title="Auto-refresco cada 30 segundos">
+          <i class="fa-solid fa-rotate" id="refreshIcon"></i>
+          <span id="autoRefreshText">Auto (30s)</span>
+        </button>
+
+        <button class="btn-action" onclick="openApiKeyModal()" title="Configurar X-API-Key (opcional si RBAC está activo)">
+          <i class="fa-solid fa-key"></i>
+        </button>
+
+        <button class="btn-action" onclick="toggleTheme()" title="Cambiar Tema (Oscuro / Claro)">
+          <i class="fa-solid fa-sun" id="themeIcon" style="color: #f59e0b;"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Global Control & Filter Toolbar -->
+    <section class="card filter-bar">
+      <div class="filter-top-row">
+        <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+          <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;">
+            <i class="fa-solid fa-calendar-days" style="color: var(--accent-cyan);"></i> Ventana:
+          </span>
+          <div class="segmented-group" id="quickRangeGroup">
+            <button class="seg-btn" data-range="today" onclick="applyQuickRange('today', this)">Hoy</button>
+            <button class="seg-btn" data-range="7d" onclick="applyQuickRange('7d', this)">Últimos 7 días</button>
+            <button class="seg-btn" data-range="30d" onclick="applyQuickRange('30d', this)">Últimos 30 días</button>
+            <button class="seg-btn active" data-range="all" onclick="applyQuickRange('all', this)">Todo el historial</button>
+          </div>
+
+          <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-left: 0.4rem;">
+            <i class="fa-solid fa-chart-column" style="color: var(--accent-primary);"></i> Serie:
+          </span>
+          <div class="segmented-group" id="granularityGroup">
+            <button class="seg-btn active" data-gran="daily" onclick="setGranularity('daily', this)">Diario</button>
+            <button class="seg-btn" data-gran="weekly" onclick="setGranularity('weekly', this)">Semanal</button>
+            <button class="seg-btn" data-gran="monthly" onclick="setGranularity('monthly', this)">Mensual</button>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span id="lastUpdatedBadge" class="mono" style="font-size: 0.72rem; color: var(--text-dim);">Actualizado: --</span>
+          <button class="btn-action primary" onclick="refreshAllData()">
+            <i class="fa-solid fa-arrows-rotate"></i> Actualizar
+          </button>
+          <select id="exportSelect" class="input-ctrl" style="width: auto; padding: 0.42rem 0.65rem;" onchange="handleCsvExport(this)">
+            <option value="">⬇ Exportar CSV...</option>
+            <option value="ledger">Libro Mayor (audit_metrics_ledger)</option>
+            <option value="stats">Telemetría (policy_processing_stats)</option>
+            <option value="jobs">Trabajos y Errores (processing_jobs)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-controls-grid">
+        <div class="field-group">
+          <label>Fecha Desde</label>
+          <input type="date" id="filterDateFrom" class="input-ctrl" onchange="onFilterChange(true)">
+        </div>
+        <div class="field-group">
+          <label>Fecha Hasta</label>
+          <input type="date" id="filterDateTo" class="input-ctrl" onchange="onFilterChange(true)">
+        </div>
+        <div class="field-group">
+          <label>Aseguradora</label>
+          <select id="filterCompany" class="input-ctrl" onchange="onFilterChange()">
+            <option value="">Todas las aseguradoras</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Ramo</label>
+          <select id="filterRamo" class="input-ctrl" onchange="onFilterChange()">
+            <option value="">Todos los ramos</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Tipo de Documento</label>
+          <select id="filterDocType" class="input-ctrl" onchange="onFilterChange()">
+            <option value="">Todos los tipos</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Tipología PDF</label>
+          <select id="filterFileType" class="input-ctrl" onchange="onFilterChange()">
+            <option value="">Todas (Digital / Escaneado)</option>
+            <option value="DIGITAL">DIGITAL</option>
+            <option value="SCANNED">SCANNED</option>
+            <option value="HYBRID">HYBRID</option>
+            <option value="UNKNOWN">UNKNOWN</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <button class="btn-action" style="width: 100%;" onclick="resetAllFilters()">
+            <i class="fa-solid fa-filter-circle-xmark"></i> Limpiar Filtros
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pulse Strip: Diario (Hoy) vs Semanal (7 Días) vs Inventario & Extractores -->
+    <section class="pulse-grid">
+      <div class="pulse-card daily">
+        <div class="pulse-header">
+          <span><i class="fa-solid fa-sun" style="color: var(--accent-cyan);"></i> Procesamiento Diario (Hoy)</span>
+          <span class="badge badge-info">En curso</span>
+        </div>
+        <div class="pulse-metrics">
+          <div class="pulse-stat">
+            <div class="p-val" id="snapTodayDocs">0</div>
+            <div class="p-lbl">Docs Extraídos</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapTodayPages">0</div>
+            <div class="p-lbl">Páginas</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapTodayEnvs">0</div>
+            <div class="p-lbl">Sobres</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapTodayErrors" style="color: #f87171;">0</div>
+            <div class="p-lbl">Errores</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pulse-card weekly">
+        <div class="pulse-header">
+          <span><i class="fa-solid fa-calendar-week" style="color: var(--accent-primary);"></i> Procesamiento Semanal (7 días)</span>
+          <span id="snapWeekGrowth" class="growth-badge growth-flat">-- vs sem. ant.</span>
+        </div>
+        <div class="pulse-metrics">
+          <div class="pulse-stat">
+            <div class="p-val" id="snapWeekDocs">0</div>
+            <div class="p-lbl">Docs Extraídos</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapWeekPages">0</div>
+            <div class="p-lbl">Páginas</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapWeekEnvs">0</div>
+            <div class="p-lbl">Sobres</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapWeekErrors" style="color: #f87171;">0</div>
+            <div class="p-lbl">Errores</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pulse-card inventory">
+        <div class="pulse-header">
+          <span><i class="fa-solid fa-database" style="color: var(--accent-success);"></i> Inventario Activo & Extractores</span>
+          <span class="badge badge-success" id="snapHwmBadge">HWM: 0</span>
+        </div>
+        <div class="pulse-metrics">
+          <div class="pulse-stat">
+            <div class="p-val" id="snapActiveEnvs">0</div>
+            <div class="p-lbl">Sobres Activos</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapActiveDocs">0</div>
+            <div class="p-lbl">Docs Activos</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapFleetCount">0</div>
+            <div class="p-lbl">Vehículos Flota</div>
+          </div>
+          <div class="pulse-stat">
+            <div class="p-val" id="snapInsuredCount">0</div>
+            <div class="p-lbl">Pers. Colectivas</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Executive KPI Grid -->
+    <section class="kpi-grid">
+      <!-- KPI 1: Documents & Envelopes -->
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Documentos Extraídos</span>
+          <div class="kpi-icon" style="background: rgba(99, 102, 241, 0.16); color: #818cf8;">
+            <i class="fa-solid fa-file-shield"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiDocsTotal">0</div>
+        <div class="kpi-sub">
+          <span>Sobres Hist: <b id="kpiEnvHist">0</b></span>
+          <span>Clientes: <b id="kpiClients">0</b></span>
+          <span>Eliminados: <b id="kpiDocsDeleted">0</b></span>
+        </div>
+      </div>
+
+      <!-- KPI 2: Pages, Tables, Volume -->
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Volumen Procesado</span>
+          <div class="kpi-icon" style="background: rgba(236, 72, 153, 0.16); color: #f472b6;">
+            <i class="fa-solid fa-book-open"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiPagesTotal">0 <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted);">págs</span></div>
+        <div class="kpi-sub">
+          <span>Tablas: <b id="kpiTables">0</b></span>
+          <span>Coberturas: <b id="kpiCoberturas">0</b></span>
+          <span>Datos: <b id="kpiVolumeBytes">0 KB</b></span>
+        </div>
+      </div>
+
+      <!-- KPI 3: RAG Vector Index -->
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Índice Vectorial RAG</span>
+          <div class="kpi-icon" style="background: rgba(6, 182, 212, 0.16); color: #22d3ee;">
+            <i class="fa-solid fa-cubes"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiChunksTotal">0</div>
+        <div class="kpi-sub">
+          <span>Parent: <b id="kpiParentChunks">0</b></span>
+          <span>Child: <b id="kpiChildChunks">0</b></span>
+          <span>Mapas: <b id="kpiSummaries">0</b></span>
+        </div>
+      </div>
+
+      <!-- KPI 4: Jobs & Error Rate -->
+      <div class="kpi-card" id="cardKpiReliability">
+        <div class="kpi-top">
+          <span class="kpi-label">Fiabilidad y Errores</span>
+          <div class="kpi-icon" id="kpiReliabilityIcon" style="background: rgba(16, 185, 129, 0.16); color: #34d399;">
+            <i class="fa-solid fa-circle-check" id="kpiReliabilityFaIcon"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiSuccessRate">100%</div>
+        <div class="kpi-sub">
+          <span>OK: <b id="kpiJobsCompleted">0</b></span>
+          <span>Dup: <b id="kpiJobsSkipped">0</b></span>
+          <span style="color: #f87171;">Fallos: <b id="kpiJobsFailed" style="color: #f87171;">0</b></span>
+        </div>
+      </div>
+
+      <!-- KPI 5: Pipeline Speed & RAM -->
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Rendimiento Motor</span>
+          <div class="kpi-icon" style="background: rgba(168, 85, 247, 0.16); color: #c084fc;">
+            <i class="fa-solid fa-stopwatch"></i>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiAvgEndToEnd">0.0s</div>
+        <div class="kpi-sub">
+          <span>P95 RAG: <b id="kpiP95">0.0s</b></span>
+          <span>/Pág: <b id="kpiPerPage">0.0s</b></span>
+          <span>Pico RAM: <b id="kpiMaxMem">0 MB</b></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Row 1 Charts: Time Series + Pipeline Stage Breakdown -->
+    <section class="charts-row-main">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">
+            <i class="fa-solid fa-chart-area"></i>
+            <span id="tsChartTitle">Evolución de Procesamiento</span>
+          </div>
+          <div class="segmented-group">
+            <button class="seg-btn active" onclick="switchTsMode('status', this)">Volumen & Errores</button>
+            <button class="seg-btn" onclick="switchTsMode('content', this)">Páginas, Tablas & Chunks</button>
+            <button class="seg-btn" onclick="switchTsMode('perf', this)">Tiempos de Pipeline</button>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="chartTimeSeries"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">
+            <i class="fa-solid fa-gauge"></i> Desglose de Tiempos por Etapa
+          </div>
+          <span class="badge badge-primary" id="badgeAvgTotalE2E">E2E: 0s</span>
+        </div>
+        <div class="stage-bars" id="pipelineStageBars">
+          <!-- Dynamically populated -->
+        </div>
+        <div class="pipeline-summary-strip">
+          <div>
+            <div class="ps-val" id="pipeDoclingAvg">0.0s</div>
+            <div class="ps-lbl">Extracción Docling</div>
+          </div>
+          <div>
+            <div class="ps-val" id="pipeRagAvg">0.0s</div>
+            <div class="ps-lbl">Pipeline RAG</div>
+          </div>
+          <div>
+            <div class="ps-val" id="pipeMemAvg">0 MB</div>
+            <div class="ps-lbl">RAM Promedio</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Row 2 Charts: PDF Tipología/OCR + Ledger Events + Document Types -->
+    <section class="charts-row-secondary">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i class="fa-solid fa-eye"></i> Tipología PDF & OCR</div>
+          <span class="badge badge-info" id="badgeOcrRate">OCR: 0%</span>
+        </div>
+        <div class="chart-box-sm">
+          <canvas id="chartFileTypes"></canvas>
+        </div>
+        <div style="margin-top: 0.6rem; font-size: 0.74rem; color: var(--text-dim); display: flex; justify-content: space-between;">
+          <span>Docs con OCR: <b id="lblOcrCount" style="color: var(--text-main);">0</b></span>
+          <span>Ratio Escaneo Prom.: <b id="lblScanRatio" style="color: var(--text-main);">0%</b></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i class="fa-solid fa-book"></i> Eventos del Libro Mayor</div>
+          <span class="badge badge-neutral" id="badgeLedgerTotal">0 eventos</span>
+        </div>
+        <div class="chart-box-sm">
+          <canvas id="chartLedgerEvents"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i class="fa-solid fa-layer-group"></i> Por Tipo de Documento</div>
+        </div>
+        <div class="chart-box-sm">
+          <canvas id="chartDocTypes"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Row 3: Company Breakdown Table & Ramo Chart -->
+    <section class="charts-row-split">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i class="fa-solid fa-building-shield"></i> Rendimiento por Aseguradora</div>
+          <span class="mono" style="font-size: 0.72rem; color: var(--text-dim);" id="lblCompanyCount">0 compañías</span>
+        </div>
+        <div class="table-wrap" style="max-height: 310px; overflow-y: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Sigla / Aseguradora</th>
+                <th>Docs</th>
+                <th>Activos</th>
+                <th>Sobres</th>
+                <th>Págs</th>
+                <th>Tablas</th>
+                <th>Chunks</th>
+                <th>Cob.</th>
+                <th>T. Extr.</th>
+                <th>T. RAG</th>
+                <th>Fallos</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyCompanyBreakdown">
+              <tr><td colspan="11" class="empty-state">Cargando datos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title"><i class="fa-solid fa-tags"></i> Distribución por Ramo de Seguro</div>
+        </div>
+        <div class="chart-box" style="height: 290px;">
+          <canvas id="chartRamos"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Deep Audit & Operations Tabs -->
+    <section class="card">
+      <div class="tabs-nav">
+        <button class="tab-btn active" onclick="switchAuditTab('errors', this)">
+          <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-danger);"></i>
+          Control de Trabajos y Errores
+          <span class="tab-count" id="tabCntErrors">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchAuditTab('ledger', this)">
+          <i class="fa-solid fa-scroll" style="color: var(--accent-primary);"></i>
+          Libro Mayor Inmutable (audit_metrics_ledger)
+          <span class="tab-count" id="tabCntLedger">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchAuditTab('stats', this)">
+          <i class="fa-solid fa-microscope" style="color: var(--accent-cyan);"></i>
+          Telemetría por Póliza (policy_processing_stats)
+          <span class="tab-count" id="tabCntStats">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchAuditTab('logs', this)">
+          <i class="fa-solid fa-terminal" style="color: var(--accent-success);"></i>
+          Logs del Servidor en Vivo
+          <span class="tab-count" id="tabCntLogs">0</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: Jobs & Errors -->
+      <div id="panelErrors" class="tab-panel active">
+        <div id="errorCategoriesStrip" class="error-cat-grid"></div>
+
+        <div class="table-toolbar">
+          <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+            <div class="segmented-group" id="jobStatusGroup">
+              <button class="seg-btn active" onclick="setJobStatusFilter('FAILED', this)">Fallidos (<span id="cntJobFailed">0</span>)</button>
+              <button class="seg-btn" onclick="setJobStatusFilter('', this)">Todos (<span id="cntJobAll">0</span>)</button>
+              <button class="seg-btn" onclick="setJobStatusFilter('PROCESSING', this)">En Proceso (<span id="cntJobProcessing">0</span>)</button>
+              <button class="seg-btn" onclick="setJobStatusFilter('SKIPPED', this)">Omitidos (<span id="cntJobSkipped">0</span>)</button>
+              <button class="seg-btn" onclick="setJobStatusFilter('COMPLETED', this)">Completados (<span id="cntJobCompleted">0</span>)</button>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="jobsSearchInput" class="input-ctrl" style="width: 260px;" placeholder="Buscar archivo, job_id o error..." onkeydown="if(event.key==='Enter') loadJobsTable(0)">
+            <button class="btn-action" onclick="loadJobsTable(0)"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Fecha Creación</th>
+                <th>Estado</th>
+                <th>Archivo</th>
+                <th>Aseg.</th>
+                <th>N° Póliza</th>
+                <th>Duración</th>
+                <th>Mensaje de Error / Detalle</th>
+                <th>Job ID</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyJobsErrors">
+              <tr><td colspan="8" class="empty-state">Cargando registros...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagJobs"></div>
+      </div>
+
+      <!-- TAB 2: Immutable Audit Ledger -->
+      <div id="panelLedger" class="tab-panel">
+        <div class="table-toolbar">
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <select id="ledgerEventTypeFilter" class="input-ctrl" style="width: 240px;" onchange="loadLedgerTable(0)">
+              <option value="">Todos los eventos del Ledger</option>
+              <option value="DOCUMENT_EXTRACTED">DOCUMENT_EXTRACTED</option>
+              <option value="DOCUMENT_SKIPPED_DUPLICATE">DOCUMENT_SKIPPED_DUPLICATE</option>
+              <option value="DOCUMENT_EXTRACTION_FAILED">DOCUMENT_EXTRACTION_FAILED</option>
+              <option value="ENVELOPE_CREATED">ENVELOPE_CREATED</option>
+              <option value="ENVELOPE_UPDATED">ENVELOPE_UPDATED</option>
+              <option value="DOCUMENT_DELETED">DOCUMENT_DELETED</option>
+              <option value="ENVELOPE_DELETED">ENVELOPE_DELETED</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="ledgerSearchInput" class="input-ctrl" style="width: 270px;" placeholder="Buscar póliza, cliente, archivo o hash..." onkeydown="if(event.key==='Enter') loadLedgerTable(0)">
+            <button class="btn-action" onclick="loadLedgerTable(0)"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Evento</th>
+                <th>Aseg.</th>
+                <th>N° Póliza</th>
+                <th>Ramo / Tipo Doc</th>
+                <th>Cliente</th>
+                <th>Archivo</th>
+                <th>Págs</th>
+                <th>Tablas</th>
+                <th>Chunks</th>
+                <th>Tamaño</th>
+                <th>Duración</th>
+                <th>Meta</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyAuditLedger">
+              <tr><td colspan="13" class="empty-state">Cargando libro mayor...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagLedger"></div>
+      </div>
+
+      <!-- TAB 3: Processing Stats -->
+      <div id="panelStats" class="tab-panel">
+        <div class="table-toolbar">
+          <span style="font-size: 0.78rem; color: var(--text-muted);">
+            Desglose completo de tiempos por fase, jerarquía RAG, OCR y consumo de memoria por documento procesado.
+          </span>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="statsSearchInput" class="input-ctrl" style="width: 270px;" placeholder="Buscar póliza, cliente, archivo..." onkeydown="if(event.key==='Enter') loadStatsTable(0)">
+            <button class="btn-action" onclick="loadStatsTable(0)"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Aseg.</th>
+                <th>N° Póliza</th>
+                <th>Archivo</th>
+                <th>Tipo / OCR</th>
+                <th>Págs</th>
+                <th>Extr. (s/pág)</th>
+                <th>Chunk</th>
+                <th>Embed</th>
+                <th>OpenAI (s)</th>
+                <th>Total RAG</th>
+                <th>Chunks (P/C)</th>
+                <th>Cob. / Tab.</th>
+                <th>RAM Pico</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyProcessingStats">
+              <tr><td colspan="14" class="empty-state">Cargando telemetría...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagStats"></div>
+      </div>
+
+      <!-- TAB 4: Live Server Logs -->
+      <div id="panelLogs" class="tab-panel">
+        <div class="table-toolbar">
+          <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+            <div class="segmented-group">
+              <button class="seg-btn active" onclick="setLogLevelFilter('', this)">Todos</button>
+              <button class="seg-btn" onclick="setLogLevelFilter('ERROR', this)">ERROR (<span id="logCntErr">0</span>)</button>
+              <button class="seg-btn" onclick="setLogLevelFilter('WARNING', this)">WARNING (<span id="logCntWarn">0</span>)</button>
+              <button class="seg-btn" onclick="setLogLevelFilter('INFO', this)">INFO</button>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="logSearchInput" class="input-ctrl" style="width: 240px;" placeholder="Filtrar texto en logs..." oninput="renderLogsBox()">
+            <button class="btn-action" onclick="loadServerLogs()"><i class="fa-solid fa-rotate"></i> Refrescar</button>
+            <button class="btn-action" onclick="downloadLogsTxt()"><i class="fa-solid fa-download"></i> Descargar .log</button>
+          </div>
+        </div>
+        <div id="logBoxContainer" class="log-box">Cargando logs del servidor...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Detail Inspector Modal -->
+  <div id="detailModal" class="modal-backdrop" onclick="if(event.target===this) closeDetailModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="detailModalTitle"><i class="fa-solid fa-circle-info" style="color: var(--accent-primary);"></i> Detalle del Registro</span>
+        <button class="btn-action" onclick="closeDetailModal()"><i class="fa-solid fa-xmark"></i> Cerrar</button>
+      </div>
+      <div class="modal-body" id="detailModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Optional API Key Modal -->
+  <div id="apiKeyModal" class="modal-backdrop" onclick="if(event.target===this) closeApiKeyModal()">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-head">
+        <span><i class="fa-solid fa-key" style="color: var(--accent-warning);"></i> Credencial X-API-Key</span>
+        <button class="btn-action" onclick="closeApiKeyModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div style="padding: 1.2rem; display: flex; flex-direction: column; gap: 0.85rem;">
+        <p style="font-size: 0.82rem; color: var(--text-muted);">
+          Si el servidor tiene activada la seguridad RBAC (<code>DOCENGINE_SECURITY_ENABLED=true</code>), ingresa una API Key con rol <code>readonly</code> o superior.
+        </p>
+        <input type="password" id="apiKeyInput" class="input-ctrl" placeholder="Pega tu X-API-Key aquí...">
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button class="btn-action" onclick="clearApiKey()">Limpiar</button>
+          <button class="btn-action primary" onclick="saveApiKey()">Guardar y Recargar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // State & Configuration
+    // =========================================================================
+    const state = {
+      granularity: 'daily',
+      tsMode: 'status',
+      activeTab: 'errors',
+      jobStatusFilter: 'FAILED',
+      logLevelFilter: '',
+      autoRefresh: true,
+      countdown: 30,
+      filtersPopulated: false,
+      overviewData: null,
+      errorCategories: [],
+      jobsItems: [],
+      ledgerItems: [],
+      statsItems: [],
+      rawLogs: [],
+      pages: {
+        jobs: { limit: 20, offset: 0, total: 0 },
+        ledger: { limit: 20, offset: 0, total: 0 },
+        stats: { limit: 20, offset: 0, total: 0 },
+      },
+      charts: {
+        ts: null,
+        fileTypes: null,
+        ledgerEvents: null,
+        docTypes: null,
+        ramos: null,
+      },
+    };
+
+    function getApiBase() {
+      if (window.location.origin && window.location.origin.startsWith('http')) {
+        return window.location.origin.replace(/\/+$/, '');
+      }
+      return 'http://localhost:8000';
+    }
+
+    function getAuthHeaders() {
+      const key = localStorage.getItem('docengine_api_key');
+      return key ? { 'X-API-Key': key } : {};
+    }
+
+    async function apiFetch(path) {
+      const res = await fetch(`${getApiBase()}${path}`, { headers: getAuthHeaders() });
+      if (res.status === 401 || res.status === 403) {
+        openApiKeyModal();
+        throw new Error(`Acceso restringido (${res.status}). Configura X-API-Key.`);
+      }
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`HTTP ${res.status}: ${txt}`);
+      }
+      return res.json();
+    }
+
+    // =========================================================================
+    // Initialization & Theme
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('docengine_theme');
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        const icon = document.getElementById('themeIcon');
+        if (icon) { icon.className = 'fa-solid fa-moon'; icon.style.color = '#6366f1'; }
+      }
+      applyChartThemeDefaults();
+      refreshAllData();
+
+      setInterval(() => {
+        if (!state.autoRefresh) return;
+        state.countdown -= 1;
+        if (state.countdown <= 0) {
+          state.countdown = 30;
+          refreshAllData(true);
+        }
+        document.getElementById('autoRefreshText').innerText = `Auto (${state.countdown}s)`;
+      }, 1000);
+    });
+
+    function toggleTheme() {
+      const isLight = document.body.classList.toggle('light-theme');
+      const icon = document.getElementById('themeIcon');
+      if (isLight) {
+        icon.className = 'fa-solid fa-moon';
+        icon.style.color = '#6366f1';
+        localStorage.setItem('docengine_theme', 'light');
+      } else {
+        icon.className = 'fa-solid fa-sun';
+        icon.style.color = '#f59e0b';
+        localStorage.setItem('docengine_theme', 'dark');
+      }
+      applyChartThemeDefaults();
+      if (state.overviewData) {
+        renderAllCharts(state.overviewData);
+      }
+    }
+
+    function applyChartThemeDefaults() {
+      const isLight = document.body.classList.contains('light-theme');
+      Chart.defaults.color = isLight ? '#475569' : '#94a3b8';
+      Chart.defaults.borderColor = isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+      Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+    }
+
+    function toggleAutoRefresh() {
+      state.autoRefresh = !state.autoRefresh;
+      const lbl = document.getElementById('autoRefreshText');
+      if (state.autoRefresh) {
+        state.countdown = 30;
+        lbl.innerText = 'Auto (30s)';
+      } else {
+        lbl.innerText = 'Pausado';
+      }
+    }
+
+    // =========================================================================
+    // Filter Query String Builder
+    // =========================================================================
+    function getGlobalFilterParams(includeGranularity = false) {
+      const params = new URLSearchParams();
+      if (includeGranularity) params.set('granularity', state.granularity);
+
+      const dFrom = document.getElementById('filterDateFrom').value;
+      const dTo = document.getElementById('filterDateTo').value;
+      const company = document.getElementById('filterCompany').value;
+      const ramo = document.getElementById('filterRamo').value;
+      const docType = document.getElementById('filterDocType').value;
+      const fileType = document.getElementById('filterFileType').value;
+
+      if (dFrom) params.set('date_from', dFrom);
+      if (dTo) params.set('date_to', dTo);
+      if (company) params.set('company_sigla', company);
+      if (ramo) params.set('ramo', ramo);
+      if (docType) params.set('tipo_documento', docType);
+      if (fileType) params.set('file_type', fileType);
+
+      return params;
+    }
+
+    function setGranularity(gran, btn) {
+      state.granularity = gran;
+      document.querySelectorAll('#granularityGroup .seg-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      loadOverview();
+    }
+
+    function applyQuickRange(range, btn) {
+      document.querySelectorAll('#quickRangeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      const today = new Date();
+      const fmt = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+      const fromEl = document.getElementById('filterDateFrom');
+      const toEl = document.getElementById('filterDateTo');
+
+      if (range === 'today') {
+        fromEl.value = fmt(today);
+        toEl.value = fmt(today);
+      } else if (range === '7d') {
+        const start = new Date(today);
+        start.setDate(today.getDate() - 6);
+        fromEl.value = fmt(start);
+        toEl.value = fmt(today);
+      } else if (range === '30d') {
+        const start = new Date(today);
+        start.setDate(today.getDate() - 29);
+        fromEl.value = fmt(start);
+        toEl.value = fmt(today);
+      } else {
+        fromEl.value = '';
+        toEl.value = '';
+      }
+      refreshAllData();
+    }
+
+    function onFilterChange(fromManualDate = false) {
+      if (fromManualDate) {
+        document.querySelectorAll('#quickRangeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+      }
+      refreshAllData();
+    }
+
+    function resetAllFilters() {
+      document.getElementById('filterDateFrom').value = '';
+      document.getElementById('filterDateTo').value = '';
+      document.getElementById('filterCompany').value = '';
+      document.getElementById('filterRamo').value = '';
+      document.getElementById('filterDocType').value = '';
+      document.getElementById('filterFileType').value = '';
+      document.getElementById('jobsSearchInput').value = '';
+      document.getElementById('ledgerSearchInput').value = '';
+      document.getElementById('statsSearchInput').value = '';
+      document.querySelectorAll('#quickRangeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('#quickRangeGroup .seg-btn[data-range="all"]').classList.add('active');
+      refreshAllData();
+    }
+
+    // =========================================================================
+    // Data Fetching
+    // =========================================================================
+    async function refreshAllData(silent = false) {
+      if (!silent) {
+        document.getElementById('refreshIcon').classList.add('fa-spin');
+      }
+      try {
+        await Promise.all([
+          loadOverview(),
+          loadJobsTable(state.pages.jobs.offset),
+          loadLedgerTable(state.pages.ledger.offset),
+          loadStatsTable(state.pages.stats.offset),
+          loadServerLogs(),
+        ]);
+        document.getElementById('lastUpdatedBadge').innerText =
+          `Actualizado: ${new Date().toLocaleTimeString('es-BO')}`;
+      } catch (err) {
+        console.error('Dashboard refresh error:', err);
+      } finally {
+        document.getElementById('refreshIcon').classList.remove('fa-spin');
+      }
+    }
+
+    async function loadOverview() {
+      const params = getGlobalFilterParams(true);
+      try {
+        const data = await apiFetch(`/api/v1/dashboard/overview?${params.toString()}`);
+        state.overviewData = data;
+        populateFilterOptions(data.available_filters);
+        renderHeaderStatus(data.worm_status, data.system_health);
+        renderPulseAndKpis(data.kpis, data.period_snapshot);
+        renderAllCharts(data);
+        renderPipelineStages(data.kpis);
+        renderCompanyTable(data.by_company);
+        renderErrorCategories(data.error_categories);
+      } catch (err) {
+        document.getElementById('serverBadge').className = 'status-pill offline';
+        document.getElementById('serverBadgeText').innerText = 'Error API';
+      }
+    }
+
+    function populateFilterOptions(avail) {
+      if (!avail || state.filtersPopulated) return;
+      const coSel = document.getElementById('filterCompany');
+      (avail.companies || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.sigla;
+        opt.textContent = `${c.sigla} — ${c.nombre}`;
+        coSel.appendChild(opt);
+      });
+
+      const rSel = document.getElementById('filterRamo');
+      (avail.ramos || []).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.textContent = r;
+        rSel.appendChild(opt);
+      });
+
+      const dSel = document.getElementById('filterDocType');
+      (avail.document_types || []).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        dSel.appendChild(opt);
+      });
+      state.filtersPopulated = true;
+    }
+
+    function renderHeaderStatus(worm, sys) {
+      const wormBadge = document.getElementById('wormBadge');
+      const wormText = document.getElementById('wormBadgeText');
+      if (worm && worm.active) {
+        wormBadge.className = 'status-pill';
+        wormText.innerText = `WORM Activo (${worm.triggers_count} triggers)`;
+        wormBadge.title = `Tablas protegidas: ${(worm.protected_tables || []).join(', ')}`;
+      } else {
+        wormBadge.className = 'status-pill warning';
+        wormText.innerText = `WORM Parcial (${worm ? worm.triggers_count : 0})`;
+      }
+
+      const srvBadge = document.getElementById('serverBadge');
+      const srvText = document.getElementById('serverBadgeText');
+      if (sys) {
+        srvBadge.className = 'status-pill';
+        const upMin = Math.floor((sys.uptime_seconds || 0) / 60);
+        const upStr = upMin >= 60 ? `${Math.floor(upMin / 60)}h ${upMin % 60}m` : `${upMin}m`;
+        srvText.innerText = `Online (${sys.environment}) · ${sys.memory_usage_mb} MB · Up ${upStr}`;
+        srvBadge.title = `DocEngine v${sys.app_version} | Docling ${sys.docling_version} | Python ${sys.python_version}`;
+      }
+    }
+
+    function renderPulseAndKpis(k, snap) {
+      // Pulse Daily
+      document.getElementById('snapTodayDocs').innerText = fmtNum(snap.today_documents);
+      document.getElementById('snapTodayPages').innerText = fmtNum(snap.today_pages);
+      document.getElementById('snapTodayEnvs').innerText = fmtNum(snap.today_envelopes);
+      document.getElementById('snapTodayErrors').innerText = fmtNum(snap.today_errors);
+
+      // Pulse Weekly
+      document.getElementById('snapWeekDocs').innerText = fmtNum(snap.week_documents);
+      document.getElementById('snapWeekPages').innerText = fmtNum(snap.week_pages);
+      document.getElementById('snapWeekEnvs').innerText = fmtNum(snap.week_envelopes);
+      document.getElementById('snapWeekErrors').innerText = fmtNum(snap.week_errors);
+
+      const gEl = document.getElementById('snapWeekGrowth');
+      if (snap.week_growth_pct === null || snap.week_growth_pct === undefined) {
+        gEl.className = 'growth-badge growth-flat';
+        gEl.innerText = `Sem. ant: ${snap.prev_week_documents} docs`;
+      } else if (snap.week_growth_pct >= 0) {
+        gEl.className = 'growth-badge growth-up';
+        gEl.innerText = `+${snap.week_growth_pct}% vs sem. ant.`;
+      } else {
+        gEl.className = 'growth-badge growth-down';
+        gEl.innerText = `${snap.week_growth_pct}% vs sem. ant.`;
+      }
+
+      // Pulse Inventory
+      document.getElementById('snapActiveEnvs').innerText = fmtNum(k.active_envelopes);
+      document.getElementById('snapActiveDocs').innerText = fmtNum(k.active_documents);
+      document.getElementById('snapFleetCount').innerText = fmtNum(k.fleet_vehicles_count);
+      document.getElementById('snapInsuredCount').innerText = fmtNum(k.insured_persons_count);
+      document.getElementById('snapHwmBadge').innerText =
+        `HWM: ${fmtNum(k.high_water_extractions)} docs / ${fmtNum(k.high_water_pages)} págs`;
+
+      // Executive KPIs
+      document.getElementById('kpiDocsTotal').innerText = fmtNum(k.documents_extracted_total);
+      document.getElementById('kpiEnvHist').innerText = fmtNum(k.total_envelopes_historical);
+      document.getElementById('kpiClients').innerText = fmtNum(k.unique_clients);
+      document.getElementById('kpiDocsDeleted').innerText = fmtNum(k.documents_deleted_total);
+
+      document.getElementById('kpiPagesTotal').innerHTML =
+        `${fmtNum(k.total_pages_processed)} <span style="font-size:0.82rem;font-weight:500;color:var(--text-muted);">págs</span>`;
+      document.getElementById('kpiTables').innerText = fmtNum(k.total_tables_detected);
+      document.getElementById('kpiCoberturas').innerText = fmtNum(k.total_coberturas_extracted);
+      document.getElementById('kpiVolumeBytes').innerText = fmtBytes(k.total_volume_bytes);
+
+      document.getElementById('kpiChunksTotal').innerText = fmtNum(k.total_chunks_created);
+      document.getElementById('kpiParentChunks').innerText = fmtNum(k.parent_chunks_count);
+      document.getElementById('kpiChildChunks').innerText = fmtNum(k.child_chunks_count);
+      document.getElementById('kpiSummaries').innerText = fmtNum(k.section_summaries_count);
+
+      const succRate = k.success_rate_pct !== null && k.success_rate_pct !== undefined ? Number(k.success_rate_pct) : 100.0;
+      document.getElementById('kpiSuccessRate').innerText = `${succRate.toFixed(1)}%`;
+      document.getElementById('kpiJobsCompleted').innerText = fmtNum(k.jobs_completed);
+      document.getElementById('kpiJobsSkipped').innerText = fmtNum(k.jobs_skipped);
+      document.getElementById('kpiJobsFailed').innerText = fmtNum(k.jobs_failed);
+
+      const relIconWrap = document.getElementById('kpiReliabilityIcon');
+      const relFaIcon = document.getElementById('kpiReliabilityFaIcon');
+      if (relIconWrap && relFaIcon) {
+        if (succRate >= 95.0) {
+          relIconWrap.style.background = 'rgba(16, 185, 129, 0.16)';
+          relIconWrap.style.color = '#34d399';
+          relFaIcon.className = 'fa-solid fa-circle-check';
+        } else if (succRate >= 80.0) {
+          relIconWrap.style.background = 'rgba(245, 158, 11, 0.16)';
+          relIconWrap.style.color = '#fbbf24';
+          relFaIcon.className = 'fa-solid fa-triangle-exclamation';
+        } else {
+          relIconWrap.style.background = 'rgba(239, 68, 68, 0.16)';
+          relIconWrap.style.color = '#f87171';
+          relFaIcon.className = 'fa-solid fa-circle-xmark';
+        }
+      }
+
+      document.getElementById('kpiAvgEndToEnd').innerText = `${(k.avg_end_to_end_seconds || 0).toFixed(1)}s`;
+      document.getElementById('kpiP95').innerText = `${(k.p95_pipeline_time_seconds || 0).toFixed(1)}s`;
+      document.getElementById('kpiPerPage').innerText = `${(k.avg_time_per_page_seconds || 0).toFixed(2)}s`;
+      document.getElementById('kpiMaxMem').innerText = `${(k.max_memory_peak_mb || 0).toFixed(0)} MB`;
+
+      // OCR labels
+      document.getElementById('badgeOcrRate').innerText = `OCR: ${(k.ocr_rate_pct || 0).toFixed(1)}%`;
+      document.getElementById('lblOcrCount').innerText = fmtNum(k.ocr_applied_count);
+      document.getElementById('lblScanRatio').innerText = `${((k.avg_scanned_page_ratio || 0) * 100).toFixed(1)}%`;
+    }
+
+    // =========================================================================
+    // Charts
+    // =========================================================================
+    function switchTsMode(mode, btn) {
+      state.tsMode = mode;
+      btn.parentElement.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (state.overviewData) {
+        renderTimeSeriesChart(state.overviewData);
+      }
+    }
+
+    function renderAllCharts(data) {
+      renderTimeSeriesChart(data);
+      renderFileTypesChart(data.by_file_type || []);
+      renderLedgerEventsChart(data.ledger_event_summary || []);
+      renderDocTypesChart(data.by_document_type || []);
+      renderRamosChart(data.by_ramo || []);
+    }
+
+    function destroyChart(key) {
+      if (state.charts[key]) {
+        state.charts[key].destroy();
+        state.charts[key] = null;
+      }
+    }
+
+    function renderTimeSeriesChart(data) {
+      destroyChart('ts');
+      const ts = data.time_series || [];
+      const granLabels = { daily: 'Diario', weekly: 'Semanal', monthly: 'Mensual' };
+      document.getElementById('tsChartTitle').innerText =
+        `Evolución de Procesamiento (${granLabels[data.granularity] || 'Diario'})`;
+
+      const labels = ts.map(p => p.period_label);
+      const ctx = document.getElementById('chartTimeSeries').getContext('2d');
+
+      let datasets = [];
+      let scales = {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, title: { display: true, text: 'Documentos / Jobs' } },
+      };
+
+      if (state.tsMode === 'status') {
+        datasets = [
+          {
+            label: 'Docs Extraídos',
+            data: ts.map(p => p.documents_extracted),
+            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Jobs Duplicados (SKIPPED)',
+            data: ts.map(p => p.jobs_skipped || p.duplicates_skipped),
+            backgroundColor: 'rgba(245, 158, 11, 0.8)',
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Jobs Fallidos (FAILED)',
+            data: ts.map(p => p.jobs_failed),
+            backgroundColor: 'rgba(239, 68, 68, 0.85)',
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Páginas Procesadas',
+            type: 'line',
+            data: ts.map(p => p.pages_processed),
+            borderColor: '#06b6d4',
+            backgroundColor: 'rgba(6, 182, 212, 0.15)',
+            borderWidth: 2.5,
+            tension: 0.3,
+            pointRadius: 4,
+            yAxisID: 'y1',
+          },
+        ];
+        scales.y1 = {
+          beginAtZero: true,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Páginas' },
+        };
+      } else if (state.tsMode === 'content') {
+        scales.y.title.text = 'Cantidad';
+        datasets = [
+          {
+            label: 'Páginas',
+            data: ts.map(p => p.pages_processed),
+            backgroundColor: 'rgba(236, 72, 153, 0.78)',
+            borderRadius: 4,
+          },
+          {
+            label: 'Tablas Detectadas',
+            data: ts.map(p => p.tables_detected),
+            backgroundColor: 'rgba(59, 130, 246, 0.78)',
+            borderRadius: 4,
+          },
+          {
+            label: 'Chunks Vectorizados',
+            type: 'line',
+            data: ts.map(p => p.chunks_created),
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.18)',
+            borderWidth: 2.5,
+            tension: 0.3,
+            fill: true,
+            yAxisID: 'y1',
+          },
+        ];
+        scales.y1 = {
+          beginAtZero: true,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Chunks' },
+        };
+      } else {
+        scales.y.title.text = 'Segundos promedio';
+        datasets = [
+          {
+            label: 'T. Extracción Docling (s)',
+            data: ts.map(p => p.avg_extraction_time_seconds),
+            backgroundColor: 'rgba(168, 85, 247, 0.78)',
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: 'T. Pipeline RAG (s)',
+            data: ts.map(p => p.avg_pipeline_time_seconds),
+            backgroundColor: 'rgba(99, 102, 241, 0.78)',
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+        ];
+      }
+
+      state.charts.ts = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, usePointStyle: true } },
+          },
+          scales,
+        },
+      });
+    }
+
+    function renderPipelineStages(k) {
+      const stages = [
+        { name: '1. Extracción PDF / OCR (Docling)', val: k.avg_extraction_time_seconds || 0, color: '#a855f7' },
+        { name: '2. Fragmentación Jerárquica (Chunking)', val: k.avg_chunking_time_seconds || 0, color: '#06b6d4' },
+        { name: '3. Embeddings Locales (BGE-M3 1024-d)', val: k.avg_embedding_time_seconds || 0, color: '#3b82f6' },
+        { name: '4. Estructuración JSON (OpenAI LLM)', val: k.avg_openai_time_seconds || 0, color: '#f59e0b' },
+      ];
+      const maxVal = Math.max(0.1, ...stages.map(s => s.val));
+      const container = document.getElementById('pipelineStageBars');
+      container.innerHTML = stages.map(s => {
+        const pct = Math.min(100, Math.round((s.val / maxVal) * 100));
+        return `
+          <div>
+            <div class="stage-item-head">
+              <span class="stage-item-name">${s.name}</span>
+              <span class="stage-item-val">${s.val.toFixed(3)} s</span>
+            </div>
+            <div class="stage-track">
+              <div class="stage-fill" style="width: ${pct}%; background: ${s.color};"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('badgeAvgTotalE2E').innerText =
+        `E2E: ${(k.avg_end_to_end_seconds || 0).toFixed(1)}s`;
+      document.getElementById('pipeDoclingAvg').innerText =
+        `${(k.avg_extraction_time_seconds || 0).toFixed(1)}s`;
+      document.getElementById('pipeRagAvg').innerText =
+        `${(k.avg_pipeline_time_seconds || 0).toFixed(1)}s`;
+      document.getElementById('pipeMemAvg').innerText =
+        `${(k.avg_memory_peak_mb || 0).toFixed(0)} MB`;
+    }
+
+    function renderFileTypesChart(items) {
+      destroyChart('fileTypes');
+      const ctx = document.getElementById('chartFileTypes').getContext('2d');
+      const palette = {
+        DIGITAL: '#10b981',
+        SCANNED: '#f59e0b',
+        HYBRID: '#6366f1',
+        UNKNOWN: '#64748b',
+      };
+      state.charts.fileTypes = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: items.map(i => `${i.file_type} (${i.documents_count})`),
+          datasets: [{
+            data: items.map(i => i.documents_count),
+            backgroundColor: items.map(i => palette[i.file_type] || '#94a3b8'),
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '64%',
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 11, padding: 12 } },
+          },
+        },
+      });
+    }
+
+    function renderLedgerEventsChart(items) {
+      destroyChart('ledgerEvents');
+      const total = items.reduce((a, b) => a + b.count, 0);
+      document.getElementById('badgeLedgerTotal').innerText = `${fmtNum(total)} eventos`;
+
+      const ctx = document.getElementById('chartLedgerEvents').getContext('2d');
+      const colorMap = {
+        DOCUMENT_EXTRACTED: '#10b981',
+        ENVELOPE_CREATED: '#06b6d4',
+        ENVELOPE_UPDATED: '#3b82f6',
+        DOCUMENT_SKIPPED_DUPLICATE: '#f59e0b',
+        DOCUMENT_EXTRACTION_FAILED: '#ef4444',
+        DOCUMENT_DELETED: '#f43f5e',
+        ENVELOPE_DELETED: '#be123c',
+      };
+      state.charts.ledgerEvents = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: items.map(i => i.event_type),
+          datasets: [{
+            data: items.map(i => i.count),
+            backgroundColor: items.map(i => colorMap[i.event_type] || '#818cf8'),
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+          },
+        },
+      });
+    }
+
+    function renderDocTypesChart(items) {
+      destroyChart('docTypes');
+      const ctx = document.getElementById('chartDocTypes').getContext('2d');
+      state.charts.docTypes = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: items.map(i => String(i.tipo_documento || 'NO_ESPECIFICADO').replace(/_/g, ' ')),
+          datasets: [{
+            label: 'Documentos',
+            data: items.map(i => i.documents_count),
+            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+            borderRadius: 5,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true },
+            y: { grid: { display: false }, ticks: { font: { size: 10 } } },
+          },
+        },
+      });
+    }
+
+    function renderRamosChart(items) {
+      destroyChart('ramos');
+      const top = items.slice(0, 12);
+      const ctx = document.getElementById('chartRamos').getContext('2d');
+      state.charts.ramos = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: top.map(i => i.ramo || 'NO ESPECIFICADO'),
+          datasets: [
+            {
+              label: 'Documentos',
+              data: top.map(i => i.documents_count),
+              backgroundColor: 'rgba(6, 182, 212, 0.82)',
+              borderRadius: 4,
+            },
+            {
+              label: 'Sobres',
+              data: top.map(i => i.envelopes_count),
+              backgroundColor: 'rgba(99, 102, 241, 0.78)',
+              borderRadius: 4,
+            },
+          ],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 11 } } },
+          scales: {
+            x: { beginAtZero: true },
+            y: { grid: { display: false }, ticks: { font: { size: 10 } } },
+          },
+        },
+      });
+    }
+
+    // =========================================================================
+    // Company Breakdown & Error Categories
+    // =========================================================================
+    function renderCompanyTable(companies) {
+      document.getElementById('lblCompanyCount').innerText = `${companies.length} aseguradoras`;
+      const tbody = document.getElementById('tbodyCompanyBreakdown');
+      if (!companies.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Sin datos para los filtros seleccionados.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = companies.map(c => `
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:0.45rem;">
+              <span class="badge badge-primary mono">${escapeHtml(c.company_sigla)}</span>
+              <span class="truncate-cell" style="max-width:150px;font-size:0.74rem;color:var(--text-muted);" title="${escapeHtml(c.company_name)}">${escapeHtml(c.company_name)}</span>
+            </div>
+          </td>
+          <td class="mono"><b>${fmtNum(c.documents_count)}</b></td>
+          <td class="mono">${fmtNum(c.active_documents_count)}</td>
+          <td class="mono">${fmtNum(c.envelopes_count)}</td>
+          <td class="mono">${fmtNum(c.pages_count)}</td>
+          <td class="mono">${fmtNum(c.tables_count)}</td>
+          <td class="mono">${fmtNum(c.chunks_count)}</td>
+          <td class="mono">${fmtNum(c.coberturas_count)}</td>
+          <td class="mono">${Number(c.avg_extraction_time_seconds || 0).toFixed(1)}s</td>
+          <td class="mono">${Number(c.avg_pipeline_time_seconds || 0).toFixed(1)}s</td>
+          <td class="mono">${c.failed_count > 0 ? `<span class="badge badge-danger">${c.failed_count}</span>` : '0'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderErrorCategories(cats) {
+      const strip = document.getElementById('errorCategoriesStrip');
+      state.errorCategories = cats || [];
+      if (!state.errorCategories.length) {
+        strip.innerHTML = '';
+        return;
+      }
+      strip.innerHTML = state.errorCategories.map((c, idx) => `
+        <div class="error-cat-card" onclick="filterJobsByCatIdx(${idx})">
+          <div class="error-cat-top">
+            <span><i class="fa-solid fa-bug"></i> ${escapeHtml(c.category)}</span>
+            <span class="badge badge-danger">${fmtNum(c.count)}</span>
+          </div>
+          <div class="error-cat-sample" title="${escapeHtml(c.sample_message)}">${escapeHtml(c.sample_message)}</div>
+        </div>
+      `).join('');
+    }
+
+    function filterJobsByCatIdx(idx) {
+      const cat = (state.errorCategories || [])[idx];
+      if (!cat) return;
+      const firstLine = String(cat.sample_message || '').split('\n')[0].slice(0, 32).trim();
+      document.getElementById('jobsSearchInput').value = firstLine;
+      setJobStatusFilter('FAILED', document.querySelector('#jobStatusGroup .seg-btn:first-child'));
+    }
+
+    function inspectJobError(idx) {
+      const j = (state.jobsItems || [])[idx];
+      if (!j) return;
+      showDetailModal(`Error en Job ${j.job_id}`, j.error_message || 'Sin mensaje de error.');
+    }
+
+    function inspectLedgerItem(idx) {
+      const r = (state.ledgerItems || [])[idx];
+      if (!r) return;
+      showDetailModal(`Evento ${r.event_id} (${r.event_type})`, JSON.stringify(r, null, 2));
+    }
+
+    // =========================================================================
+    // Audit & Operations Tabs
+    // =========================================================================
+    function switchAuditTab(tab, btn) {
+      state.activeTab = tab;
+      document.querySelectorAll('.tabs-nav .tab-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      const map = { errors: 'panelErrors', ledger: 'panelLedger', stats: 'panelStats', logs: 'panelLogs' };
+      document.getElementById(map[tab]).classList.add('active');
+    }
+
+    function setJobStatusFilter(st, btn) {
+      state.jobStatusFilter = st;
+      document.querySelectorAll('#jobStatusGroup .seg-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      loadJobsTable(0);
+    }
+
+    async function loadJobsTable(offset = 0) {
+      state.pages.jobs.offset = offset;
+      const params = getGlobalFilterParams(false);
+      params.set('limit', state.pages.jobs.limit);
+      params.set('offset', offset);
+      if (state.jobStatusFilter) params.set('status', state.jobStatusFilter);
+      const q = document.getElementById('jobsSearchInput').value.trim();
+      if (q) params.set('search', q);
+
+      const tbody = document.getElementById('tbodyJobsErrors');
+      try {
+        const data = await apiFetch(`/api/v1/dashboard/jobs-errors?${params.toString()}`);
+        state.pages.jobs.total = data.total;
+        state.jobsItems = data.items || [];
+
+        const sc = data.status_counts || {};
+        const totalAll = Object.values(sc).reduce((a, b) => a + b, 0);
+        document.getElementById('cntJobFailed').innerText = sc.FAILED || 0;
+        document.getElementById('cntJobAll').innerText = totalAll;
+        document.getElementById('cntJobProcessing').innerText = sc.PROCESSING || 0;
+        document.getElementById('cntJobSkipped').innerText = sc.SKIPPED || 0;
+        document.getElementById('cntJobCompleted').innerText = sc.COMPLETED || 0;
+        document.getElementById('tabCntErrors').innerText = sc.FAILED || 0;
+
+        if (!state.jobsItems.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay trabajos que coincidan con el filtro.</td></tr>';
+        } else {
+          tbody.innerHTML = state.jobsItems.map((j, idx) => {
+            const stBadge = {
+              FAILED: 'badge-danger',
+              COMPLETED: 'badge-success',
+              SKIPPED: 'badge-warning',
+              PROCESSING: 'badge-info',
+              PENDING: 'badge-neutral',
+            }[j.status] || 'badge-neutral';
+
+            const errMsg = j.error_message ? String(j.error_message) : '';
+            const errHtml = errMsg
+              ? `<a href="javascript:void(0)" style="color:#f87171;text-decoration:underline dotted;" onclick="inspectJobError(${idx})">${escapeHtml(errMsg.slice(0, 95))}${errMsg.length > 95 ? '...' : ''}</a>`
+              : '<span style="color:var(--text-dim);">—</span>';
+
+            return `
+              <tr>
+                <td class="mono">${fmtDate(j.created_at)}</td>
+                <td><span class="badge ${stBadge}">${escapeHtml(j.status)}</span></td>
+                <td class="truncate-cell" title="${escapeHtml(j.file_name)}">${escapeHtml(j.file_name)}</td>
+                <td>${j.company_sigla ? `<span class="badge badge-primary">${escapeHtml(j.company_sigla)}</span>` : '—'}</td>
+                <td class="mono">${escapeHtml(j.numero_poliza || '—')}</td>
+                <td class="mono">${j.duration_seconds !== null && j.duration_seconds !== undefined ? `${j.duration_seconds}s` : '—'}</td>
+                <td style="max-width:340px;">${errHtml}</td>
+                <td class="mono" style="font-size:0.7rem;color:var(--text-dim);">${escapeHtml(String(j.job_id || '').slice(0, 8))}…</td>
+              </tr>
+            `;
+          }).join('');
+        }
+        renderPagination('pagJobs', data.total, state.pages.jobs.limit, offset, 'loadJobsTable');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:#f87171;">Error cargando trabajos: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function loadLedgerTable(offset = 0) {
+      state.pages.ledger.offset = offset;
+      const params = getGlobalFilterParams(false);
+      params.set('limit', state.pages.ledger.limit);
+      params.set('offset', offset);
+      const evt = document.getElementById('ledgerEventTypeFilter').value;
+      const q = document.getElementById('ledgerSearchInput').value.trim();
+      if (evt) params.set('event_type', evt);
+      if (q) params.set('search', q);
+
+      const tbody = document.getElementById('tbodyAuditLedger');
+      try {
+        const data = await apiFetch(`/api/v1/dashboard/audit-ledger?${params.toString()}`);
+        state.pages.ledger.total = data.total;
+        state.ledgerItems = data.items || [];
+        document.getElementById('tabCntLedger').innerText = fmtNum(data.total);
+
+        if (!state.ledgerItems.length) {
+          tbody.innerHTML = '<tr><td colspan="13" class="empty-state">No hay eventos en el libro mayor para estos filtros.</td></tr>';
+        } else {
+          tbody.innerHTML = state.ledgerItems.map((r, idx) => {
+            const evClass = {
+              DOCUMENT_EXTRACTED: 'badge-success',
+              ENVELOPE_CREATED: 'badge-info',
+              ENVELOPE_UPDATED: 'badge-primary',
+              DOCUMENT_SKIPPED_DUPLICATE: 'badge-warning',
+              DOCUMENT_EXTRACTION_FAILED: 'badge-danger',
+              DOCUMENT_DELETED: 'badge-danger',
+              ENVELOPE_DELETED: 'badge-danger',
+            }[r.event_type] || 'badge-neutral';
+
+            const clientLabel = [r.id_cliente, r.nombre_cliente].filter(Boolean).join(' · ') || '—';
+            return `
+              <tr>
+                <td class="mono">${fmtDate(r.created_at)}</td>
+                <td><span class="badge ${evClass}">${escapeHtml(r.event_type)}</span></td>
+                <td>${r.company_sigla ? `<span class="badge badge-primary">${escapeHtml(r.company_sigla)}</span>` : '—'}</td>
+                <td class="mono">${escapeHtml(r.numero_poliza || '—')}</td>
+                <td>
+                  <div class="truncate-cell" style="max-width:155px;" title="${escapeHtml(r.ramo || '')}">${escapeHtml(r.ramo || '—')}</div>
+                  <div style="font-size:0.68rem;color:var(--text-dim);">${escapeHtml(r.tipo_documento || '')}</div>
+                </td>
+                <td class="truncate-cell" style="max-width:150px;" title="${escapeHtml(clientLabel)}">${escapeHtml(clientLabel)}</td>
+                <td class="truncate-cell" style="max-width:170px;" title="${escapeHtml(r.file_name || '')}">${escapeHtml(r.file_name || '—')}</td>
+                <td class="mono">${fmtNum(r.pages_count)}</td>
+                <td class="mono">${fmtNum(r.tables_count)}</td>
+                <td class="mono">${fmtNum(r.chunks_count)}</td>
+                <td class="mono">${fmtBytes(r.file_size_bytes)}</td>
+                <td class="mono">${Number(r.duration_seconds || 0).toFixed(2)}s</td>
+                <td>
+                  <button class="btn-action" style="padding:0.2rem 0.45rem;font-size:0.7rem;" onclick="inspectLedgerItem(${idx})" title="Ver JSON completo y metadata">
+                    <i class="fa-solid fa-code"></i>
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+        renderPagination('pagLedger', data.total, state.pages.ledger.limit, offset, 'loadLedgerTable');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="13" class="empty-state" style="color:#f87171;">Error cargando libro mayor: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function loadStatsTable(offset = 0) {
+      state.pages.stats.offset = offset;
+      const params = getGlobalFilterParams(false);
+      params.set('limit', state.pages.stats.limit);
+      params.set('offset', offset);
+      const q = document.getElementById('statsSearchInput').value.trim();
+      if (q) params.set('search', q);
+
+      const tbody = document.getElementById('tbodyProcessingStats');
+      try {
+        const data = await apiFetch(`/api/v1/dashboard/processing-stats?${params.toString()}`);
+        state.pages.stats.total = data.total;
+        state.statsItems = data.items || [];
+        document.getElementById('tabCntStats').innerText = fmtNum(data.total);
+
+        if (!state.statsItems.length) {
+          tbody.innerHTML = '<tr><td colspan="14" class="empty-state">No hay registros de telemetría para estos filtros.</td></tr>';
+        } else {
+          tbody.innerHTML = state.statsItems.map(s => {
+            const ftBadge = {
+              DIGITAL: 'badge-success',
+              SCANNED: 'badge-warning',
+              HYBRID: 'badge-info',
+              UNKNOWN: 'badge-neutral',
+            }[s.file_type] || 'badge-neutral';
+            return `
+              <tr>
+                <td class="mono">${fmtDate(s.created_at)}</td>
+                <td>${s.company_sigla ? `<span class="badge badge-primary">${escapeHtml(s.company_sigla)}</span>` : '—'}</td>
+                <td class="mono">${escapeHtml(s.policy_number || '—')}</td>
+                <td class="truncate-cell" style="max-width:170px;" title="${escapeHtml(s.file_name || '')}">${escapeHtml(s.file_name || '—')}</td>
+                <td>
+                  <span class="badge ${ftBadge}">${escapeHtml(s.file_type)}</span>
+                  ${s.ocr_applied ? '<span class="badge badge-info">OCR</span>' : ''}
+                </td>
+                <td class="mono">${fmtNum(s.total_pages)}</td>
+                <td class="mono">${Number(s.extraction_time_seconds || 0).toFixed(1)}s<br><span style="color:var(--text-dim);font-size:0.68rem;">${Number(s.time_per_page_seconds || 0).toFixed(2)}s/p</span></td>
+                <td class="mono">${Number(s.chunking_time_seconds || 0).toFixed(3)}s</td>
+                <td class="mono">${Number(s.embedding_time_seconds || 0).toFixed(1)}s</td>
+                <td class="mono">${Number(s.openai_time_seconds || 0).toFixed(1)}s</td>
+                <td class="mono"><b>${Number(s.total_pipeline_time_seconds || 0).toFixed(1)}s</b></td>
+                <td class="mono">${fmtNum(s.total_chunks)} <span style="color:var(--text-dim);font-size:0.68rem;">(${s.parent_chunks}/${s.child_chunks})</span></td>
+                <td class="mono">${fmtNum(s.coberturas_extracted_count)} / ${fmtNum(s.tables_detected)}</td>
+                <td class="mono">${s.memory_peak_mb ? `${Number(s.memory_peak_mb).toFixed(0)} MB` : '—'}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+        renderPagination('pagStats', data.total, state.pages.stats.limit, offset, 'loadStatsTable');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="14" class="empty-state" style="color:#f87171;">Error cargando telemetría: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    // =========================================================================
+    // Server Logs Tab
+    // =========================================================================
+    function setLogLevelFilter(lvl, btn) {
+      state.logLevelFilter = lvl;
+      btn.parentElement.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderLogsBox();
+    }
+
+    async function loadServerLogs() {
+      try {
+        const data = await apiFetch('/api/v1/logs?lines=400');
+        state.rawLogs = data.logs || [];
+        document.getElementById('tabCntLogs').innerText = state.rawLogs.length;
+        const errs = state.rawLogs.filter(l => /\[error\]| error /i.test(l)).length;
+        const warns = state.rawLogs.filter(l => /\[warning\]| warning /i.test(l)).length;
+        document.getElementById('logCntErr').innerText = errs;
+        document.getElementById('logCntWarn').innerText = warns;
+        renderLogsBox();
+      } catch (err) {
+        document.getElementById('logBoxContainer').innerText = `No se pudieron cargar logs: ${err.message}`;
+      }
+    }
+
+    function renderLogsBox() {
+      const box = document.getElementById('logBoxContainer');
+      const search = (document.getElementById('logSearchInput').value || '').toLowerCase();
+      let lines = state.rawLogs;
+      if (state.logLevelFilter) {
+        const f = state.logLevelFilter.toUpperCase();
+        lines = lines.filter(l => l.toUpperCase().includes(`[${f}]`) || l.toUpperCase().includes(` ${f} `));
+      }
+      if (search) {
+        lines = lines.filter(l => l.toLowerCase().includes(search));
+      }
+      if (!lines.length) {
+        box.innerHTML = '<div style="color:#64748b;">No hay entradas de log para el filtro actual.</div>';
+        return;
+      }
+      box.innerHTML = lines.slice().reverse().map(line => {
+        const u = line.toUpperCase();
+        const cls = (u.includes('[ERROR]') || u.includes(' ERROR ')) ? 'err' : ((u.includes('[WARNING]') || u.includes(' WARNING ')) ? 'warn' : '');
+        return `<div class="log-row ${cls}">${escapeHtml(line)}</div>`;
+      }).join('');
+    }
+
+    function downloadLogsTxt() {
+      const blob = new Blob([state.rawLogs.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `docengine_server_logs_${new Date().toISOString().slice(0, 10)}.log`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    }
+
+    // =========================================================================
+    // CSV Export
+    // =========================================================================
+    async function handleCsvExport(sel) {
+      const dataset = sel.value;
+      sel.value = '';
+      if (!dataset) return;
+      const params = getGlobalFilterParams(false);
+      params.set('dataset', dataset);
+      if (dataset === 'ledger') {
+        const evt = document.getElementById('ledgerEventTypeFilter').value;
+        const q = document.getElementById('ledgerSearchInput').value.trim();
+        if (evt) params.set('event_type', evt);
+        if (q) params.set('search', q);
+      } else if (dataset === 'jobs') {
+        const q = document.getElementById('jobsSearchInput').value.trim();
+        if (state.jobStatusFilter) params.set('status', state.jobStatusFilter);
+        if (q) params.set('search', q);
+      } else if (dataset === 'stats') {
+        const q = document.getElementById('statsSearchInput').value.trim();
+        if (q) params.set('search', q);
+      }
+      const url = `${getApiBase()}/api/v1/dashboard/export.csv?${params.toString()}`;
+      try {
+        const res = await fetch(url, { headers: getAuthHeaders() });
+        if (res.status === 401 || res.status === 403) {
+          openApiKeyModal();
+          throw new Error(`Acceso restringido (${res.status}). Configura X-API-Key.`);
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `docengine_auditoria_${dataset}.csv`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } catch (err) {
+        alert(`Error exportando CSV: ${err.message}`);
+      }
+    }
+
+    // =========================================================================
+    // Pagination, Modals & Formatters
+    // =========================================================================
+    function renderPagination(elId, total, limit, offset, fnName) {
+      const el = document.getElementById(elId);
+      if (total <= limit) {
+        el.innerHTML = `<span>Mostrando ${total} de ${total} registros</span><div></div>`;
+        return;
+      }
+      const start = offset + 1;
+      const end = Math.min(total, offset + limit);
+      const prevDisabled = offset <= 0 ? 'disabled style="opacity:0.45;cursor:not-allowed;"' : '';
+      const nextDisabled = (offset + limit) >= total ? 'disabled style="opacity:0.45;cursor:not-allowed;"' : '';
+      el.innerHTML = `
+        <span>Mostrando <b>${start}–${end}</b> de <b>${fmtNum(total)}</b> registros</span>
+        <div style="display:flex;gap:0.4rem;">
+          <button class="btn-action" ${prevDisabled} onclick="${fnName}(${Math.max(0, offset - limit)})">
+            <i class="fa-solid fa-chevron-left"></i> Anterior
+          </button>
+          <button class="btn-action" ${nextDisabled} onclick="${fnName}(${offset + limit})">
+            Siguiente <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    function showDetailModal(title, content) {
+      document.getElementById('detailModalTitle').innerText = title;
+      document.getElementById('detailModalBody').innerText = content;
+      document.getElementById('detailModal').classList.add('show');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.remove('show');
+    }
+
+    function openApiKeyModal() {
+      document.getElementById('apiKeyInput').value = localStorage.getItem('docengine_api_key') || '';
+      document.getElementById('apiKeyModal').classList.add('show');
+    }
+
+    function closeApiKeyModal() {
+      document.getElementById('apiKeyModal').classList.remove('show');
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById('apiKeyInput').value.trim();
+      if (val) localStorage.setItem('docengine_api_key', val);
+      closeApiKeyModal();
+      refreshAllData();
+    }
+
+    function clearApiKey() {
+      localStorage.removeItem('docengine_api_key');
+      document.getElementById('apiKeyInput').value = '';
+      closeApiKeyModal();
+      refreshAllData();
+    }
+
+    function fmtNum(n) {
+      return Number(n || 0).toLocaleString('es-BO');
+    }
+
+    function fmtBytes(bytes) {
+      const b = Number(bytes || 0);
+      if (b === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(b) / Math.log(k));
+      return `${(b / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`;
+    }
+
+    function fmtDate(isoStr) {
+      if (!isoStr) return '—';
+      try {
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return String(isoStr).slice(0, 19);
+        return d.toLocaleString('es-BO', {
+          year: '2-digit', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+      } catch {
+        return String(isoStr).slice(0, 19);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>

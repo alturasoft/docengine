@@ -184,6 +184,14 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
                 "métricas estadísticas acumuladas y visualización del búfer de registros (`logs`)."
             ),
         },
+        {
+            "name": "Dashboard",
+            "description": (
+                "Endpoints de analítica operativa y auditoría inmutable (WORM). "
+                "Exponen métricas diarias, semanales y mensuales de procesamiento, consumo de tokens OpenAI, "
+                "desglose por aseguradora/ramo, detección de errores y exportación CSV."
+            ),
+        },
     ]
 
     app = FastAPI(
@@ -246,6 +254,11 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         @app.get("/eliminar.html", include_in_schema=False)
         async def root_to_eliminar() -> FileResponse:
             return FileResponse(webui_dir / "eliminar.html")
+
+        @app.get("/dashboard", include_in_schema=False)
+        @app.get("/dashboard.html", include_in_schema=False)
+        async def root_to_dashboard() -> FileResponse:
+            return FileResponse(webui_dir / "dashboard.html")
 
     # Global exception handler
     @app.exception_handler(Exception)

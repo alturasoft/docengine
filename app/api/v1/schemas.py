@@ -194,6 +194,12 @@ class MetricsResponse(BaseModel):
     total_tables_detected: int = Field(description="Total acumulado de tablas detectadas y estructuradas")
     avg_extraction_time_seconds: float = Field(description="Tiempo promedio de procesamiento por documento en segundos")
     memory_usage_mb: float = Field(description="Consumo de memoria RAM del proceso del servidor en megabytes (MB)")
+    total_envelopes: int = Field(default=0, description="Total de sobres digitales de póliza registrados")
+    active_documents: int = Field(default=0, description="Total de documentos actualmente activos en el catálogo")
+    total_chunks_indexed: int = Field(default=0, description="Total histórico acumulado de fragmentos vectorizados")
+    skipped_duplicates: int = Field(default=0, description="Total de documentos duplicados omitidos por idempotencia")
+    total_clients: int = Field(default=0, description="Total de clientes únicos registrados en sobres de póliza")
+    immutable_mode: bool = Field(default=True, description="Indica si las estadísticas operan en modo de auditoría inmutable (WORM)")
 
 
 # ---------------------------------------------------------------------------

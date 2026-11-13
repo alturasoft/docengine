@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import catalogs, extraction, fleet, health, insured_persons, policies, query
+from app.api.v1 import catalogs, dashboard, extraction, fleet, health, insured_persons, policies, query
 
 router = APIRouter()
 router.include_router(health.router)
+router.include_router(dashboard.router)
 router.include_router(catalogs.router)
 router.include_router(extraction.router)
 router.include_router(query.router)

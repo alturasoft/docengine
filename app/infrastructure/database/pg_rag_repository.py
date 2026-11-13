@@ -304,78 +304,163 @@ class PgRagRepository:
 
                     # 5. Insert into policy_processing_stats (if provided)
                     if stats:
+                        try:
+                            cur.execute("SAVEPOINT sp_stats_extended;")
+                            cur.execute(
+                                """
+                                INSERT INTO policy_processing_stats (
+                                    policy_id, job_id, policy_number, company_sigla, file_type,
+                                    ocr_applied, scanned_page_ratio, total_pages, extraction_time_seconds,
+                                    time_per_page_seconds, chunking_time_seconds, embedding_time_seconds,
+                                    openai_time_seconds, total_pipeline_time_seconds, total_chunks,
+                                    parent_chunks, child_chunks, openai_prompt_tokens, openai_completion_tokens,
+                                    openai_total_tokens, openai_estimated_cost_usd, coberturas_extracted_count,
+                                    tables_detected, memory_peak_mb,
+                                    envelope_id, file_name, file_hash, tipo_documento, id_cliente
+                                )
+                                VALUES (
+                                    %s, %s, %s, %s, %s,
+                                    %s, %s, %s, %s,
+                                    %s, %s, %s,
+                                    %s, %s, %s,
+                                    %s, %s, %s, %s,
+                                    %s, %s, %s,
+                                    %s, %s,
+                                    %s, %s, %s, %s, %s
+                                );
+                                """,
+                                (
+                                    policy_id,
+                                    stats.job_id,
+                                    stats.policy_number,
+                                    sigla,
+                                    _normalize_file_type(stats.file_type),
+                                    stats.ocr_applied,
+                                    stats.scanned_page_ratio,
+                                    stats.total_pages,
+                                    stats.extraction_time_seconds,
+                                    stats.time_per_page_seconds,
+                                    stats.chunking_time_seconds,
+                                    stats.embedding_time_seconds,
+                                    stats.openai_time_seconds,
+                                    stats.total_pipeline_time_seconds,
+                                    stats.total_chunks,
+                                    stats.parent_chunks,
+                                    stats.child_chunks,
+                                    stats.openai_prompt_tokens,
+                                    stats.openai_completion_tokens,
+                                    stats.openai_total_tokens,
+                                    stats.openai_estimated_cost_usd,
+                                    stats.coberturas_extracted_count,
+                                    stats.tables_detected,
+                                    stats.memory_peak_mb,
+                                    envelope_id or stats.envelope_id,
+                                    file_name or stats.file_name,
+                                    file_hash or stats.file_hash,
+                                    tipo_documento or stats.tipo_documento,
+                                    clean_id_cliente or stats.id_cliente,
+                                ),
+                            )
+                            cur.execute("RELEASE SAVEPOINT sp_stats_extended;")
+                        except Exception:
+                            cur.execute("ROLLBACK TO SAVEPOINT sp_stats_extended;")
+                            cur.execute(
+                                """
+                                INSERT INTO policy_processing_stats (
+                                    policy_id, job_id, policy_number, company_sigla, file_type,
+                                    ocr_applied, scanned_page_ratio, total_pages, extraction_time_seconds,
+                                    time_per_page_seconds, chunking_time_seconds, embedding_time_seconds,
+                                    openai_time_seconds, total_pipeline_time_seconds, total_chunks,
+                                    parent_chunks, child_chunks, openai_prompt_tokens, openai_completion_tokens,
+                                    openai_total_tokens, openai_estimated_cost_usd, coberturas_extracted_count,
+                                    tables_detected, memory_peak_mb
+                                )
+                                VALUES (
+                                    %s, %s, %s, %s, %s,
+                                    %s, %s, %s, %s,
+                                    %s, %s, %s,
+                                    %s, %s, %s,
+                                    %s, %s, %s, %s,
+                                    %s, %s, %s,
+                                    %s, %s
+                                );
+                                """,
+                                (
+                                    policy_id,
+                                    stats.job_id,
+                                    stats.policy_number,
+                                    sigla,
+                                    _normalize_file_type(stats.file_type),
+                                    stats.ocr_applied,
+                                    stats.scanned_page_ratio,
+                                    stats.total_pages,
+                                    stats.extraction_time_seconds,
+                                    stats.time_per_page_seconds,
+                                    stats.chunking_time_seconds,
+                                    stats.embedding_time_seconds,
+                                    stats.openai_time_seconds,
+                                    stats.total_pipeline_time_seconds,
+                                    stats.total_chunks,
+                                    stats.parent_chunks,
+                                    stats.child_chunks,
+                                    stats.openai_prompt_tokens,
+                                    stats.openai_completion_tokens,
+                                    stats.openai_total_tokens,
+                                    stats.openai_estimated_cost_usd,
+                                    stats.coberturas_extracted_count,
+                                    stats.tables_detected,
+                                    stats.memory_peak_mb,
+                                ),
+                            )
+
+                    # 6. [ADITIVO] Registrar evento inmutable en audit_metrics_ledger
+                    try:
+                        cur.execute("SAVEPOINT sp_audit_ledger;")
                         cur.execute(
                             """
-                            INSERT INTO policy_processing_stats (
-                                policy_id, job_id, policy_number, company_sigla, file_type,
-                                ocr_applied, scanned_page_ratio, total_pages, extraction_time_seconds,
-                                time_per_page_seconds, chunking_time_seconds, embedding_time_seconds,
-                                openai_time_seconds, total_pipeline_time_seconds, total_chunks,
-                                parent_chunks, child_chunks, openai_prompt_tokens, openai_completion_tokens,
-                                openai_total_tokens, openai_estimated_cost_usd, coberturas_extracted_count,
-                                tables_detected, memory_peak_mb
+                            INSERT INTO audit_metrics_ledger (
+                                event_type, policy_id, envelope_id, job_id,
+                                numero_poliza, company_sigla, tipo_documento,
+                                id_cliente, nombre_cliente, file_name, file_hash,
+                                pages_count, tables_count, chunks_count,
+                                file_size_bytes, duration_seconds,
+                                openai_tokens, openai_cost_usd
                             )
                             VALUES (
-                                %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s,
-                                %s, %s, %s,
+                                'DOCUMENT_EXTRACTED', %s, %s, %s,
                                 %s, %s, %s,
                                 %s, %s, %s, %s,
                                 %s, %s, %s,
+                                %s, %s,
                                 %s, %s
-                            )
-                            ON CONFLICT (policy_id) DO UPDATE SET
-                                job_id = EXCLUDED.job_id,
-                                policy_number = EXCLUDED.policy_number,
-                                company_sigla = EXCLUDED.company_sigla,
-                                file_type = EXCLUDED.file_type,
-                                ocr_applied = EXCLUDED.ocr_applied,
-                                scanned_page_ratio = EXCLUDED.scanned_page_ratio,
-                                total_pages = EXCLUDED.total_pages,
-                                extraction_time_seconds = EXCLUDED.extraction_time_seconds,
-                                time_per_page_seconds = EXCLUDED.time_per_page_seconds,
-                                chunking_time_seconds = EXCLUDED.chunking_time_seconds,
-                                embedding_time_seconds = EXCLUDED.embedding_time_seconds,
-                                openai_time_seconds = EXCLUDED.openai_time_seconds,
-                                total_pipeline_time_seconds = EXCLUDED.total_pipeline_time_seconds,
-                                total_chunks = EXCLUDED.total_chunks,
-                                parent_chunks = EXCLUDED.parent_chunks,
-                                child_chunks = EXCLUDED.child_chunks,
-                                openai_prompt_tokens = EXCLUDED.openai_prompt_tokens,
-                                openai_completion_tokens = EXCLUDED.openai_completion_tokens,
-                                openai_total_tokens = EXCLUDED.openai_total_tokens,
-                                openai_estimated_cost_usd = EXCLUDED.openai_estimated_cost_usd,
-                                coberturas_extracted_count = EXCLUDED.coberturas_extracted_count,
-                                tables_detected = EXCLUDED.tables_detected,
-                                memory_peak_mb = EXCLUDED.memory_peak_mb;
+                            );
                             """,
                             (
                                 policy_id,
-                                stats.job_id,
-                                stats.policy_number,
+                                envelope_id,
+                                stats.job_id if stats else None,
+                                stats.policy_number if stats else None,
                                 sigla,
-                                _normalize_file_type(stats.file_type),
-                                stats.ocr_applied,
-                                stats.scanned_page_ratio,
-                                stats.total_pages,
-                                stats.extraction_time_seconds,
-                                stats.time_per_page_seconds,
-                                stats.chunking_time_seconds,
-                                stats.embedding_time_seconds,
-                                stats.openai_time_seconds,
-                                stats.total_pipeline_time_seconds,
-                                stats.total_chunks,
-                                stats.parent_chunks,
-                                stats.child_chunks,
-                                stats.openai_prompt_tokens,
-                                stats.openai_completion_tokens,
-                                stats.openai_total_tokens,
-                                stats.openai_estimated_cost_usd,
-                                stats.coberturas_extracted_count,
-                                stats.tables_detected,
-                                stats.memory_peak_mb,
+                                tipo_documento,
+                                clean_id_cliente,
+                                clean_nombre_cliente,
+                                file_name,
+                                file_hash,
+                                stats.total_pages if stats else (total_pages or 0),
+                                stats.tables_detected if stats else 0,
+                                len(chunks) if chunks else 0,
+                                file_size_bytes or 0,
+                                stats.total_pipeline_time_seconds if stats else 0.0,
+                                stats.openai_total_tokens if stats else 0,
+                                stats.openai_estimated_cost_usd if stats else 0.0,
                             ),
                         )
+                        cur.execute("RELEASE SAVEPOINT sp_audit_ledger;")
+                    except Exception:
+                        try:
+                            cur.execute("ROLLBACK TO SAVEPOINT sp_audit_ledger;")
+                        except Exception:
+                            pass
 
                 # Commit transaction
                 conn.commit()
@@ -398,7 +483,7 @@ class PgRagRepository:
                 raise
 
     def save_processing_stats(self, stats: PolicyProcessingStats) -> None:
-        """Persist or update processing statistics for a policy.
+        """Persist processing statistics for a policy (append-only).
 
         Args:
             stats: PolicyProcessingStats instance.
@@ -411,7 +496,8 @@ class PgRagRepository:
                 openai_time_seconds, total_pipeline_time_seconds, total_chunks,
                 parent_chunks, child_chunks, openai_prompt_tokens, openai_completion_tokens,
                 openai_total_tokens, openai_estimated_cost_usd, coberturas_extracted_count,
-                tables_detected, memory_peak_mb
+                tables_detected, memory_peak_mb,
+                envelope_id, file_name, file_hash, tipo_documento, id_cliente
             )
             VALUES (
                 %s, %s, %s, %s, %s,
@@ -420,32 +506,9 @@ class PgRagRepository:
                 %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s,
-                %s, %s
-            )
-            ON CONFLICT (policy_id) DO UPDATE SET
-                job_id = EXCLUDED.job_id,
-                policy_number = EXCLUDED.policy_number,
-                company_sigla = EXCLUDED.company_sigla,
-                file_type = EXCLUDED.file_type,
-                ocr_applied = EXCLUDED.ocr_applied,
-                scanned_page_ratio = EXCLUDED.scanned_page_ratio,
-                total_pages = EXCLUDED.total_pages,
-                extraction_time_seconds = EXCLUDED.extraction_time_seconds,
-                time_per_page_seconds = EXCLUDED.time_per_page_seconds,
-                chunking_time_seconds = EXCLUDED.chunking_time_seconds,
-                embedding_time_seconds = EXCLUDED.embedding_time_seconds,
-                openai_time_seconds = EXCLUDED.openai_time_seconds,
-                total_pipeline_time_seconds = EXCLUDED.total_pipeline_time_seconds,
-                total_chunks = EXCLUDED.total_chunks,
-                parent_chunks = EXCLUDED.parent_chunks,
-                child_chunks = EXCLUDED.child_chunks,
-                openai_prompt_tokens = EXCLUDED.openai_prompt_tokens,
-                openai_completion_tokens = EXCLUDED.openai_completion_tokens,
-                openai_total_tokens = EXCLUDED.openai_total_tokens,
-                openai_estimated_cost_usd = EXCLUDED.openai_estimated_cost_usd,
-                coberturas_extracted_count = EXCLUDED.coberturas_extracted_count,
-                tables_detected = EXCLUDED.tables_detected,
-                memory_peak_mb = EXCLUDED.memory_peak_mb;
+                %s, %s,
+                %s, %s, %s, %s, %s
+            );
         """
         sigla = stats.company_sigla.upper() if stats.company_sigla else None
         with self._db.get_connection() as conn:
@@ -477,9 +540,91 @@ class PgRagRepository:
                         stats.coberturas_extracted_count,
                         stats.tables_detected,
                         stats.memory_peak_mb,
+                        stats.envelope_id,
+                        stats.file_name,
+                        stats.file_hash,
+                        stats.tipo_documento,
+                        stats.id_cliente,
                     ),
                 )
             conn.commit()
+
+    def record_audit_event(
+        self,
+        event_type: str,
+        policy_id: str | None = None,
+        envelope_id: str | None = None,
+        job_id: str | None = None,
+        numero_poliza: str | None = None,
+        company_sigla: str | None = None,
+        ramo: str | None = None,
+        tipo_documento: str | None = None,
+        id_cliente: str | None = None,
+        nombre_cliente: str | None = None,
+        file_name: str | None = None,
+        file_hash: str | None = None,
+        pages_count: int = 0,
+        tables_count: int = 0,
+        chunks_count: int = 0,
+        file_size_bytes: int = 0,
+        duration_seconds: float = 0.0,
+        openai_tokens: int = 0,
+        openai_cost_usd: float = 0.0,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Append an immutable audit and telemetry event to audit_metrics_ledger."""
+        sigla = company_sigla.strip().upper() if company_sigla else None
+        clean_meta = _sanitize_null_bytes(metadata or {})
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO audit_metrics_ledger (
+                            event_type, policy_id, envelope_id, job_id,
+                            numero_poliza, company_sigla, ramo, tipo_documento,
+                            id_cliente, nombre_cliente, file_name, file_hash,
+                            pages_count, tables_count, chunks_count, file_size_bytes,
+                            duration_seconds, openai_tokens, openai_cost_usd, metadata
+                        )
+                        VALUES (
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s
+                        );
+                        """,
+                        (
+                            event_type,
+                            policy_id,
+                            envelope_id,
+                            job_id,
+                            numero_poliza,
+                            sigla,
+                            ramo,
+                            tipo_documento,
+                            id_cliente,
+                            nombre_cliente,
+                            _sanitize_null_bytes(file_name) if file_name else None,
+                            file_hash,
+                            pages_count or 0,
+                            tables_count or 0,
+                            chunks_count or 0,
+                            file_size_bytes or 0,
+                            duration_seconds or 0.0,
+                            openai_tokens or 0,
+                            openai_cost_usd or 0.0,
+                            Json(clean_meta),
+                        ),
+                    )
+                conn.commit()
+        except Exception as exc:
+            logger.warning(
+                "No se pudo registrar evento en audit_metrics_ledger",
+                event_type=event_type,
+                error=str(exc),
+            )
 
     def link_policy_to_envelope(
         self,

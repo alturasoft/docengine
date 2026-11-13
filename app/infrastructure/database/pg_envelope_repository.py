@@ -23,6 +23,53 @@ class PgEnvelopeRepository:
     def __init__(self, db_manager: DatabaseManager) -> None:
         self._db = db_manager
 
+    def _record_audit_ledger_safe(
+        self,
+        event_type: str,
+        envelope_id: str | None = None,
+        policy_id: str | None = None,
+        numero_poliza: str | None = None,
+        company_sigla: str | None = None,
+        ramo: str | None = None,
+        id_cliente: str | None = None,
+        nombre_cliente: str | None = None,
+        file_name: str | None = None,
+        file_hash: str | None = None,
+    ) -> None:
+        """Append an immutable audit event into audit_metrics_ledger without interrupting main flow."""
+        if not isinstance(self._db, DatabaseManager) and self._db.__dict__.get("_enable_audit_in_mock") is not True:
+            return
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SAVEPOINT sp_env_audit;")
+                    cur.execute(
+                        """
+                        INSERT INTO audit_metrics_ledger (
+                            event_type, envelope_id, policy_id, numero_poliza,
+                            company_sigla, ramo, id_cliente, nombre_cliente,
+                            file_name, file_hash
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        """,
+                        (
+                            event_type,
+                            envelope_id,
+                            policy_id,
+                            numero_poliza,
+                            company_sigla,
+                            ramo,
+                            id_cliente,
+                            nombre_cliente,
+                            file_name,
+                            file_hash,
+                        ),
+                    )
+                    cur.execute("RELEASE SAVEPOINT sp_env_audit;")
+                conn.commit()
+        except Exception:
+            pass
+
     def get_or_create_envelope(
         self,
         numero_poliza: str,
@@ -203,7 +250,17 @@ class PgEnvelopeRepository:
                     res = cur.fetchone()
                     cur.execute("RELEASE SAVEPOINT insert_full;")
                     conn.commit()
-                    return str(res[0]) if res else envelope_id
+                    created_id = str(res[0]) if res else envelope_id
+                    self._record_audit_ledger_safe(
+                        event_type="ENVELOPE_CREATED",
+                        envelope_id=created_id,
+                        numero_poliza=clean_num,
+                        company_sigla=clean_sigla,
+                        ramo=clean_ramo,
+                        id_cliente=clean_id_cliente,
+                        nombre_cliente=clean_nombre_cliente,
+                    )
+                    return created_id
                 except Exception:
                     try:
                         cur.execute("ROLLBACK TO SAVEPOINT insert_full;")
@@ -859,6 +916,13 @@ class PgEnvelopeRepository:
                     )
 
                 conn.commit()
+                self._record_audit_ledger_safe(
+                    event_type="ENVELOPE_DELETED",
+                    envelope_id=envelope_info["id"],
+                    numero_poliza=envelope_info["numero_poliza"],
+                    company_sigla=envelope_info["company_sigla"],
+                    ramo=envelope_info["ramo"],
+                )
                 return envelope_info
             except Exception:
                 conn.rollback()
@@ -868,8 +932,9 @@ class PgEnvelopeRepository:
         """Atomically delete a single policy document from PostgreSQL.
 
         Due to ON DELETE CASCADE on associated tables (chunks, structured data,
-        markdown, stats), deleting the document record from `policies` automatically
-        removes all vector embeddings, atomized data, and cached files.
+        markdown), deleting the document record from `policies` automatically
+        removes all vector embeddings, atomized data, and cached files, while
+        preserving permanent historical stats in `policy_processing_stats`.
 
         Args:
             policy_id: UUID string of the document in the policies table.
@@ -909,6 +974,14 @@ class PgEnvelopeRepository:
                     )
 
                 conn.commit()
+                self._record_audit_ledger_safe(
+                    event_type="DOCUMENT_DELETED",
+                    policy_id=doc_info["policy_id"],
+                    envelope_id=doc_info["envelope_id"],
+                    company_sigla=doc_info["company_sigla"],
+                    file_name=doc_info["file_name"],
+                    file_hash=doc_info["file_hash"],
+                )
                 return doc_info
             except Exception:
                 conn.rollback()

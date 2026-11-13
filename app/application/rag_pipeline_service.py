@@ -193,6 +193,7 @@ class RagPipelineService:
         tipo_documento: str | None = None,
         id_cliente: str | None = None,
         nombre_cliente: str | None = None,
+        existing_job_id: str | None = None,
     ) -> RagProcessingReport:
         """Process an ExtractionResult through the RAG pipeline and persist to PostgreSQL.
 
@@ -242,7 +243,7 @@ class RagPipelineService:
             nombre_cliente=client_name_hint,
         )
 
-        job_id = None
+        job_id = existing_job_id
         try:
             # 1. Idempotency Check
             logger.info(
@@ -314,12 +315,36 @@ class RagPipelineService:
                         if client_name_hint:
                             result.metadata.nombre_cliente = client_name_hint
 
-                job_id = self._repo.create_job(file_name)
+                if not job_id:
+                    job_id = self._repo.create_job(file_name)
                 self._repo.update_job(
                     job_id=job_id,
                     status="SKIPPED",
                     policy_id=existing_policy_id,
                 )
+                skip_duration = time.perf_counter() - start_time
+                if hasattr(self._repo, "record_audit_event"):
+                    try:
+                        self._repo.record_audit_event(
+                            event_type="DOCUMENT_SKIPPED_DUPLICATE",
+                            policy_id=existing_policy_id,
+                            envelope_id=envelope_id,
+                            job_id=job_id,
+                            numero_poliza=pol_num,
+                            company_sigla=company_sigla,
+                            ramo=pol_ramo,
+                            tipo_documento=effective_doc_type,
+                            id_cliente=client_id_hint,
+                            nombre_cliente=client_name_hint,
+                            file_name=file_name,
+                            file_hash=file_hash,
+                            pages_count=result.metadata.page_count or 0,
+                            tables_count=getattr(result.metadata, "tables_detected", 0) or 0,
+                            file_size_bytes=result.metadata.markdown_size_bytes or 0,
+                            duration_seconds=skip_duration,
+                        )
+                    except Exception:
+                        pass
                 return RagProcessingReport(
                     policy_id=existing_policy_id,
                     file_name=file_name,
@@ -327,13 +352,14 @@ class RagPipelineService:
                     company_sigla=company_sigla,
                     skipped_duplicate=True,
                     job_id=job_id,
-                    processing_time_seconds=time.perf_counter() - start_time,
+                    processing_time_seconds=skip_duration,
                     envelope_id=envelope_id,
                     tipo_documento=effective_doc_type,
                 )
 
-            # Create processing job record
-            job_id = self._repo.create_job(file_name)
+            # Create processing job record if not already provided
+            if not job_id:
+                job_id = self._repo.create_job(file_name)
 
             # 2. Local Chunking (must run first — embeddings depend on chunks)
             logger.info(
@@ -615,6 +641,15 @@ class RagPipelineService:
                     file_hash=file_hash,
                 )
 
+            # Enrich stats with resolved immutable identity fields before transactional persistence
+            stats.policy_number = effective_pol_num or stats.policy_number
+            stats.company_sigla = effective_sigla or stats.company_sigla
+            stats.envelope_id = envelope_id
+            stats.file_name = file_name
+            stats.file_hash = file_hash
+            stats.tipo_documento = effective_doc_type
+            stats.id_cliente = effective_id_cliente
+
             # Enrich chunks metadata with id_cliente and nombre_cliente if available
             if effective_id_cliente or effective_nombre_cliente:
                 for c in chunks_with_embeddings:
@@ -737,6 +772,69 @@ class RagPipelineService:
             )
 
         except Exception as e:
+            # [ADITIVO] Recuperación de concurrencia: si otro worker persistió el mismo archivo en paralelo
+            err_str = str(e)
+            if "policies_file_hash_key" in err_str or ("duplicate key" in err_str.lower() and "file_hash" in err_str.lower()):
+                logger.warning(
+                    "[RAG Concurrencia] Conflicto de hash en inserción concurrente detectado. Recuperando como duplicado...",
+                    file_name=file_name,
+                    file_hash=file_hash,
+                )
+                try:
+                    existing_policy_id = self._repo.policy_exists_by_hash(file_hash)
+                    if existing_policy_id:
+                        recovered_doc_type = (
+                            locals().get("effective_doc_type")
+                            or normalize_document_type(doc_type)
+                            or normalize_document_type(file_name)
+                            or DocumentType.POLIZA_PRINCIPAL.value
+                        )
+                        recovered_env_id = locals().get("envelope_id")
+                        if job_id:
+                            try:
+                                self._repo.update_job(
+                                    job_id=job_id,
+                                    status="SKIPPED",
+                                    policy_id=existing_policy_id,
+                                )
+                            except Exception:
+                                pass
+                        if hasattr(self._repo, "record_audit_event"):
+                            try:
+                                self._repo.record_audit_event(
+                                    event_type="DOCUMENT_SKIPPED_DUPLICATE",
+                                    policy_id=existing_policy_id,
+                                    envelope_id=recovered_env_id,
+                                    job_id=job_id,
+                                    numero_poliza=pol_num,
+                                    company_sigla=company_sigla,
+                                    ramo=pol_ramo,
+                                    tipo_documento=recovered_doc_type,
+                                    id_cliente=client_id_hint,
+                                    nombre_cliente=client_name_hint,
+                                    file_name=file_name,
+                                    file_hash=file_hash,
+                                    pages_count=getattr(result.metadata, "page_count", 0) or 0,
+                                    tables_count=getattr(result.metadata, "tables_detected", 0) or 0,
+                                    file_size_bytes=getattr(result.metadata, "markdown_size_bytes", 0) or 0,
+                                    duration_seconds=time.perf_counter() - start_time,
+                                )
+                            except Exception:
+                                pass
+                        return RagProcessingReport(
+                            policy_id=existing_policy_id,
+                            file_name=file_name,
+                            file_hash=file_hash,
+                            company_sigla=company_sigla,
+                            skipped_duplicate=True,
+                            job_id=job_id,
+                            processing_time_seconds=time.perf_counter() - start_time,
+                            envelope_id=recovered_env_id,
+                            tipo_documento=recovered_doc_type,
+                        )
+                except Exception as recov_exc:
+                    logger.warning("No se pudo auto-recuperar duplicado concurrente", error=str(recov_exc))
+
             logger.error(
                 "[ERROR] [RAG] Fallo crítico durante la ejecución del pipeline RAG",
                 file_name=file_name,
@@ -748,6 +846,21 @@ class RagPipelineService:
                         job_id=job_id,
                         status="FAILED",
                         error_message=str(e),
+                    )
+                except Exception:
+                    pass
+            if hasattr(self._repo, "record_audit_event"):
+                try:
+                    self._repo.record_audit_event(
+                        event_type="DOCUMENT_EXTRACTION_FAILED",
+                        job_id=job_id,
+                        company_sigla=company_sigla,
+                        file_name=file_name,
+                        file_hash=file_hash,
+                        pages_count=getattr(result.metadata, "page_count", 0) or 0,
+                        tables_count=getattr(result.metadata, "tables_detected", 0) or 0,
+                        duration_seconds=getattr(result.metadata, "extraction_time_seconds", 0.0) or 0.0,
+                        metadata={"error": str(e)},
                     )
                 except Exception:
                     pass

@@ -463,6 +463,8 @@ def extract_folder(
                 if client_name_hint:
                     r.metadata.nombre_cliente = client_name_hint
 
+            _record_and_log(r)
+
             rag_report_schema = _process_rag_safe(
                 rag_service,
                 r,
@@ -705,10 +707,19 @@ def _run_async_extraction(
             tipo_documento=tipo_doc_clean,
             id_cliente=id_cliente_clean,
             nombre_cliente=nombre_cliente_clean,
+            existing_job_id=job_id,
         )
         policy_id = rag_report.policy_id if rag_report and rag_report.policy_id else None
-        rag_repo.update_job(job_id=job_id, status="COMPLETED", policy_id=policy_id)
-        logger.info("Async extraction completed successfully", job_id=job_id, policy_id=policy_id)
+        if rag_report and rag_report.errors:
+            err_msg = "; ".join(str(e) for e in rag_report.errors)
+            rag_repo.update_job(job_id=job_id, status="FAILED", error_message=err_msg)
+            logger.error("Async extraction RAG stage failed", job_id=job_id, error=err_msg)
+        elif rag_report and rag_report.skipped_duplicate:
+            rag_repo.update_job(job_id=job_id, status="SKIPPED", policy_id=policy_id)
+            logger.info("Async extraction skipped duplicate", job_id=job_id, policy_id=policy_id)
+        else:
+            rag_repo.update_job(job_id=job_id, status="COMPLETED", policy_id=policy_id)
+            logger.info("Async extraction completed successfully", job_id=job_id, policy_id=policy_id)
     except Exception as exc:
         logger.error("Async extraction failed", job_id=job_id, error=str(exc))
         rag_repo.update_job(job_id=job_id, status="FAILED", error_message=str(exc))
@@ -729,18 +740,24 @@ def _process_rag_safe(
     tipo_documento: str | None = None,
     id_cliente: str | None = None,
     nombre_cliente: str | None = None,
+    existing_job_id: str | None = None,
 ) -> RagReportSchema | None:
     """Helper to safely execute RAG pipeline without failing primary extraction."""
     if not rag_service or not result.is_successful:
         return None
     try:
+        kwargs: dict[str, Any] = {
+            "numero_poliza": numero_poliza,
+            "ramo": ramo,
+            "tipo_documento": tipo_documento,
+            "id_cliente": id_cliente,
+            "nombre_cliente": nombre_cliente,
+        }
+        if existing_job_id is not None:
+            kwargs["existing_job_id"] = existing_job_id
         report = rag_service.process_extraction_result(
             result,
-            numero_poliza=numero_poliza,
-            ramo=ramo,
-            tipo_documento=tipo_documento,
-            id_cliente=id_cliente,
-            nombre_cliente=nombre_cliente,
+            **kwargs,
         )
         if report:
             return RagReportSchema(
