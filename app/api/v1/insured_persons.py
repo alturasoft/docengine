@@ -18,6 +18,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from app.api.security import require_role
 from app.application.collective_insured_extractor_service import CollectiveInsuredExtractorService
 from app.infrastructure.database.db_connection import DatabaseManager
 from app.infrastructure.database.pg_insured_persons_repository import PgInsuredPersonsRepository
@@ -25,7 +26,7 @@ from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["CollectiveInsured"])
+router = APIRouter(tags=["CollectiveInsured"], dependencies=[Depends(require_role("readonly"))])
 
 
 def get_insured_repo(request: Request) -> PgInsuredPersonsRepository:

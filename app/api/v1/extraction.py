@@ -8,10 +8,15 @@ POST /api/v1/extract/folder   — Extract all PDFs in a server-side folder
 from __future__ import annotations
 
 import io
+import ipaddress
+import os
 import re
+import socket
+import threading
 import uuid
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 import pypdf
 from fastapi import (
@@ -49,6 +54,10 @@ from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Extraction"])
+
+# Limit concurrent background extractions per worker to prevent Docling/BGE-M3 OOM crashes.
+_MAX_CONCURRENT_ASYNC_JOBS = max(1, int(os.environ.get("DOCENGINE_MAX_CONCURRENT_ASYNC_JOBS", "1")))
+_ASYNC_EXTRACTION_SEMAPHORE = threading.BoundedSemaphore(value=_MAX_CONCURRENT_ASYNC_JOBS)
 
 
 def get_rag_repo(request: Request) -> PgRagRepository:
@@ -140,8 +149,9 @@ async def extract_file(
             detail="El campo 'id_cliente' (Carnet de Identidad o NIT) es requerido y no puede estar vacío.",
         )
 
-    # Save uploaded file to a temporary location
-    temp_path = Path("outputs") / "_uploads" / f"{uuid.uuid4()}_{file.filename}"
+    # Save uploaded file to a temporary location (sanitize filename against path traversal)
+    safe_filename = Path(file.filename or "document.pdf").name
+    temp_path = Path("outputs") / "_uploads" / f"{uuid.uuid4()}_{safe_filename}"
     temp_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -318,6 +328,9 @@ def extract_url(
                 detail="El campo 'id_cliente' (Carnet de Identidad o NIT) es requerido.",
             )
 
+        if get_settings().is_production():
+            _validate_public_url(body.url)
+
         result = extraction_service.extract_from_url(body.url, company_sigla=sigla_clean)
         if result.metadata:
             result.metadata.id_cliente = id_cliente_clean
@@ -409,6 +422,15 @@ def extract_folder(
         HTTPException 500: If batch extraction fails unexpectedly.
     """
     folder = Path(body.folder_path)
+    allowed_base = os.environ.get("DOCENGINE_ALLOWED_FOLDER_BASE", "").strip()
+    if allowed_base:
+        try:
+            folder.resolve().relative_to(Path(allowed_base).resolve())
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: folder_path is outside DOCENGINE_ALLOWED_FOLDER_BASE.",
+            )
     if not folder.exists() or not folder.is_dir():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -506,6 +528,7 @@ def extract_folder(
     "/extract/{document_id}/markdown",
     summary="Obtener contenido Markdown de una extracción",
     description="Recupera el contenido completo en texto Markdown generado a partir de una extracción previa, identificado por document_id o ruta de archivo.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def get_extraction_markdown(
     document_id: str,
@@ -568,6 +591,21 @@ def get_extraction_markdown(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _validate_public_url(url: str) -> None:
+    """Reject non-HTTP(S) schemes and private/loopback/link-local targets in production."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("URL inválida: solo se permiten esquemas http/https con hostname válido.")
+    try:
+        addr_infos = socket.getaddrinfo(parsed.hostname, None)
+        for info in addr_infos:
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                raise ValueError("URL bloqueada por política de seguridad (dirección interna no permitida).")
+    except socket.gaierror as exc:
+        raise ValueError(f"No se pudo resolver el hostname de la URL: {exc}") from exc
 
 
 def _validate_upload(file: UploadFile) -> None:
@@ -676,59 +714,60 @@ def _run_async_extraction(
     nombre_cliente_clean: str | None = None,
 ) -> None:
     """Execute document extraction and RAG ingestion in background task."""
-    try:
-        request = ExtractionRequest(
-            source=temp_path,
-            output_formats=["all"],
-            request_id=str(uuid.uuid4()),
-            company_sigla=sigla_clean,
-            numero_poliza=num_poliza_clean,
-            ramo=ramo_clean,
-            tipo_documento=tipo_doc_clean,
-            id_cliente=id_cliente_clean,
-            nombre_cliente=nombre_cliente_clean,
-        )
-        result = extraction_service.extract_document(request)
-        if filename:
-            result.metadata.filename = filename
-        if result.metadata:
-            result.metadata.id_cliente = id_cliente_clean
-            if nombre_cliente_clean:
-                result.metadata.nombre_cliente = nombre_cliente_clean
-            if ramo_clean:
-                result.metadata.ramo = ramo_clean
-        _record_and_log(result)
+    with _ASYNC_EXTRACTION_SEMAPHORE:
+        try:
+            request = ExtractionRequest(
+                source=temp_path,
+                output_formats=["all"],
+                request_id=str(uuid.uuid4()),
+                company_sigla=sigla_clean,
+                numero_poliza=num_poliza_clean,
+                ramo=ramo_clean,
+                tipo_documento=tipo_doc_clean,
+                id_cliente=id_cliente_clean,
+                nombre_cliente=nombre_cliente_clean,
+            )
+            result = extraction_service.extract_document(request)
+            if filename:
+                result.metadata.filename = filename
+            if result.metadata:
+                result.metadata.id_cliente = id_cliente_clean
+                if nombre_cliente_clean:
+                    result.metadata.nombre_cliente = nombre_cliente_clean
+                if ramo_clean:
+                    result.metadata.ramo = ramo_clean
+            _record_and_log(result)
 
-        rag_report = _process_rag_safe(
-            rag_service,
-            result,
-            numero_poliza=num_poliza_clean,
-            ramo=ramo_clean,
-            tipo_documento=tipo_doc_clean,
-            id_cliente=id_cliente_clean,
-            nombre_cliente=nombre_cliente_clean,
-            existing_job_id=job_id,
-        )
-        policy_id = rag_report.policy_id if rag_report and rag_report.policy_id else None
-        if rag_report and rag_report.errors:
-            err_msg = "; ".join(str(e) for e in rag_report.errors)
-            rag_repo.update_job(job_id=job_id, status="FAILED", error_message=err_msg)
-            logger.error("Async extraction RAG stage failed", job_id=job_id, error=err_msg)
-        elif rag_report and rag_report.skipped_duplicate:
-            rag_repo.update_job(job_id=job_id, status="SKIPPED", policy_id=policy_id)
-            logger.info("Async extraction skipped duplicate", job_id=job_id, policy_id=policy_id)
-        else:
-            rag_repo.update_job(job_id=job_id, status="COMPLETED", policy_id=policy_id)
-            logger.info("Async extraction completed successfully", job_id=job_id, policy_id=policy_id)
-    except Exception as exc:
-        logger.error("Async extraction failed", job_id=job_id, error=str(exc))
-        rag_repo.update_job(job_id=job_id, status="FAILED", error_message=str(exc))
-    finally:
-        if temp_path.exists():
-            try:
-                temp_path.unlink()
-            except Exception:
-                pass
+            rag_report = _process_rag_safe(
+                rag_service,
+                result,
+                numero_poliza=num_poliza_clean,
+                ramo=ramo_clean,
+                tipo_documento=tipo_doc_clean,
+                id_cliente=id_cliente_clean,
+                nombre_cliente=nombre_cliente_clean,
+                existing_job_id=job_id,
+            )
+            policy_id = rag_report.policy_id if rag_report and rag_report.policy_id else None
+            if rag_report and rag_report.errors:
+                err_msg = "; ".join(str(e) for e in rag_report.errors)
+                rag_repo.update_job(job_id=job_id, status="FAILED", error_message=err_msg)
+                logger.error("Async extraction RAG stage failed", job_id=job_id, error=err_msg)
+            elif rag_report and rag_report.skipped_duplicate:
+                rag_repo.update_job(job_id=job_id, status="SKIPPED", policy_id=policy_id)
+                logger.info("Async extraction skipped duplicate", job_id=job_id, policy_id=policy_id)
+            else:
+                rag_repo.update_job(job_id=job_id, status="COMPLETED", policy_id=policy_id)
+                logger.info("Async extraction completed successfully", job_id=job_id, policy_id=policy_id)
+        except Exception as exc:
+            logger.error("Async extraction failed", job_id=job_id, error=str(exc))
+            rag_repo.update_job(job_id=job_id, status="FAILED", error_message=str(exc))
+        finally:
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
 
 
 
@@ -843,6 +882,7 @@ def _record_and_log(result: ExtractionResult) -> None:
     "/companies",
     summary="Listar compañías aseguradoras registradas",
     description="Retorna el catálogo completo de compañías aseguradoras soportadas con sus siglas oficiales y nombres completos.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def get_companies() -> dict[str, str]:
     """Return dictionary of supported insurance company siglas to full names."""

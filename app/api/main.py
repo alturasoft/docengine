@@ -7,6 +7,8 @@ context manager and stored in app.state.extraction_service.
 
 from __future__ import annotations
 
+import json
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -103,6 +105,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Could not initialize RAG Pipeline Service", error=str(exc))
         app.state.rag_service = None
 
+    # Recover/mark stale PROCESSING jobs left behind by previous worker crashes
+    try:
+        rag_repo = getattr(app.state.rag_service, "_repo", None)
+        if rag_repo is not None and hasattr(rag_repo, "fail_stale_processing_jobs"):
+            stale_minutes = int(os.environ.get("DOCENGINE_STALE_JOB_MINUTES", "30"))
+            cleaned_jobs = rag_repo.fail_stale_processing_jobs(max_age_minutes=stale_minutes)
+            if cleaned_jobs > 0:
+                logger.warning(
+                    "Marked stale PROCESSING jobs as FAILED on startup",
+                    count=cleaned_jobs,
+                    max_age_minutes=stale_minutes,
+                )
+    except Exception as exc:
+        logger.warning("Could not clean up stale PROCESSING jobs on startup", error=str(exc))
+
     # Build RAG Query Service (read/query path — new, independent service)
     # Reuse the EmbeddingService from rag_service._embedder to share the
     # already-loaded bge-m3 model in memory (avoids a second ~1GB model load).
@@ -124,6 +141,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield  # Application is running
 
     logger.info("DocEngine shutting down gracefully.")
+
+
+def _get_cors_origins(settings: AppSettings) -> list[str]:
+    """Resolve allowed CORS origins from DOCENGINE_CORS_ORIGINS or environment."""
+    raw = os.environ.get("DOCENGINE_CORS_ORIGINS", "").strip()
+    if raw:
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [str(o).strip() for o in parsed if str(o).strip()]
+            except Exception:
+                pass
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [] if settings.is_production() else ["*"]
+
+
+def _is_docs_enabled(settings: AppSettings) -> bool:
+    """Disable OpenAPI/Swagger UI in production unless DOCENGINE_ENABLE_DOCS=true."""
+    if not settings.is_production():
+        return True
+    return os.environ.get("DOCENGINE_ENABLE_DOCS", "false").strip().lower() in {"true", "1", "yes"}
 
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
@@ -194,6 +233,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         },
     ]
 
+    docs_enabled = _is_docs_enabled(resolved_settings)
     app = FastAPI(
         title="DocEngine — Motor de Extracción Documental",
         description=(
@@ -210,21 +250,22 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         ),
         version=resolved_settings.app_version,
         openapi_tags=tags_metadata,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
         lifespan=lifespan,
     )
 
     # Store settings in app state for lifespan access
     app.state.settings = resolved_settings
 
-    # CORS middleware (permissive for internal use — tighten for production)
+    # CORS middleware: restricted by DOCENGINE_CORS_ORIGINS in production
+    cors_origins = _get_cors_origins(resolved_settings)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=cors_origins,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"] if resolved_settings.is_production() else ["*"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key"] if resolved_settings.is_production() else ["*"],
     )
 
     # Register routers

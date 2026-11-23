@@ -1,0 +1,72 @@
+# ==============================================================================
+# DocEngine — Docker Compose Production Override
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# ==============================================================================
+
+services:
+  docengine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    volumes: !override
+      - ./outputs:/app/outputs
+      - ./skills:/app/skills:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - hf_cache:/tmp/huggingface
+      - docengine_logs:/var/log/docengine
+    environment:
+      - DOCENGINE_ENV=production
+      - DOCENGINE_LOG_LEVEL=INFO
+      - DOCENGINE_LOG_FORMAT=json
+      - DOCENGINE_LOG_LOG_FILE=/var/log/docengine/docengine.log
+      - DOCENGINE_SECURITY_ENABLED=true
+      - DOCENGINE_API_KEYS=${DOCENGINE_API_KEYS:?DOCENGINE_API_KEYS must be set in production}
+      - DOCENGINE_CORS_ORIGINS=${DOCENGINE_CORS_ORIGINS:-}
+      - DOCENGINE_ENABLE_DOCS=false
+      - DOCENGINE_DB_HOST=postgres_db
+      - DOCENGINE_DB_PORT=5432
+      - DOCENGINE_DB_NAME=${DOCENGINE_DB_NAME:-docengine}
+      - DOCENGINE_DB_USER=${DOCENGINE_DB_USER:-docengine}
+      - DOCENGINE_DB_PASSWORD=${DOCENGINE_DB_PASSWORD:?DOCENGINE_DB_PASSWORD must be set in production}
+      - DOCENGINE_PERF_REQUEST_TIMEOUT_SECONDS=600
+      - DOCENGINE_OUTPUT_OUTPUT_DIR=/app/outputs
+      - HF_HOME=/tmp/huggingface
+      - HF_TOKEN=${HF_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY must be set in production}
+      - TORCH_COMPILE_DISABLE=1
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 4G
+
+  postgres_db:
+    ports: !reset []
+    environment:
+      - POSTGRES_DB=${DOCENGINE_DB_NAME:-docengine}
+      - POSTGRES_USER=${DOCENGINE_DB_USER:-docengine}
+      - POSTGRES_PASSWORD=${DOCENGINE_DB_PASSWORD:?DOCENGINE_DB_PASSWORD must be set in production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/001_add_rag_tables.sql:/docker-entrypoint-initdb.d/001_add_rag_tables.sql:ro
+      - ./scripts/002_parent_child_hybrid_search.sql:/docker-entrypoint-initdb.d/002_parent_child_hybrid_search.sql:ro
+      - ./scripts/003_add_processing_stats_table.sql:/docker-entrypoint-initdb.d/003_add_processing_stats_table.sql:ro
+      - ./scripts/004_add_policy_envelope.sql:/docker-entrypoint-initdb.d/004_add_policy_envelope.sql:ro
+      - ./scripts/005_add_id_cliente.sql:/docker-entrypoint-initdb.d/005_add_id_cliente.sql:ro
+      - ./scripts/006_add_master_catalogs.sql:/docker-entrypoint-initdb.d/006_add_master_catalogs.sql:ro
+      - ./scripts/007_align_stats_company_sigla.sql:/docker-entrypoint-initdb.d/007_align_stats_company_sigla.sql:ro
+      - ./scripts/008_add_policy_section_summaries.sql:/docker-entrypoint-initdb.d/008_add_policy_section_summaries.sql:ro
+      - ./scripts/009_add_policy_fleet_vehicles.sql:/docker-entrypoint-initdb.d/009_add_policy_fleet_vehicles.sql:ro
+      - ./scripts/010_add_policy_insured_persons.sql:/docker-entrypoint-initdb.d/010_add_policy_insured_persons.sql:ro
+      - ./scripts/011_add_nombre_cliente.sql:/docker-entrypoint-initdb.d/011_add_nombre_cliente.sql:ro
+      - ./scripts/012_add_client_name_search_indexes.sql:/docker-entrypoint-initdb.d/012_add_client_name_search_indexes.sql:ro
+      - ./scripts/013_immutable_audit_and_stats.sql:/docker-entrypoint-initdb.d/013_immutable_audit_and_stats.sql:ro
+    restart: always
+
+volumes:
+  docengine_logs:

@@ -1,0 +1,51 @@
+# ==============================================================================
+# DocEngine — systemd Service Unit (Native Linux Deployment)
+# Copy to /etc/systemd/system/docengine.service
+# Then run:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now docengine
+# ==============================================================================
+
+[Unit]
+Description=DocEngine — Motor de Extracción Documental y Pipeline RAG
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=docengine
+Group=docengine
+WorkingDirectory=/opt/docengine
+EnvironmentFile=/opt/docengine/.env
+Environment="DOCENGINE_ENV=production"
+Environment="DOCENGINE_LOG_FORMAT=json"
+Environment="TORCH_COMPILE_DISABLE=1"
+
+ExecStart=/opt/docengine/.venv/bin/uvicorn main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --timeout-keep-alive 60 \
+    --log-level info
+
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+
+# --- Resource Limits ---
+MemoryMax=12G
+LimitNOFILE=65536
+
+# --- Systemd Hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/docengine/outputs /var/log/docengine /tmp
+
+StandardOutput=append:/var/log/docengine/docengine.log
+StandardError=append:/var/log/docengine/docengine-error.log
+
+[Install]
+WantedBy=multi-user.target

@@ -17,6 +17,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from app.api.security import require_role
 from app.application.fleet_extractor_service import FleetExtractorService
 from app.infrastructure.database.db_connection import DatabaseManager
 from app.infrastructure.database.pg_fleet_repository import PgFleetRepository
@@ -24,7 +25,7 @@ from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["Fleet"])
+router = APIRouter(tags=["Fleet"], dependencies=[Depends(require_role("readonly"))])
 
 
 def get_fleet_repo(request: Request) -> PgFleetRepository:

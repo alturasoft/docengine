@@ -165,6 +165,36 @@ class PgRagRepository:
             logger.error("Failed to fetch job status", job_id=job_id, error=str(exc))
             return None
 
+    def fail_stale_processing_jobs(
+        self,
+        max_age_minutes: int = 30,
+        reason: str = "Job interrumpido por reinicio o caída de worker antes de completar.",
+    ) -> int:
+        """Mark stale PROCESSING jobs older than max_age_minutes as FAILED.
+
+        Args:
+            max_age_minutes: Minimum age in minutes before a PROCESSING job is considered stale.
+            reason: Error message recorded on marked jobs.
+
+        Returns:
+            Number of jobs updated to FAILED.
+        """
+        age_minutes = max(1, int(max_age_minutes))
+        query = """
+            UPDATE processing_jobs
+            SET status = 'FAILED',
+                error_message = COALESCE(error_message, %s),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'PROCESSING'
+              AND updated_at < CURRENT_TIMESTAMP - make_interval(mins => %s);
+        """
+        with self._db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (reason, age_minutes))
+                updated_count = cur.rowcount or 0
+            conn.commit()
+        return updated_count
+
     def save_rag_policy_transactional(
         self,
         file_name: str,

@@ -907,6 +907,67 @@
       font-size: 0.84rem;
     }
 
+    /* Interactive Card Tooltips */
+    .has-tooltip {
+      cursor: help;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+    }
+
+    .kpi-icon.has-tooltip {
+      cursor: help;
+    }
+
+    .tooltip-hint {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      opacity: 0.7;
+      transition: opacity 0.15s ease, color 0.15s ease;
+    }
+
+    .has-tooltip:hover .tooltip-hint,
+    .has-tooltip:focus-visible .tooltip-hint {
+      opacity: 1;
+      color: var(--accent-cyan);
+    }
+
+    .dash-tooltip {
+      position: fixed;
+      z-index: 9999;
+      max-width: 290px;
+      padding: 0.6rem 0.8rem;
+      border-radius: var(--radius-sm);
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #f8fafc;
+      font-family: var(--font-sans);
+      font-size: 0.76rem;
+      font-weight: 400;
+      line-height: 1.45;
+      text-transform: none;
+      letter-spacing: normal;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+
+    .dash-tooltip.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    body.light-theme .dash-tooltip {
+      background: rgba(15, 23, 42, 0.95);
+      color: #f8fafc;
+      border-color: rgba(99, 102, 241, 0.45);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.22);
+    }
+
     /* Scrollbar */
     ::-webkit-scrollbar { width: 7px; height: 7px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -1056,7 +1117,7 @@
     <section class="pulse-grid">
       <div class="pulse-card daily">
         <div class="pulse-header">
-          <span><i class="fa-solid fa-sun" style="color: var(--accent-cyan);"></i> Procesamiento Diario (Hoy)</span>
+          <span class="has-tooltip" tabindex="0" data-tooltip="Resumen en tiempo real de la actividad de hoy: documentos extraídos, páginas procesadas, sobres nuevos y errores ocurridos desde las 00:00."><i class="fa-solid fa-sun" style="color: var(--accent-cyan);"></i> Procesamiento Diario (Hoy) <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
           <span class="badge badge-info">En curso</span>
         </div>
         <div class="pulse-metrics">
@@ -1081,7 +1142,7 @@
 
       <div class="pulse-card weekly">
         <div class="pulse-header">
-          <span><i class="fa-solid fa-calendar-week" style="color: var(--accent-primary);"></i> Procesamiento Semanal (7 días)</span>
+          <span class="has-tooltip" tabindex="0" data-tooltip="Actividad acumulada en los últimos 7 días y comparación porcentual de documentos extraídos frente a la semana anterior."><i class="fa-solid fa-calendar-week" style="color: var(--accent-primary);"></i> Procesamiento Semanal (7 días) <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
           <span id="snapWeekGrowth" class="growth-badge growth-flat">-- vs sem. ant.</span>
         </div>
         <div class="pulse-metrics">
@@ -1106,7 +1167,7 @@
 
       <div class="pulse-card inventory">
         <div class="pulse-header">
-          <span><i class="fa-solid fa-database" style="color: var(--accent-success);"></i> Inventario Activo & Extractores</span>
+          <span class="has-tooltip" tabindex="0" data-tooltip="Pólizas y documentos actualmente vigentes en el sistema (sin eliminar), junto con vehículos de flota, personas colectivas y el máximo histórico (HWM)."><i class="fa-solid fa-database" style="color: var(--accent-success);"></i> Inventario Activo & Extractores <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
           <span class="badge badge-success" id="snapHwmBadge">HWM: 0</span>
         </div>
         <div class="pulse-metrics">
@@ -1135,8 +1196,8 @@
       <!-- KPI 1: Documents & Envelopes -->
       <div class="kpi-card">
         <div class="kpi-top">
-          <span class="kpi-label">Documentos Extraídos</span>
-          <div class="kpi-icon" style="background: rgba(99, 102, 241, 0.16); color: #818cf8;">
+          <span class="kpi-label has-tooltip" tabindex="0" data-tooltip="Total de PDFs procesados con éxito en el periodo filtrado. Incluye el histórico de sobres, clientes únicos y documentos eliminados.">Documentos Extraídos <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
+          <div class="kpi-icon has-tooltip" tabindex="0" data-tooltip="Total de PDFs procesados con éxito en el periodo filtrado. Incluye el histórico de sobres, clientes únicos y documentos eliminados." style="background: rgba(99, 102, 241, 0.16); color: #818cf8;">
             <i class="fa-solid fa-file-shield"></i>
           </div>
         </div>
@@ -1151,8 +1212,8 @@
       <!-- KPI 2: Pages, Tables, Volume -->
       <div class="kpi-card">
         <div class="kpi-top">
-          <span class="kpi-label">Volumen Procesado</span>
-          <div class="kpi-icon" style="background: rgba(236, 72, 153, 0.16); color: #f472b6;">
+          <span class="kpi-label has-tooltip" tabindex="0" data-tooltip="Cantidad total de páginas leídas, tablas estructuradas detectadas, coberturas extraídas y peso acumulado de los archivos.">Volumen Procesado <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
+          <div class="kpi-icon has-tooltip" tabindex="0" data-tooltip="Cantidad total de páginas leídas, tablas estructuradas detectadas, coberturas extraídas y peso acumulado de los archivos." style="background: rgba(236, 72, 153, 0.16); color: #f472b6;">
             <i class="fa-solid fa-book-open"></i>
           </div>
         </div>
@@ -1167,8 +1228,8 @@
       <!-- KPI 3: RAG Vector Index -->
       <div class="kpi-card">
         <div class="kpi-top">
-          <span class="kpi-label">Índice Vectorial RAG</span>
-          <div class="kpi-icon" style="background: rgba(6, 182, 212, 0.16); color: #22d3ee;">
+          <span class="kpi-label has-tooltip" tabindex="0" data-tooltip="Fragmentos de texto (chunks) indexados para búsquedas del chat IA: bloques padre (contexto), bloques hijo (precisión) y mapas de sección.">Índice Vectorial RAG <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
+          <div class="kpi-icon has-tooltip" tabindex="0" data-tooltip="Fragmentos de texto (chunks) indexados para búsquedas del chat IA: bloques padre (contexto), bloques hijo (precisión) y mapas de sección." style="background: rgba(6, 182, 212, 0.16); color: #22d3ee;">
             <i class="fa-solid fa-cubes"></i>
           </div>
         </div>
@@ -1183,8 +1244,8 @@
       <!-- KPI 4: Jobs & Error Rate -->
       <div class="kpi-card" id="cardKpiReliability">
         <div class="kpi-top">
-          <span class="kpi-label">Fiabilidad y Errores</span>
-          <div class="kpi-icon" id="kpiReliabilityIcon" style="background: rgba(16, 185, 129, 0.16); color: #34d399;">
+          <span class="kpi-label has-tooltip" tabindex="0" data-tooltip="Porcentaje de trabajos completados sin fallo frente al total ejecutado. Muestra tareas exitosas (OK), duplicados omitidos (Dup) y fallos.">Fiabilidad y Errores <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
+          <div class="kpi-icon has-tooltip" id="kpiReliabilityIcon" tabindex="0" data-tooltip="Porcentaje de trabajos completados sin fallo frente al total ejecutado. Muestra tareas exitosas (OK), duplicados omitidos (Dup) y fallos." style="background: rgba(16, 185, 129, 0.16); color: #34d399;">
             <i class="fa-solid fa-circle-check" id="kpiReliabilityFaIcon"></i>
           </div>
         </div>
@@ -1199,8 +1260,8 @@
       <!-- KPI 5: Pipeline Speed & RAM -->
       <div class="kpi-card">
         <div class="kpi-top">
-          <span class="kpi-label">Rendimiento Motor</span>
-          <div class="kpi-icon" style="background: rgba(168, 85, 247, 0.16); color: #c084fc;">
+          <span class="kpi-label has-tooltip" tabindex="0" data-tooltip="Tiempo promedio total de procesamiento por documento, percentil 95 del pipeline RAG, velocidad por página y pico máximo de memoria RAM.">Rendimiento Motor <i class="fa-regular fa-circle-question tooltip-hint"></i></span>
+          <div class="kpi-icon has-tooltip" tabindex="0" data-tooltip="Tiempo promedio total de procesamiento por documento, percentil 95 del pipeline RAG, velocidad por página y pico máximo de memoria RAM." style="background: rgba(168, 85, 247, 0.16); color: #c084fc;">
             <i class="fa-solid fa-stopwatch"></i>
           </div>
         </div>
@@ -1217,9 +1278,10 @@
     <section class="charts-row-main">
       <div class="card">
         <div class="section-header">
-          <div class="section-title">
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Tendencia histórica según la granularidad elegida (diaria, semanal o mensual). Permite alternar entre volumen/errores, contenido y tiempos.">
             <i class="fa-solid fa-chart-area"></i>
             <span id="tsChartTitle">Evolución de Procesamiento</span>
+            <i class="fa-regular fa-circle-question tooltip-hint"></i>
           </div>
           <div class="segmented-group">
             <button class="seg-btn active" onclick="switchTsMode('status', this)">Volumen & Errores</button>
@@ -1234,8 +1296,8 @@
 
       <div class="card">
         <div class="section-header">
-          <div class="section-title">
-            <i class="fa-solid fa-gauge"></i> Desglose de Tiempos por Etapa
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Duración promedio de cada fase del motor: 1) lectura PDF/OCR con Docling, 2) fragmentación, 3) embeddings vectoriales y 4) estructuración con OpenAI.">
+            <i class="fa-solid fa-gauge"></i> Desglose de Tiempos por Etapa <i class="fa-regular fa-circle-question tooltip-hint"></i>
           </div>
           <span class="badge badge-primary" id="badgeAvgTotalE2E">E2E: 0s</span>
         </div>
@@ -1263,7 +1325,7 @@
     <section class="charts-row-secondary">
       <div class="card">
         <div class="section-header">
-          <div class="section-title"><i class="fa-solid fa-eye"></i> Tipología PDF & OCR</div>
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Proporción de documentos según su origen: digitales nativos, escaneados (requieren OCR), híbridos o desconocidos."><i class="fa-solid fa-eye"></i> Tipología PDF & OCR <i class="fa-regular fa-circle-question tooltip-hint"></i></div>
           <span class="badge badge-info" id="badgeOcrRate">OCR: 0%</span>
         </div>
         <div class="chart-box-sm">
@@ -1277,7 +1339,7 @@
 
       <div class="card">
         <div class="section-header">
-          <div class="section-title"><i class="fa-solid fa-book"></i> Eventos del Libro Mayor</div>
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Distribución de eventos registrados en la auditoría inmutable (WORM): extracciones, creación/actualización de sobres, duplicados, fallos y eliminaciones."><i class="fa-solid fa-book"></i> Eventos del Libro Mayor <i class="fa-regular fa-circle-question tooltip-hint"></i></div>
           <span class="badge badge-neutral" id="badgeLedgerTotal">0 eventos</span>
         </div>
         <div class="chart-box-sm">
@@ -1287,7 +1349,7 @@
 
       <div class="card">
         <div class="section-header">
-          <div class="section-title"><i class="fa-solid fa-layer-group"></i> Por Tipo de Documento</div>
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Conteo de documentos clasificados según su tipo documental (condicionado particular, anexo, certificado, endoso, etc.)."><i class="fa-solid fa-layer-group"></i> Por Tipo de Documento <i class="fa-regular fa-circle-question tooltip-hint"></i></div>
         </div>
         <div class="chart-box-sm">
           <canvas id="chartDocTypes"></canvas>
@@ -1299,7 +1361,7 @@
     <section class="charts-row-split">
       <div class="card">
         <div class="section-header">
-          <div class="section-title"><i class="fa-solid fa-building-shield"></i> Rendimiento por Aseguradora</div>
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Comparativa detallada por compañía aseguradora: volumen procesado, documentos activos, tiempos promedio de extracción/RAG y fallos."><i class="fa-solid fa-building-shield"></i> Rendimiento por Aseguradora <i class="fa-regular fa-circle-question tooltip-hint"></i></div>
           <span class="mono" style="font-size: 0.72rem; color: var(--text-dim);" id="lblCompanyCount">0 compañías</span>
         </div>
         <div class="table-wrap" style="max-height: 310px; overflow-y: auto;">
@@ -1328,7 +1390,7 @@
 
       <div class="card">
         <div class="section-header">
-          <div class="section-title"><i class="fa-solid fa-tags"></i> Distribución por Ramo de Seguro</div>
+          <div class="section-title has-tooltip" tabindex="0" data-tooltip="Ranking de ramos de seguro (Automotores, Salud, Vida, etc.) ordenados por cantidad de documentos y sobres procesados."><i class="fa-solid fa-tags"></i> Distribución por Ramo de Seguro <i class="fa-regular fa-circle-question tooltip-hint"></i></div>
         </div>
         <div class="chart-box" style="height: 290px;">
           <canvas id="chartRamos"></canvas>
@@ -2706,6 +2768,86 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
+
+    // =========================================================================
+    // Floating Card Tooltips
+    // =========================================================================
+    (function initCardTooltips() {
+      const tooltipEl = document.createElement('div');
+      tooltipEl.id = 'dashTooltip';
+      tooltipEl.className = 'dash-tooltip';
+      tooltipEl.setAttribute('role', 'tooltip');
+      document.body.appendChild(tooltipEl);
+
+      let activeTrigger = null;
+
+      function positionTooltip(trigger) {
+        const rect = trigger.getBoundingClientRect();
+        const ttRect = tooltipEl.getBoundingClientRect();
+        const pad = 10;
+
+        let top = rect.top - ttRect.height - pad;
+        if (top < pad) {
+          top = rect.bottom + pad;
+        }
+        if (top + ttRect.height > window.innerHeight - pad) {
+          top = Math.max(pad, window.innerHeight - ttRect.height - pad);
+        }
+
+        let left = rect.left + (rect.width / 2) - (ttRect.width / 2);
+        left = Math.max(pad, Math.min(left, window.innerWidth - ttRect.width - pad));
+
+        tooltipEl.style.top = `${Math.round(top)}px`;
+        tooltipEl.style.left = `${Math.round(left)}px`;
+      }
+
+      function showTooltip(trigger) {
+        const text = trigger.getAttribute('data-tooltip');
+        if (!text) return;
+        activeTrigger = trigger;
+        tooltipEl.textContent = text;
+        tooltipEl.classList.add('visible');
+        positionTooltip(trigger);
+      }
+
+      function hideTooltip() {
+        activeTrigger = null;
+        tooltipEl.classList.remove('visible');
+      }
+
+      document.addEventListener('mouseover', (e) => {
+        const trigger = e.target.closest('[data-tooltip]');
+        if (!trigger) return;
+        if (trigger !== activeTrigger) showTooltip(trigger);
+      });
+
+      document.addEventListener('mouseout', (e) => {
+        if (!activeTrigger) return;
+        const related = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('[data-tooltip]') : null;
+        if (related !== activeTrigger) hideTooltip();
+      });
+
+      document.addEventListener('focusin', (e) => {
+        const trigger = e.target.closest('[data-tooltip]');
+        if (trigger) showTooltip(trigger);
+      });
+
+      document.addEventListener('focusout', (e) => {
+        if (activeTrigger && !activeTrigger.contains(e.relatedTarget)) hideTooltip();
+      });
+
+      window.addEventListener('scroll', () => {
+        if (activeTrigger) positionTooltip(activeTrigger);
+      }, { passive: true });
+
+      window.addEventListener('resize', () => {
+        if (activeTrigger) positionTooltip(activeTrigger);
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && activeTrigger) hideTooltip();
+      });
+    })();
   </script>
 </body>
 </html>

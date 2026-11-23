@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 
 import json
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 try:
     import psutil
@@ -23,12 +23,20 @@ try:
 except (ImportError, AttributeError):
     _DOCLING_VERSION = "unknown"
 
+from app.api.security import require_role
 from app.api.v1.schemas import HealthResponse, MetricsResponse, VersionResponse
 from app.config.settings import AppSettings, get_settings
 
 router = APIRouter(tags=["System"])
 
-_METRICS_FILE = Path("outputs") / "metrics.json"
+
+def _get_metrics_file() -> Path:
+    """Resolve metrics.json path inside configured output_dir."""
+    try:
+        return get_settings().output.output_dir / "metrics.json"
+    except Exception:
+        return Path("outputs") / "metrics.json"
+
 
 def _load_metrics() -> dict:
     """Load persistent metrics from disk if available."""
@@ -40,9 +48,10 @@ def _load_metrics() -> dict:
         "total_tables_detected": 0,
         "extraction_times": [],
     }
-    if _METRICS_FILE.exists():
+    metrics_file = _get_metrics_file()
+    if metrics_file.exists():
         try:
-            data = json.loads(_METRICS_FILE.read_text(encoding="utf-8"))
+            data = json.loads(metrics_file.read_text(encoding="utf-8"))
             for key in default_metrics:
                 if key in data:
                     default_metrics[key] = data[key]
@@ -53,8 +62,9 @@ def _load_metrics() -> dict:
 def _save_metrics() -> None:
     """Save persistent metrics to disk."""
     try:
-        _METRICS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _METRICS_FILE.write_text(json.dumps(_METRICS), encoding="utf-8")
+        metrics_file = _get_metrics_file()
+        metrics_file.parent.mkdir(parents=True, exist_ok=True)
+        metrics_file.write_text(json.dumps(_METRICS), encoding="utf-8")
     except Exception:
         pass
 
@@ -127,6 +137,7 @@ def get_version() -> VersionResponse:
     response_model=MetricsResponse,
     summary="Métricas de extracción",
     description="Retorna estadísticas agregadas e inmutables de extracción (documentos procesados, exitosos, fallidos, páginas, tablas, sobres, chunks y tiempos), sincronizadas con la base de datos.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def get_metrics(request: Request) -> MetricsResponse:
     """Return aggregate extraction metrics, querying PostgreSQL immutable tables if available."""
@@ -295,6 +306,7 @@ def get_metrics(request: Request) -> MetricsResponse:
     "/logs",
     summary="Consultar registros del proceso",
     description="Retorna las entradas recientes de log desde el búfer circular en memoria del servidor.",
+    dependencies=[Depends(require_role("readonly"))],
 )
 def get_logs(
     lines: int = Query(default=200, ge=1, le=1000, description="Cantidad de líneas de log a recuperar (1 a 1000)"),
@@ -314,6 +326,7 @@ def get_logs(
     "/logs/clear",
     summary="Limpiar registros del proceso",
     description="Limpia todas las entradas de log almacenadas en el búfer circular en memoria del servidor.",
+    dependencies=[Depends(require_role("admin"))],
 )
 def clear_logs() -> dict:
     """Clear server log buffer."""
@@ -327,6 +340,7 @@ def clear_logs() -> dict:
     "/metrics/reset",
     summary="Restablecer métricas del servicio (Bloqueado en modo inmutable)",
     description="Operación bloqueada por política de auditoría inmutable (WORM). Las estadísticas e indicadores históricos no pueden ser eliminados ni reiniciados.",
+    dependencies=[Depends(require_role("admin"))],
 )
 def reset_metrics() -> dict:
     """Block reset of aggregate extraction metrics in immutable production mode."""

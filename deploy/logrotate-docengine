@@ -1,0 +1,15 @@
+# ==============================================================================
+# DocEngine — logrotate configuration
+# Copy to /etc/logrotate.d/docengine
+# ==============================================================================
+
+/var/log/docengine/*.log /opt/docengine/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+    create 0640 docengine docengine
+}

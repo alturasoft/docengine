@@ -34,10 +34,12 @@ if Path(".env.local").exists():
     _env_files.append(".env.local")
 
 # Load .env files in priority order into environment variables (except during pytest execution)
+# In production, real OS/container env vars take precedence (override=False).
 if "pytest" not in sys.modules and os.getenv("PYTEST_CURRENT_TEST") is None:
+    _is_prod_env = os.getenv("DOCENGINE_ENV", "").strip().lower() in ("production", "prod")
     for _env_path in _env_files:
         if Path(_env_path).exists():
-            load_dotenv(_env_path, override=True)
+            load_dotenv(_env_path, override=not _is_prod_env)
 
 # Guarantee a valid, writable cache directory for HuggingFace / Docling / PyTorch
 # when running under system users with HOME=/nonexistent (e.g. Docker containers)

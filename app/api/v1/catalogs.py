@@ -9,12 +9,13 @@ Endpoints for retrieving reference catalogs:
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.api.security import require_role
 from app.application.catalog_service import catalog_service
 
-router = APIRouter(prefix="/catalogs", tags=["Catálogos"])
+router = APIRouter(prefix="/catalogs", tags=["Catálogos"], dependencies=[Depends(require_role("readonly"))])
 
 
 class CompanyCatalogResponse(BaseModel):
