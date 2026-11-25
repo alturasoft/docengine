@@ -19,10 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # --- Install Python dependencies ---
-COPY requirements.txt pdfextract-1.0.0-py3-none-any.whl ./
+COPY requirements.txt pdfextract-1.0.2-py3-none-any.whl ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir ./pdfextract-1.0.0-py3-none-any.whl
+    pip install --no-cache-dir ./pdfextract-1.0.2-py3-none-any.whl
 
 # --- Copy application code and extraction skills ---
 COPY app/ ./app/
